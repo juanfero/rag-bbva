@@ -128,6 +128,9 @@ class CleanReport(BaseModel):
     # (comparando la subetiqueta principal: `es-CO` cuenta como `es`).
     lang_mismatch: int
     lang_mismatch_pairs: dict[str, int]
+    # Documentos sin señal clara de idioma (lang tomado de <html lang>), por plantilla
+    # y por idioma resultante.
+    lang_fallback_by_template: dict[str, dict[str, int]]
     leaks: LeakReport
 
 
@@ -140,6 +143,15 @@ def _percentil(valores: Sequence[int], q: float) -> int:
 
 def _ordenado(conteo: Counter[str]) -> dict[str, int]:
     return dict(sorted(conteo.items(), key=lambda kv: (-kv[1], kv[0])))
+
+
+def _respaldo_por_plantilla(documentos: Sequence[CleanDocument]) -> dict[str, dict[str, int]]:
+    """{plantilla: {idioma: n}} de los documentos cuyo `lang` vino de `<html lang>`."""
+    por_plantilla: dict[str, Counter[str]] = {}
+    for d in documentos:
+        if d.lang_source == "html_lang":
+            por_plantilla.setdefault(d.template, Counter())[d.lang or "desconocido"] += 1
+    return {p: _ordenado(c) for p, c in sorted(por_plantilla.items())}
 
 
 @dataclass
@@ -191,6 +203,7 @@ class CleaningPipeline:
             text=resultado.text,
             html_lang=resultado.html_lang,
             lang=resultado.lang,
+            lang_source=resultado.lang_source,
             lastmod=page.lastmod,
             published_at=resultado.published_at,
             scraped_at=page.fetched_at,
@@ -256,6 +269,7 @@ class CleaningPipeline:
             by_lang=_ordenado(Counter(d.lang or "desconocido" for d in documentos)),
             lang_mismatch=sum(distintos.values()),
             lang_mismatch_pairs=_ordenado(distintos),
+            lang_fallback_by_template=_respaldo_por_plantilla(documentos),
             leaks=leak_report(documentos),
         )
         return CleaningResult(documentos, reporte)

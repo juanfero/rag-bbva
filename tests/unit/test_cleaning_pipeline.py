@@ -162,6 +162,7 @@ def test_reporte(raw_dir: Path) -> None:
     assert reporte.by_lang == {"es": 3}
     assert reporte.lang_mismatch == 1  # la página de la plantilla C
     assert reporte.lang_mismatch_pairs == {"en → es": 1}
+    assert reporte.lang_fallback_by_template == {}  # los tres fixtures tienen señal clara
 
 
 def test_determinista(raw_dir: Path, tmp_path: Path) -> None:
@@ -242,6 +243,7 @@ def test_leak_report_cuenta_casos() -> None:
     doc = CleanDocument(
         doc_id="1", url=f"{B}/x", title=None, section="personas", breadcrumbs=[],
         text="Hola ${title} y ${loading}. Copyright © 2026", html_lang="es", lang="es",
+        lang_source="html_lang",
         lastmod=None,
         published_at=None, scraped_at=FECHA, content_hash="h", n_chars=10,
         template="otra", extraction="selector",
@@ -253,3 +255,22 @@ def test_leak_report_cuenta_casos() -> None:
     assert reporte.documents_with_leaks == 1
     assert reporte.by_pattern == {"pie": 1, "placeholder": 2}
     assert len(reporte.cases) == 2
+
+
+def test_reporte_cuenta_el_respaldo_de_idioma_por_plantilla(tmp_path: Path) -> None:
+    """Una página sin palabras funcionales toma `lang` de `<html lang>` y se cuenta."""
+    raw = tmp_path / "raw"
+    (raw / "pages").mkdir(parents=True)
+    filas = "".join(f"<li>Plan {i}: $14.900 / Mes · Retiros $2.700</li>" for i in range(8))
+    html = f'<html lang="es-CO"><body><main><ul>{filas}</ul></main></body></html>'
+    (raw / "pages" / "t.html").write_text(html, encoding="utf-8")
+    (raw / "manifest.jsonl").write_text(
+        _entrada(f"{B}/personas/tarifas", path="pages/t.html").model_dump_json() + "\n",
+        encoding="utf-8",
+    )
+
+    resultado = _pipeline().process_directory(raw)
+
+    doc = resultado.documents[0]
+    assert (doc.lang, doc.lang_source) == ("es", "html_lang")
+    assert resultado.report.lang_fallback_by_template == {"A_main": {"es": 1}}

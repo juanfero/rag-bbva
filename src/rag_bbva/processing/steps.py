@@ -368,7 +368,10 @@ class DetectLanguageStep(CleaningStep):
     name = "idioma"
 
     def process(self, doc: WorkingDocument) -> WorkingDocument | Discarded:
-        doc.lang = detect_language(doc.text) or primary_language(doc.html_lang)
+        if detectado := detect_language(doc.text):
+            doc.lang, doc.lang_source = detectado, "detectado"
+        else:
+            doc.lang, doc.lang_source = primary_language(doc.html_lang), "html_lang"
         return doc
 
 

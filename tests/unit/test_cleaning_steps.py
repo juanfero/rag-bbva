@@ -325,6 +325,7 @@ def test_plantilla_c_declara_en_pero_el_contenido_es_espanol() -> None:
 
     assert doc.html_lang == "en"
     assert doc.lang == "es"
+    assert doc.lang_source == "detectado"
 
 
 @pytest.mark.parametrize(
@@ -346,6 +347,7 @@ def test_sin_senal_clara_usa_html_lang() -> None:
     doc.html_lang, doc.text = "es-CO", "Plan Oro $14,900"
 
     assert DetectLanguageStep().process(doc).lang == "es"  # type: ignore[union-attr]
+    assert doc.lang_source == "html_lang"
     doc.html_lang = None
     assert DetectLanguageStep().process(doc).lang is None  # type: ignore[union-attr]
 

@@ -119,7 +119,8 @@ def _resumen_limpieza(reporte: CleanReport) -> str:
         f"Por plantilla: {reporte.by_template}",
         f"Extracción: {reporte.by_extraction}",
         f"Idioma: {reporte.by_lang} · distinto de <html lang>: {reporte.lang_mismatch} "
-        f"{reporte.lang_mismatch_pairs}",
+        f"{reporte.lang_mismatch_pairs} · sin señal (lang de <html lang>): "
+        f"{reporte.lang_fallback_by_template}",
         f"Fugas de boilerplate: {reporte.leaks.total} {reporte.leaks.by_pattern}",
     ]
     return "\n".join(lineas)

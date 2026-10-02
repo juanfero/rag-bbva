@@ -9,6 +9,8 @@ from pydantic import BaseModel, Field
 # Plantillas del sitio identificadas en M1 (`docs/exploracion_sitio.md` §5).
 Template = Literal["A_main", "B_main_content", "C_role_main", "otra"]
 Extraction = Literal["trafilatura", "selector"]
+# Origen de `lang`: detectado en el texto o tomado de `<html lang>` por falta de señal.
+LangSource = Literal["detectado", "html_lang"]
 
 
 class RawPage(BaseModel):
@@ -33,6 +35,7 @@ class CleanDocument(BaseModel):
     text: str
     html_lang: str | None  # valor de `<html lang>` tal como lo declara el sitio
     lang: str | None  # idioma del contenido (detectado; si no hay señal, el de html_lang)
+    lang_source: LangSource
     lastmod: str | None
     published_at: str | None
     scraped_at: str
@@ -60,6 +63,7 @@ class WorkingDocument:
     title: str | None = None
     html_lang: str | None = None
     lang: str | None = None
+    lang_source: LangSource = "html_lang"
     published_at: str | None = None
     breadcrumbs: list[str] = field(default_factory=list)
     template: Template = "otra"

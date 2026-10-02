@@ -43,6 +43,8 @@ SELECTORES_BOILERPLATE: tuple[str, ...] = (
     ".wpthemeHiddenPlusControlHeaderParent", "#portletState",
     # Cajas de error de WCM ("Invalid configuration found").
     ".lrpError",
+    # Visor de WCM sin configurar ("This Web Content Viewer is associated with…").
+    ".LRPunconfigured",
     # Bloque rotativo de "Contenido relacionado" (L-08).
     "section.miniatura-articulos",
     # Iconos de fuente: su texto es el nombre del icono ("arrow2-right", "check-small").
@@ -52,7 +54,9 @@ SELECTORES_BOILERPLATE: tuple[str, ...] = (
 )  # fmt: skip
 
 # Placeholders de plantillas sin resolver: ${title}, ${loading}, {{ x }}.
-_PLACEHOLDER = re.compile(r"\$\{[^}\s]{1,60}\}|\{\{[^}]{1,60}\}\}")
+# Las expresiones AngularJS de los simuladores pueden ser largas:
+# `{{(ctrl.tasaefectivaAnualSinSubsidio/number:2) + ctrl.etiquetas.porcentaje}}`.
+_PLACEHOLDER = re.compile(r"\$\{[^}\s]{1,60}\}|\{\{[^{}]{1,200}\}\}")
 # Encabezados de bloques de "relacionados" que pueden quedar sueltos.
 _ENCABEZADOS_RELACIONADOS = re.compile(
     r"^\s*(contenido relacionado|art[ií]culos relacionados|te puede interesar)\s*$", re.I
@@ -356,8 +360,8 @@ def detect_language(texto: str) -> str | None:
 
 
 def primary_language(etiqueta: str | None) -> str | None:
-    """Subetiqueta principal de una etiqueta BCP 47 (`es-CO` → `es`)."""
-    return etiqueta.split("-")[0].strip().lower() or None if etiqueta else None
+    """Subetiqueta principal de una etiqueta de idioma (`es-CO` o `es_CO` → `es`)."""
+    return re.split(r"[-_]", etiqueta)[0].strip().lower() or None if etiqueta else None
 
 
 class DetectLanguageStep(CleaningStep):

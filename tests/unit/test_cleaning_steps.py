@@ -183,6 +183,25 @@ def test_boilerplate_plantilla_b_cajas_de_error_wcm() -> None:
     assert "Invalid configuration found" not in doc.soup.get_text(" ")
 
 
+def test_boilerplate_visor_wcm_sin_configurar_y_angular_largo() -> None:
+    """Casos del crawl completo: el aviso en inglés de un visor de WCM sin configurar
+    (`preaprobados`) y expresiones AngularJS largas de los simuladores."""
+    expresion = "{{(ctrl.tasaefectivaAnualSinSubsidio/number:2) + ctrl.etiquetas.porcentaje}}"
+    html = (
+        "<html><body><main><table class='LRPunconfigured'><tr>"
+        "<td class='LRPunconfigured-center'>This Web Content Viewer is associated with the "
+        "current page.</td></tr></table>"
+        f"<p>Tasa efectiva anual {expresion} sin subsidio.</p>"
+        "<p>Plazo {{ctrl.visualizarPlazoAnios +\n\t\tctrl.etiquetas.medidaAnios}}</p>"
+        "</main></body></html>"
+    )
+
+    doc = _hasta(html, ParseHtmlStep(), ExtractMetadataStep(), RemoveBoilerplateStep())
+    assert doc.soup is not None
+
+    assert " ".join(doc.soup.get_text(" ").split()) == "Tasa efectiva anual sin subsidio. Plazo"
+
+
 def test_boilerplate_banner_de_cookies_y_textos_de_interfaz() -> None:
     html = (
         "<html><body><main><div id='CookieBanner'>Usamos cookies. Aceptar cookies</div>"
@@ -353,7 +372,8 @@ def test_sin_senal_clara_usa_html_lang() -> None:
 
 
 @pytest.mark.parametrize(
-    ("etiqueta", "esperado"), [("es-CO", "es"), ("EN", "en"), ("", None), (None, None)]
+    ("etiqueta", "esperado"),
+    [("es-CO", "es"), ("es_CO", "es"), ("EN", "en"), ("", None), (None, None)],
 )
 def test_primary_language(etiqueta: str | None, esperado: str | None) -> None:
     assert primary_language(etiqueta) == esperado

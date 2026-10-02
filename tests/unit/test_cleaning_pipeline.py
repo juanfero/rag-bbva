@@ -238,6 +238,7 @@ def test_fixtures_sin_fugas_de_boilerplate(raw_dir: Path, fixture: str) -> None:
         ("placeholder", "Menú ${title} ${loading}"),
         ("menu_portlet", "Web Content Viewer Component Action Menu"),
         ("error_wcm", "Warning Invalid configuration found."),
+        ("error_wcm", "This Web Content Viewer is associated with the current page."),
         ("icono", "Inicio arrow2-right Canales"),
         ("relacionados", "texto\nContenido relacionado\nmás texto"),
         ("cookies", "Usamos cookies para mejorar tu experiencia"),
@@ -245,11 +246,27 @@ def test_fixtures_sin_fugas_de_boilerplate(raw_dir: Path, fixture: str) -> None:
         ("menu_sitio", "Sucursal Virtual Personas Sucursal Virtual Negocios Pagos PSE"),
         ("menu_sitio", "Personas Negocios Corporativos Buscar"),
         ("pie", "Síguenos en nuestras redes sociales"),
+        ("pie", "Copyright © 2026 Bancolombia S.A. BANCOLOMBIA S.A. Establecimiento Bancario"),
+        ("pie", "Carrera 48 # 26 - 85 Medellín \u2013 Colombia"),
     ],
 )
 def test_cada_patron_de_fuga_detecta_su_caso(patron: str, texto: str) -> None:
     assert patron in LEAK_PATTERNS
     assert patron in find_leaks(texto)
+
+
+@pytest.mark.parametrize(
+    "texto",
+    [
+        "Este producto es ofrecido por Bancolombia S.A. Establecimiento Bancario.",
+        "Llámanos a la Sucursal Telefónica 01 8000 9 12345 o visítanos.",
+        "Cibest S.A. • NIT: 901.878.169-2 • Carrera 48 # 26 - 85, Medellín, Colombia.",
+    ],
+)
+def test_menciones_legitimas_no_son_fuga_de_pie(texto: str) -> None:
+    """Falsos positivos del crawl completo: el contenido propio cita la razón social,
+    la línea gratuita o la dirección; solo cuentan las frases tal como están en el pie."""
+    assert "pie" not in find_leaks(texto)
 
 
 def test_leak_report_cuenta_casos() -> None:

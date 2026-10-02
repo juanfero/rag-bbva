@@ -16,14 +16,21 @@ from rag_bbva.processing.models import CleanDocument
 LEAK_PATTERNS: dict[str, re.Pattern[str]] = {
     "placeholder": re.compile(r"\$\{|\{\{"),
     "menu_portlet": re.compile(r"Component Action Menu|Display portlet menu|Deferred Modules"),
-    "error_wcm": re.compile(r"Invalid configuration found|Contact the administrator"),
+    "error_wcm": re.compile(
+        r"Invalid configuration found|Contact the administrator|"
+        r"This Web Content Viewer is associated|cannot display the referenced content"
+    ),
     "icono": re.compile(r"\b(arrow2-(?:down|up|left|right)|check-small|menu-dots-v)\b"),
     "relacionados": re.compile(
         r"(?im)^\W*(contenido relacionado|art[ií]culos relacionados|te puede interesar)\W*$"
     ),
     "cookies": re.compile(r"(?i)(usamos|utilizamos) cookies|aceptar (todas las )?cookies"),
+    # Frases tal como aparecen en el pie. "Bancolombia S.A. Establecimiento Bancario",
+    # la línea 01 8000 o la dirección sueltas también aparecen en avisos legales y
+    # textos de contacto del contenido propio, así que no cuentan como fuga.
     "pie": re.compile(
-        r"Copyright ©|Establecimiento Bancario|Carrera 48 # 26 - 85|01 8000 9 12345|"
+        r"Copyright ©|BANCOLOMBIA S\.A\. Establecimiento Bancario|"
+        r"Carrera 48 # 26 - 85 Medellín \u2013 Colombia|Línea gratuita resto del país|"
         r"Síguenos en nuestras redes sociales"
     ),
     "menu_sitio": re.compile(

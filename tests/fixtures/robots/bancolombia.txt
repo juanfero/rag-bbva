@@ -1,0 +1,135 @@
+# BLOQUE 1 RESTRICCION DE ENTRENAMIENTO AI
+
+User-agent: GPTBot
+User-agent: Google-Extended
+User-agent: ClaudeBot
+User-agent: Applebot-Extended
+User-agent: cohere-ai
+Disallow: /
+
+# Permitir Favicon
+
+User-agent: Googlebot-Image
+Allow: /favicon.ico
+
+# BLOQUE 2 BOTS DE BUSQUEDA SEO Y AI SEARCH
+
+User-agent: *
+User-agent: Googlebot
+User-agent: SemrushBot
+User-agent: SiteAuditBot
+User-agent: OAI-SearchBot
+User-agent: Claude-SearchBot
+User-agent: PerplexityBot
+User-agent: Perplexity-User
+User-agent: ChatGPT-User
+User-agent: Claude-User
+User-agent: AdsBot-Google
+User-agent: Mediapartners-Google
+
+# Bloqueo de Crawl para Directorios
+Disallow: /*myportal
+Disallow: /rest/
+Disallow: /cgi/
+Disallow: /crypto-js/
+Disallow: /*formulario*
+Disallow: /*?ofertaId*
+Disallow: /*pdf*
+Disallow: /*!ut/p/z0/
+Disallow: /*!ut/p/z1/
+Disallow: /*buscador
+Disallow: /wps/portal/preguntas-frecuentes/preguntas/
+
+# Recursos para Renderizado Allow para RAG y SEO
+
+Allow: /connect/*.gif
+Allow: /connect/*.jpg
+Allow: /connect/*.jpeg
+Allow: /connect/*.png
+Allow: /connect/*.svg
+Allow: /connect/*.css
+Allow: /connect/*.js
+Allow: /contenthandler/*.gif
+Allow: /contenthandler/*.jpg
+Allow: /contenthandler/*.jpeg
+Allow: /contenthandler/*.png
+Allow: /contenthandler/*.svg
+Allow: /contenthandler/*.css
+Allow: /contenthandler/*.js
+Allow: /contenthandler/*!ut*
+Allow: /themes/*.gif
+Allow: /themes/*.jpg
+Allow: /themes/*.jpeg
+Allow: /themes/*.png
+Allow: /themes/*.svg
+Allow: /themes/*.css
+Allow: /themes/*.js
+
+# DISALLOW URLS ESPECIFICAS
+Disallow: /wps/portal/personas/productos-servicios/tarjetas-credito/preaprobados/general
+Disallow: /wps/portal/personas/productos-servicios/tarjetas-credito/preaprobados
+Disallow: /personas/solicitud-de-productos/
+Disallow: /personas/solicitud-de-productos/tarjeta-american-express-azul
+Disallow: /personas/solicitud-de-productos/tarjeta-american-express-verde
+Disallow: /personas/solicitud-de-productos/tarjeta-american-express-oro
+Disallow: /personas/solicitud-de-productos/tarjeta-american-express-platinum
+Disallow: /personas/solicitud-de-productos/tarjeta-visa-clasica
+Disallow: /personas/solicitud-de-productos/tarjeta-visa-oro
+Disallow: /personas/solicitud-de-productos/tarjeta-visa-platinum
+Disallow: /personas/solicitud-de-productos/tarjeta-oficial-seleccion-colombia
+Disallow: /personas/solicitud-de-productos/tarjeta-visa-infinite
+Disallow: /personas/solicitud-de-productos/tarjeta-mastercard-joven
+Disallow: /personas/solicitud-de-productos/tarjeta-mastercard-e-card
+Disallow: /personas/solicitud-de-productos/tarjeta-mastercard-ideal
+Disallow: /personas/solicitud-de-productos/tarjeta-mastercard-clasica
+Disallow: /personas/solicitud-de-productos/tarjeta-mastercard-oro
+Disallow: /personas/solicitud-de-productos/tarjeta-mastercard-platinum
+Disallow: /personas/solicitud-de-productos/tarjeta-mastercard-black
+Disallow: /personas/solicitud-de-productos/tarjeta-mastercard-sufi-oro
+Disallow: /personas/solicitud-de-productos/cuenta-plan-nomina
+Disallow: /personas/solicitud-de-productos/cuenta-plan-basico
+Disallow: /personas/solicitud-de-productos/cuenta-plan-estandar
+Disallow: /personas/solicitud-de-productos/cuenta-plan-premium
+Disallow: /personas/creditos/consumo/crediagil-credito-rotativo/ampliar-plazo
+Disallow: /personas/creditos/consumo/credito-libre-inversion/ampliar-plazo
+Disallow: /personas/solicitud-de-productos/cuentas/cuentas-ahorros
+Disallow: /personas/solicitud-de-productos/soat/escoger-seguro
+Disallow: /personas/productos-servicios/creditos/preaprobados/fondo-nacional-garantias
+Disallow: /personas/productos-servicios/tarjetas-credito/oferta/general
+Disallow: /personas/productos-servicios/creditos/preaprobados/libre-inversion
+Disallow: /personas/productos-servicios/tarjetas-credito/preaprobados/general
+Disallow: /personas/productos-servicios/tarjetas-credito/preaprobados/american-express
+Disallow: /personas/productos-servicios/creditos/consumo/libre-inversion/preaprobados
+Disallow: /personas/productos-servicios/tarjetas-credito/preaprobados/ecard
+Disallow: /personas/aprender-es-facil/como-usar-banco/asesoria-productos-documentos/preaprobado-tarjeta-credito
+Disallow: /personas/productos-servicios/tarjetas-credito/preaprobados/visa
+Disallow: /personas/productos-servicios/tarjetas-credito/preaprobados/mastercard
+Disallow: /personas/productos-servicios/creditos/preaprobados-digitales
+Disallow: /personas/productos-servicios/tarjetas-credito/preaprobados
+Disallow: /personas/formulario-preaprobados
+Disallow: /personas/creditos/consumo/credito-libre-inversion/preaprobados
+Disallow: /centro-de-ayuda/preguntas-frecuentes/resultados/
+Disallow: /centro-de-ayuda/preguntas-frecuentes/resultados?consultaFiltroTema=/PreguntasFrecuentes/taxoTemasPreguntas/catGestionarmidiaadia/
+Disallow: /centro-de-ayuda/preguntas-frecuentes/resultados?consultaFiltroTema=/PreguntasFrecuentes/taxoTemasPreguntas/catSolicituddedocumentosycertificados/
+Disallow: /personas/beneficios/reconocimientos/simulador-credito-consumo-old
+Disallow: /personas/nueva-raza-old
+Disallow: /negocios/comercio-internacional/importar/empezar/incoterms-old
+Disallow: /personas/prueba-script
+Disallow: /personas/banco-script
+Disallow: /personas/temp-test-rotador
+Disallow: /personas/test-banner-footer
+Disallow: /negocios/actualizate/perspectivas-economicas/prueba-interesar
+Disallow: /negocios/comercio-internacional/exportar/empezar/incoterms/prueba-incoterm
+Disallow: /personas/aprender-es-facil/como-manejar-dinero/endeudamiento-responsable/que-es-credito/simulador-credito-consumo-old
+Disallow: /personas/beneficios/puntos-colombia-old
+Disallow: /personas/eventos/navidad-edicion-especial-old
+Disallow: /personas/productos-servicios/canales-servicio/sucursal-web/old-sucursal-virtual-personas
+Disallow: /web/transfer-gateway/checkout/jO3eB5CDqq
+Disallow: /personas/buscador
+Disallow: /wps/portal/innovacion/buscador
+Disallow: /empresas/capital-inteligente/buscador
+Disallow: /negocios/buscador
+Disallow: /empresas/buscador
+Disallow: /tramites-digitales-news
+
+Sitemap: https://www.bancolombia.com/sitemap-index.xml

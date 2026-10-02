@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     crawl_max_retries: int = Field(default=3, ge=0)
     crawl_backoff_seconds: float = Field(default=2.0, ge=0)
     crawl_block_threshold: int = Field(default=5, gt=0)
+    # Prefijos de ruta que no se piden (ADR-010: la sala de prensa redirige a otro host).
+    crawl_exclude_path_prefixes: list[str] = Field(
+        default_factory=lambda: ["/acerca-de/sala-prensa/"]
+    )
     raw_data_dir: Path = Path("data/raw")
 
     # Chunking y embeddings
@@ -72,6 +76,10 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def _validar_coherencia(self) -> Self:
         """Valida reglas que involucran más de un campo."""
+        if invalidos := [p for p in self.crawl_exclude_path_prefixes if not p.startswith("/")]:
+            raise ValueError(
+                f"CRAWL_EXCLUDE_PATH_PREFIXES debe tener rutas que empiecen por '/': {invalidos}"
+            )
         if self.chunk_overlap >= self.chunk_size:
             raise ValueError(
                 f"CHUNK_OVERLAP ({self.chunk_overlap}) debe ser menor que "

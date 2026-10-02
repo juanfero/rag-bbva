@@ -89,6 +89,7 @@ def scrape(
             max_pages=max_pages or settings.crawl_max_pages,
             max_depth=settings.crawl_max_depth,
             block_threshold=settings.crawl_block_threshold,
+            exclude_path_prefixes=settings.crawl_exclude_path_prefixes,
         )
         try:
             reporte = crawler.crawl()

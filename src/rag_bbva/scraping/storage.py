@@ -36,6 +36,7 @@ Outcome = Literal[
     "no_html",  # 2xx pero el contenido no es text/html
     "error_red",  # fallo de red o timeout tras reintentos, o demasiadas redirecciones
     "redireccion_omitida",  # redirige fuera del dominio o a una ruta prohibida
+    "excluida",  # ruta excluida por configuración (CRAWL_EXCLUDE_PATH_PREFIXES): no se pide
 ]
 
 

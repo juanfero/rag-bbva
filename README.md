@@ -98,7 +98,7 @@ python -m rag_bbva.cli scrape --max-pages 50   # desarrollo; sin --max-pages usa
 ```
 Deja en `data/raw/` (ignorado por git):
 - `pages/<sha1(url)>.html`: HTML tal como lo sirvió el sitio.
-- `manifest.jsonl`: una línea por URL procesada, con `url`, `final_url`, `status`, `outcome` (`guardada`, `sin_cambios`, `duplicada`, `error_http`, `no_html`, `error_red`, `redireccion_omitida`), `depth`, `source`, `lastmod` del sitemap, huella del contenido, ruta del HTML, intentos y error.
+- `manifest.jsonl`: una línea por URL procesada, con `url`, `final_url`, `status`, `outcome` (`guardada`, `sin_cambios`, `duplicada`, `error_http`, `no_html`, `error_red`, `redireccion_omitida`, `excluida`), `depth`, `source`, `lastmod` del sitemap, huella del contenido, ruta del HTML, intentos y error.
 - `crawl_report.json`: resumen de la corrida.
 
 Comportamiento:
@@ -106,6 +106,7 @@ Comportamiento:
 - Reintentos con backoff exponencial (2, 4, 8 s con la configuración por defecto: `CRAWL_MAX_RETRIES=3`, `CRAWL_BACKOFF_SECONDS=2.0`; tope de 60 s por espera). Solo se reintentan las respuestas HTTP **500, 502, 503 y 504** y los **errores de red de httpx** (`httpx.TransportError`: timeouts y fallos de conexión, lectura, escritura, protocolo o proxy). Cualquier otro código (incluidos 403, 404 y 429) se registra al primer intento. Si se agotan los intentos, una 5xx queda como `error_http` y un fallo de red como `error_red`, sin detener el crawl.
 - Cada redirección se valida contra el dominio y `robots.txt`.
 - URLs normalizadas: sin `utm_*`, fragmentos ni barra final.
+- Las rutas de `CRAWL_EXCLUDE_PATH_PREFIXES` no se piden. Por defecto es `/acerca-de/sala-prensa/` ([ADR-010](docs/02_DECISIONES.md#adr-010--sala-de-prensa-fuera-del-alcance-del-scraping)). Quedan en el manifest como `excluida` y no consumen cupo de `--max-pages`.
 - Si llegan 5 respuestas 403/429 seguidas, el crawl se aborta (código de salida 2) y se guarda lo avanzado.
 - Re-ejecutarlo no reescribe los HTML cuyo texto visible no cambió.
 
@@ -189,7 +190,7 @@ Registro completo: [`docs/02_DECISIONES.md`](docs/02_DECISIONES.md) (ADR) y supu
 | L-03 | **Contenido dinámico no capturado:** sin renderizar JS no se obtienen el banner de cookies, carruseles ni listas de enlaces dinámicas; su contenido llega por las páginas enlazadas | ADR-009 |
 | L-04 | **Sin PDFs:** quedan fuera del alcance y además `robots.txt` los prohíbe (`/*pdf*`) | S-03 |
 | L-05 | **Foto del sitio:** el índice refleja el sitio en la fecha del scraping; la demo usará un snapshot versionado de datos limpios | S-07, M12 |
-| L-06 | **Sin sala de prensa (noticias y comunicados):** los sitemaps listan 74 URLs únicas bajo `/acerca-de/sala-prensa/`: 73 en `sitemap-sala-de-prensa.xml` y 1 solo en `sitemap-personas.xml`. Responden 301 hacia otro host, `prensa.bancolombia.com`. En el manifest de M2, la única procesada (1 de 1) redirige a la **portada** `https://prensa.bancolombia.com/`, no a la noticia, así que seguir la redirección no daría su contenido. Incluirlas exigiría explorar y crawlear un segundo sitio. Se excluyen: quedan como `redireccion_omitida`, sin HTML, y el asistente no responde sobre noticias. El resto de `acerca-de` sí se incluye | [ADR-010](docs/02_DECISIONES.md#adr-010--sala-de-prensa-fuera-del-alcance-del-scraping), M2 |
+| L-06 | **Sin sala de prensa (noticias y comunicados):** los sitemaps listan 74 URLs únicas bajo `/acerca-de/sala-prensa/`: 73 en `sitemap-sala-de-prensa.xml` y 1 solo en `sitemap-personas.xml`. Responden 301 hacia otro host, `prensa.bancolombia.com`. En el manifest de M2, la única procesada (1 de 1) redirige a la **portada** `https://prensa.bancolombia.com/`, no a la noticia, así que seguir la redirección no daría su contenido. Incluirlas exigiría explorar y crawlear un segundo sitio. Se excluyen sin pedirlas (`CRAWL_EXCLUDE_PATH_PREFIXES`, desde M3; quedan como `excluida`), y el asistente no responde sobre noticias. El resto de `acerca-de` sí se incluye | [ADR-010](docs/02_DECISIONES.md#adr-010--sala-de-prensa-fuera-del-alcance-del-scraping), M2 |
 | L-07 | **URLs muertas en el sitemap:** algunas páginas listadas responden 403 `AccessDenied` (origen S3; p. ej. `/negocios/especiales/wobi…`). Se registran como `error_http` con un fragmento del cuerpo | M2 |
 | L-08 | **Bloques que rotan:** varias páginas de educación financiera y del centro de ayuda muestran "artículos relacionados" aleatorios en cada petición, por lo que se reescriben aunque su contenido principal no cambie. Se quitarán en la limpieza (M3) | M2 |
 

@@ -200,6 +200,7 @@ El caso pide mínimo 3. Se implementan 6 para tener margen, pero el README desta
 | `CRAWL_MAX_RETRIES` | `3` | Reintentos ante errores transitorios (5xx, timeouts) con backoff exponencial (M2) |
 | `CRAWL_BACKOFF_SECONDS` | `2.0` | Espera base del backoff: 2, 4, 8 s… (M2) |
 | `CRAWL_BLOCK_THRESHOLD` | `5` | Respuestas 403/429 consecutivas que abortan el crawl (M2) |
+| `CRAWL_EXCLUDE_PATH_PREFIXES` | `["/acerca-de/sala-prensa/"]` | Prefijos de ruta que no se piden; quedan en el manifest como `excluida` (lista JSON; ADR-010, M3) |
 | `RAW_DATA_DIR` | `data/raw` | Carpeta de HTML crudo y `manifest.jsonl` (M2) |
 | `CHUNK_SIZE` | `800` | Tamaño de chunk (caracteres) |
 | `CHUNK_OVERLAP` | `120` | Solapamiento |

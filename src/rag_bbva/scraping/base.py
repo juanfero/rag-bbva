@@ -13,7 +13,7 @@ import logging
 import time
 from abc import ABC, abstractmethod
 from collections import Counter, deque
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Literal
@@ -22,7 +22,7 @@ from pydantic import BaseModel
 
 from rag_bbva.scraping.fetcher import FetchResult, PoliteFetcher
 from rag_bbva.scraping.storage import ManifestEntry, Outcome, RawStorage
-from rag_bbva.scraping.urls import normalize_url
+from rag_bbva.scraping.urls import excluded_prefix, normalize_url
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +86,19 @@ def _ahora() -> str:
     return datetime.now(tz=UTC).isoformat(timespec="seconds")
 
 
+def _entrada_excluida(target: CrawlTarget, prefijo: str) -> ManifestEntry:
+    """Entrada del manifest para una URL excluida por configuración (sin petición)."""
+    return ManifestEntry(
+        url=target.url,
+        outcome="excluida",
+        fetched_at=_ahora(),
+        depth=target.depth,
+        source=target.source,
+        lastmod=target.lastmod,
+        error=f"excluida por prefijo de ruta {prefijo}",
+    )
+
+
 def _describir_error(result: FetchResult) -> str | None:
     """Mensaje de error para el manifest; en respuestas HTTP de error con cuerpo
     pequeño incluye un fragmento normalizado del cuerpo."""
@@ -110,9 +123,16 @@ class BaseCrawler(ABC):
         max_pages: int,
         max_depth: int,
         block_threshold: int,
+        exclude_path_prefixes: Sequence[str] = (),
     ) -> None:
-        """Configura límites y dependencias (fetcher y almacenamiento inyectados)."""
+        """Configura límites y dependencias (fetcher y almacenamiento inyectados).
+
+        Args:
+            exclude_path_prefixes: prefijos de ruta que no se piden; cada URL excluida
+                queda en el manifest como `excluida` y no consume cupo de `max_pages`.
+        """
         self.fetcher = fetcher
+        self.exclude_path_prefixes = tuple(exclude_path_prefixes)
         self.storage = storage
         self.max_pages = max_pages
         self.max_depth = max_depth
@@ -129,11 +149,16 @@ class BaseCrawler(ABC):
         frontera: deque[CrawlTarget] = deque(semillas)
         encoladas = {t.url for t in semillas}
         entradas: list[ManifestEntry] = []
+        procesadas = 0
         enlaces = 0
         abortado: str | None = None
 
-        while frontera and len(entradas) < self.max_pages:
+        while frontera and procesadas < self.max_pages:
             objetivo = frontera.popleft()
+            if prefijo := excluded_prefix(objetivo.url, self.exclude_path_prefixes):
+                self.skipped["excluida por prefijo de ruta"] += 1
+                entradas.append(_entrada_excluida(objetivo, prefijo))
+                continue
             if objetivo.url in self._finales:
                 self.skipped["ya descargada vía redirección"] += 1
                 continue
@@ -145,8 +170,9 @@ class BaseCrawler(ABC):
             outcome = self.validate(objetivo, resultado)
             entrada = self.persist(objetivo, resultado, outcome)
             entradas.append(entrada)
-            if len(entradas) % _LOG_CADA == 0:
-                logger.info("Progreso del crawl", extra={"procesadas": len(entradas)})
+            procesadas += 1
+            if procesadas % _LOG_CADA == 0:
+                logger.info("Progreso del crawl", extra={"procesadas": procesadas})
 
             if self._guard.record(resultado.status):
                 abortado = (
@@ -169,7 +195,7 @@ class BaseCrawler(ABC):
             finished_at=_ahora(),
             duration_seconds=round(time.perf_counter() - t0, 1),
             seeds=len(semillas),
-            processed=len(entradas),
+            processed=procesadas,
             outcomes=dict(Counter(e.outcome for e in entradas)),
             status_codes=dict(Counter(str(e.status) for e in entradas)),
             skipped=dict(self.skipped),

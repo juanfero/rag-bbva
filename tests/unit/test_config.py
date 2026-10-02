@@ -22,6 +22,7 @@ def test_settings_defaults(clean_env: pytest.MonkeyPatch) -> None:
     assert settings.crawl_max_retries == 3
     assert settings.crawl_backoff_seconds == 2.0
     assert settings.crawl_block_threshold == 5
+    assert settings.crawl_exclude_path_prefixes == ["/acerca-de/sala-prensa/"]
     assert settings.raw_data_dir == Path("data/raw")
     assert settings.chunk_size == 800
     assert settings.chunk_overlap == 120
@@ -80,6 +81,7 @@ def test_settings_env_file_override(clean_env: pytest.MonkeyPatch, tmp_path: Pat
         ({"CRAWL_TIMEOUT_SECONDS": "0"}, "crawl_timeout_seconds"),
         ({"CRAWL_MAX_RETRIES": "-1"}, "crawl_max_retries"),
         ({"CRAWL_BLOCK_THRESHOLD": "0"}, "crawl_block_threshold"),
+        ({"CRAWL_EXCLUDE_PATH_PREFIXES": '["acerca-de/"]'}, "CRAWL_EXCLUDE_PATH_PREFIXES"),
     ],
 )
 def test_settings_validation(
@@ -91,6 +93,15 @@ def test_settings_validation(
 
     with pytest.raises(ValidationError, match=fragmento):
         Settings(_env_file=None)
+
+
+def test_settings_exclude_prefixes_desde_env(clean_env: pytest.MonkeyPatch) -> None:
+    """La lista de exclusiones se lee como JSON; una lista vacía desactiva la exclusión."""
+    clean_env.setenv("CRAWL_EXCLUDE_PATH_PREFIXES", '["/a/", "/b"]')
+    assert Settings(_env_file=None).crawl_exclude_path_prefixes == ["/a/", "/b"]
+
+    clean_env.setenv("CRAWL_EXCLUDE_PATH_PREFIXES", "[]")
+    assert Settings(_env_file=None).crawl_exclude_path_prefixes == []
 
 
 def test_settings_history_window_zero_is_valid(clean_env: pytest.MonkeyPatch) -> None:

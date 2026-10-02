@@ -69,3 +69,4 @@ Formato: una entrada por decisión. Estado: Propuesta · Aceptada · Reemplazada
   - − El asistente no responde sobre noticias ni comunicados de prensa (limitación L-06 del README).
   - − Un crawl completo gasta unas 74 peticiones en redirecciones omitidas.
   - Mejora futura: crawlear `prensa.bancolombia.com` como host adicional permitido, con su propio `robots.txt` y sitemap.
+- **Actualización (2026-10-02, M3):** desde M3 el crawler sí las filtra antes de pedirlas, con `CRAWL_EXCLUDE_PATH_PREFIXES` (por defecto `["/acerca-de/sala-prensa/"]`). Quedan en el manifest como `excluida`, sin petición HTTP y sin consumir cupo de `max_pages`. Eso elimina las ~74 peticiones de la consecuencia anterior.

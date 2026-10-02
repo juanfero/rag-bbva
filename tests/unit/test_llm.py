@@ -136,11 +136,23 @@ def test_5xx_se_reintenta() -> None:
 
 
 @pytest.mark.parametrize(
-    ("estado", "fragmento"),
-    [(401, "XAI_API_KEY no es válida"), (403, "XAI_API_KEY no es válida"), (404, "llm-check")],
+    ("estado", "cuerpo", "fragmento"),
+    [
+        (401, {"error": "x"}, "XAI_API_KEY no es válida"),
+        (403, {"error": "x"}, "XAI_API_KEY no es válida"),
+        (404, {"error": "x"}, "llm-check"),
+        # Respuesta real de xAI ante una clave inválida (M07.md §7): 400, no 401.
+        (
+            400,
+            {"code": "invalid-argument", "error": "Incorrect API key provided."},
+            "empieza con 'xai-'",
+        ),
+    ],
 )
-def test_errores_no_transitorios_no_se_reintentan(estado: int, fragmento: str) -> None:
-    servidor = Servidor([httpx2.Response(estado, json={"error": "x"})])
+def test_errores_no_transitorios_no_se_reintentan(
+    estado: int, cuerpo: dict[str, str], fragmento: str
+) -> None:
+    servidor = Servidor([httpx2.Response(estado, json=cuerpo)])
 
     with pytest.raises(LLMError, match=fragmento):
         _proveedor(servidor).complete(MENSAJES)

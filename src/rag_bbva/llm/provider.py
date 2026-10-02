@@ -95,8 +95,14 @@ def _mensaje_amigable(exc: Exception) -> str:
         )
     if isinstance(exc, openai.APITimeoutError):
         return "El servicio de respuestas tardó demasiado en contestar. Intenta de nuevo."
-    if isinstance(exc, openai.AuthenticationError | openai.PermissionDeniedError):
-        return "La clave XAI_API_KEY no es válida o no tiene permisos para este modelo."
+    if isinstance(exc, openai.AuthenticationError | openai.PermissionDeniedError) or (
+        # xAI responde 400 (no 401) ante una clave inválida: "Incorrect API key provided".
+        isinstance(exc, openai.BadRequestError) and "api key" in str(exc).lower()
+    ):
+        return (
+            "La clave XAI_API_KEY no es válida o no tiene permisos para este modelo. "
+            "Revise que sea la clave secreta de https://console.x.ai (empieza con 'xai-')."
+        )
     if isinstance(exc, openai.NotFoundError):
         return "El modelo configurado (LLM_MODEL) no existe. Ejecute `llm-check`."
     return "El servicio de respuestas no está disponible en este momento. Intenta más tarde."

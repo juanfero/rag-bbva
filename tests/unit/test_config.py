@@ -18,6 +18,7 @@ def test_settings_defaults(clean_env: pytest.MonkeyPatch) -> None:
     assert settings.crawl_max_depth == 3
     assert settings.crawl_delay_seconds == 1.0
     assert settings.crawl_user_agent == "RAG-BBVA-TechTest/1.0"
+    assert settings.crawl_timeout_seconds == 20
     assert settings.chunk_size == 800
     assert settings.chunk_overlap == 120
     assert settings.embedding_model == "intfloat/multilingual-e5-small"
@@ -72,6 +73,7 @@ def test_settings_env_file_override(clean_env: pytest.MonkeyPatch, tmp_path: Pat
         ({"LLM_PROVIDER": "ollama"}, "llm_provider"),
         ({"LOG_LEVEL": "VERBOSE"}, "log_level"),
         ({"CRAWL_MAX_PAGES": "0"}, "crawl_max_pages"),
+        ({"CRAWL_TIMEOUT_SECONDS": "0"}, "crawl_timeout_seconds"),
     ],
 )
 def test_settings_validation(

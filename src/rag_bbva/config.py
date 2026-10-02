@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     crawl_max_depth: int = Field(default=3, ge=0)
     crawl_delay_seconds: float = Field(default=1.0, ge=0)
     crawl_user_agent: str = Field(default="RAG-BBVA-TechTest/1.0", min_length=1)
+    crawl_timeout_seconds: float = Field(default=20, gt=0)
 
     # Chunking y embeddings
     chunk_size: int = Field(default=800, gt=0)

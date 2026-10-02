@@ -4,18 +4,22 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Sin publicar]
 
-### M1 — Exploración del sitio (en curso, pendiente de validar el alcance)
-#### Añadido
+## [m01] - 2026-10-01 — Exploración del sitio
+### Añadido
 - Parser y política de `robots.txt` según RFC 9309, con comodines `*`/`$` (`scraping/robots.py`).
 - Parser de sitemaps (índice/urlset, gzip, protección XXE) y conteo por sección (`scraping/sitemap.py`).
 - Análisis de HTML estático y comparación con el renderizado (`scraping/page_analysis.py`).
 - `PoliteFetcher` y `SiteExplorer` (`scraping/exploration.py`); script `scripts/explore_site.py`.
 - `docs/exploracion_sitio.md`, evidencia JSON de la corrida y bitácora `docs/modulos/M01.md`.
 - Variable `CRAWL_TIMEOUT_SECONDS`; dependencias `httpx`, `beautifulsoup4` y `lxml`.
-- ADR-008 (fuente: Bancolombia) y ADR-009 (httpx sin Playwright, propuesta).
-#### Cambiado
+- ADR-008 (fuente: Bancolombia) y ADR-009 (httpx sin Playwright).
+- Regla en `CLAUDE.md`: los textos visibles al usuario dicen Bancolombia.
+- Tabla de limitaciones conocidas para el README (`00_VISION_GENERAL.md §12`).
+### Cambiado
 - Fuente de datos: `www.bancolombia.com` en lugar de `www.bbva.com.co`, que bloquea crawlers con 403. Defaults `TARGET_BASE_URL` y `QDRANT_COLLECTION=bancolombia_docs`.
-#### Corregido
+- Defaults del crawl: `CRAWL_MAX_PAGES=1200` y `CRAWL_MAX_DEPTH=1` (S-04).
+- Supuestos S-02, S-03 y S-04 confirmados; plan de M2, M3, M12 y M14 actualizado con las decisiones del checkpoint.
+### Corregido
 - El fetcher ya no sigue redirecciones fuera del dominio ni hacia rutas prohibidas por `robots.txt`.
 
 ## [m00] - 2026-10-01 — Fundaciones

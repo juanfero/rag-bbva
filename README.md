@@ -16,7 +16,7 @@ Prueba técnica de ML/AI Engineer: un sistema RAG (*Retrieval-Augmented Generati
 | M1 | Exploración del sitio: robots.txt, sitemaps, dependencia de JS, alcance | ✅ | `m01` |
 | M2 | Scraper (datos crudos): sitemaps + BFS, robots, reintentos, manifest incremental | ✅ | `m02` |
 | M3 | Limpieza (datos limpios): pipeline de pasos, metadatos, idioma, deduplicación, chequeo de fugas | ✅ | `m03` |
-| M4 | Chunking + embeddings | ⏳ | — |
+| M4 | Chunking + embeddings: estrategias de chunking, e5-small en CPU, fábrica de componentes | 🚧 en revisión (rama `feat/m04-chunking-embeddings`) | — |
 | M5 | Indexación vectorial (Qdrant) | ⏳ | — |
 | M6 | Recuperación + reranker | ⏳ | — |
 | M7 | Generación con LLM (Grok) | ⏳ | — |
@@ -34,7 +34,7 @@ Detalle de cada módulo: [plan de módulos](docs/01_PLAN_DE_MODULOS.md) y bitác
 
 ## Arquitectura
 
-Diseño objetivo ([visión general §3](docs/00_VISION_GENERAL.md)). Hoy existen las dos primeras etapas de la ingesta: **Crawler → `data/raw/`** (M2) y **Limpieza → `data/clean/`** (M3), además de la configuración, la CLI y la exploración del sitio (M0–M1).
+Diseño objetivo ([visión general §3](docs/00_VISION_GENERAL.md)). Hoy existen las tres primeras etapas de la ingesta: **Crawler → `data/raw/`** (M2), **Limpieza → `data/clean/`** (M3) y **Chunking → `data/chunks/`** con embeddings en CPU (M4, todavía sin base vectorial), además de la configuración, la CLI y la exploración del sitio (M0–M1).
 
 **Ingesta (offline)**
 ```
@@ -137,6 +137,23 @@ Cómo limpia (pasos en [`processing/steps.py`](src/rag_bbva/processing/steps.py)
 
 El resultado es determinista: la misma entrada produce la misma salida.
 
+**Chunking y embeddings (M4).** Trocea `data/clean/documents.jsonl` y deja en `data/chunks/` (ignorado por git) `chunks.jsonl` y `chunk_report.json`:
+```bash
+python -m rag_bbva.cli chunk                          # estrategia de CHUNKING_STRATEGY (heading_aware)
+python -m rag_bbva.cli chunk --strategy fixed_size    # línea base
+```
+- **`heading_aware`** (por defecto):
+  - Divide por los títulos markdown de la limpieza y agrupa secciones pequeñas consecutivas hasta `CHUNK_SIZE`=800 caracteres.
+  - Parte por tamaño, con `CHUNK_OVERLAP`=120 y sin cortar palabras, solo las secciones que no caben.
+  - Cada chunk lleva su `heading_path` ("Título > Sección > Subsección").
+- **`fixed_size`:** parte el texto completo por tamaño.
+- **Qué guarda cada chunk:** `chunk_id` determinista, `doc_id`, `url`, `title`, `section`, `heading_path`, `lang`, `position`, `n_chars`, `text` (para citar) y `embedding_text` (encabezado con título, sección y ruta + texto: lo que se embebe).
+- **El reporte** trae la distribución de tamaños, los chunks por documento y por sección, los chunks muy cortos y los que superarían los 512 tokens del modelo, contados con su tokenizer real. En la corrida real: 3574 chunks y 0 sobre el máximo.
+- **Embeddings:** `intfloat/multilingual-e5-small` (384 dimensiones) en CPU, con prefijos `query: `/`passage: ` y vectores normalizados (L2).
+  - El modelo se descarga una vez (~470 MB) a `MODEL_CACHE_DIR` (`models/`, ignorado por git).
+  - Embeber los ~3600 chunks toma ~2,7 min en CPU ([evidencia M04](docs/modulos/M04.md#6-evidencia-manual)).
+  - La base vectorial llega en M5.
+
 **Docker.** Hoy solo existe la imagen base: `docker build .` y `docker compose run --rm api` ejecutan el comando `version`.
 🚧 **El despliegue completo con `docker compose up -d --build` (Qdrant, API, UI) se completa en M12.** Ese arranque no scrapeará el sitio: usará un snapshot versionado de datos limpios.
 
@@ -155,10 +172,11 @@ El caso exige al menos 3. Previstos en la [visión general §6](docs/00_VISION_G
 | Patrón | Dónde | Por qué | Estado |
 |---|---|---|---|
 | **Singleton (vía caché)** | [`src/rag_bbva/config.py`](src/rag_bbva/config.py): `get_settings()` con `lru_cache` | La configuración se lee y valida una sola vez; todo el código la obtiene del mismo punto | ✅ M0 |
-| **Strategy** (inyección de dependencias) | [`src/rag_bbva/scraping/exploration.py`](src/rag_bbva/scraping/exploration.py): `Renderer` (`Protocol`); [`src/rag_bbva/scraping/storage.py`](src/rag_bbva/scraping/storage.py): función de huella inyectable en `RawStorage` | El explorador funciona con Playwright, con un doble o sin renderizador. El almacenamiento detecta cambios con la huella que se le inyecte (bytes por defecto, texto visible en el crawler) sin cambiar su código | ✅ parcial (M1–M2). Las estrategias principales (`ChunkingStrategy`, `LLMProvider`, `Reranker`) llegan en M4, M6 y M7 |
+| **Strategy** (inyección de dependencias) | [`src/rag_bbva/scraping/exploration.py`](src/rag_bbva/scraping/exploration.py): `Renderer` (`Protocol`); [`src/rag_bbva/scraping/storage.py`](src/rag_bbva/scraping/storage.py): función de huella inyectable en `RawStorage` | El explorador funciona con Playwright, con un doble o sin renderizador. El almacenamiento detecta cambios con la huella que se le inyecte (bytes por defecto, texto visible en el crawler) sin cambiar su código | ✅ parcial (M1–M2) |
+| **Strategy** (algoritmos intercambiables) | [`src/rag_bbva/indexing/chunking.py`](src/rag_bbva/indexing/chunking.py): `ChunkingStrategy` → `HeadingAwareChunker` / `FixedSizeChunker`; [`src/rag_bbva/indexing/embedding.py`](src/rag_bbva/indexing/embedding.py): `Embedder` → `SentenceTransformerEmbedder` / `FakeEmbedder` | Cambiar cómo se trocea o cómo se embebe sin tocar el pipeline: la línea base de chunking se compara con la principal y los tests usan un embedder falso, sin modelo | ✅ M4. `LLMProvider` y `Reranker` llegan en M6 y M7 |
 | **Template Method** | [`src/rag_bbva/scraping/base.py`](src/rag_bbva/scraping/base.py): `BaseCrawler.crawl()`; subclase concreta [`SitemapBfsCrawler`](src/rag_bbva/scraping/crawler.py) | `crawl()` fija el algoritmo (`prepare` → `discover_urls` → `fetch` → `validate` → `persist` → `extract_links`) y aplica en un solo lugar los límites, la deduplicación y el corte por bloqueo. Las subclases solo redefinen los pasos | ✅ M2 |
 | **Chain of Responsibility / Pipeline** | [`src/rag_bbva/processing/steps.py`](src/rag_bbva/processing/steps.py): `CleaningStep` (`set_next`/`handle`) y sus pasos; [`src/rag_bbva/processing/pipeline.py`](src/rag_bbva/processing/pipeline.py): `CleaningPipeline` | Cada paso de la limpieza (parseo, metadatos, boilerplate, extracción, normalización, idioma, longitud, duplicados) es una clase que transforma el documento y lo pasa al siguiente, o corta la cadena con el motivo del descarte. Se prueban por separado y se pueden reordenar o sustituir | ✅ M3 |
-| **Factory** | `indexing/factory.py`, `llm/factory.py` | Crear embedder, LLM, vector store y reranker desde la configuración sin acoplarse a clases concretas | ⏳ M4–M7 |
+| **Factory** | [`src/rag_bbva/indexing/factory.py`](src/rag_bbva/indexing/factory.py): `ComponentFactory` (`create_chunker`, `create_embedder`); `llm/factory.py` | Crear chunker y embedder (luego LLM, vector store y reranker) desde la configuración (`CHUNKING_STRATEGY`, `EMBEDDING_PROVIDER`) sin acoplar el resto del código a clases concretas | ✅ parcial (M4). LLM, vector store y reranker: M5–M7 |
 | **Repository** | `memory/repository.py` | Aislar la persistencia del historial (SQLite en producción, memoria en tests) | ⏳ M8 |
 | **Facade** | `services/rag_service.py` | Un único punto de entrada `ask(conversation_id, pregunta)` que orquesta todo el flujo | ⏳ M9 |
 
@@ -176,7 +194,8 @@ El caso exige al menos 3. Previstos en la [visión general §6](docs/00_VISION_G
 | Reintentos | `tenacity` | Backoff exponencial declarativo, solo ante errores transitorios | ✅ en uso (M2) |
 | Calidad | `pytest`, `respx`, `ruff` | Tests rápidos sin red (`respx` simula el sitio por HTTP); lint y formato uniformes | ✅ en uso |
 | Extracción de texto | `trafilatura` + reglas propias | Reglas por selector para el boilerplate conocido del sitio y trafilatura para el contenido principal, con *fallback* por selector cuando omite contenido | ✅ en uso (M3) |
-| Embeddings | `intfloat/multilingual-e5-small` | Gratis, multilingüe, corre en CPU ([ADR-005](docs/02_DECISIONES.md)) | ⏳ M4 |
+| Embeddings | `intfloat/multilingual-e5-small` vía `sentence-transformers` | Gratis, multilingüe, corre en CPU; 384 dimensiones ([ADR-005](docs/02_DECISIONES.md)) | ✅ en uso (M4) |
+| Cómputo de modelos | `torch` CPU-only | Instalado desde el índice CPU de PyTorch: sin CUDA, para una imagen Docker liviana (M12) | ✅ en uso (M4) |
 | Base vectorial | Qdrant self-hosted | Gratis, Docker oficial, filtros por metadatos ([ADR-002](docs/02_DECISIONES.md)) | ⏳ M5 |
 | Reranker | `cross-encoder/mmarco-mMiniLMv2-L12-H384-v1` | Multilingüe y liviano ([ADR-005](docs/02_DECISIONES.md)) | ⏳ M6 |
 | LLM | Grok (xAI) vía SDK `openai` | Calidad en español sin GPU local; es de pago y queda aislado tras una interfaz ([ADR-003](docs/02_DECISIONES.md)) | ⏳ M7 |
@@ -253,9 +272,10 @@ rag-bbva/
 │   ├── config.py · exceptions.py · logging_conf.py · cli.py
 │   ├── scraping/          # robots, sitemap, urls, fetcher, discovery, storage, base (Template Method), crawler, page_analysis, exploration
 │   ├── processing/        # models, markdown, steps (Chain of Responsibility), pipeline, quality
-│   └── indexing/ retrieval/ llm/ memory/ services/ api/ ui/ analytics/   # vacíos (próximos módulos)
+│   ├── indexing/          # models, chunking (Strategy), embedding, factory (Factory), pipeline
+│   └── retrieval/ llm/ memory/ services/ api/ ui/ analytics/   # vacíos (próximos módulos)
 ├── scripts/explore_site.py · scripts/trim_html_fixture.py
-├── tests/unit/ · tests/fixtures/ (robots, sitemaps, html: páginas reales recortadas de las 3 plantillas) · tests/integration/
+├── tests/unit/ · tests/fixtures/ (robots, sitemaps, html: páginas reales recortadas de las 3 plantillas; clean: glosario limpio) · tests/integration/
 ├── eval/                  # golden set (M13)
 └── docs/
 ```
@@ -265,5 +285,5 @@ Documentación:
 - [Plan de módulos](docs/01_PLAN_DE_MODULOS.md): tareas, pruebas de aceptación y Definition of Done.
 - [Decisiones (ADR)](docs/02_DECISIONES.md).
 - [Exploración del sitio](docs/exploracion_sitio.md) y su [evidencia JSON](docs/evidencia/).
-- Bitácoras por módulo: [M00](docs/modulos/M00.md) · [M01](docs/modulos/M01.md) · [M02](docs/modulos/M02.md) · [M03](docs/modulos/M03.md).
+- Bitácoras por módulo: [M00](docs/modulos/M00.md) · [M01](docs/modulos/M01.md) · [M02](docs/modulos/M02.md) · [M03](docs/modulos/M03.md) · [M04](docs/modulos/M04.md).
 - [CHANGELOG](CHANGELOG.md).

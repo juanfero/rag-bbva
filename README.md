@@ -14,7 +14,7 @@ Prueba técnica de ML/AI Engineer: un sistema RAG (*Retrieval-Augmented Generati
 |---|---|---|---|
 | M0 | Fundaciones: estructura, configuración, excepciones, logging, CLI, Docker base | ✅ | `m00` |
 | M1 | Exploración del sitio: robots.txt, sitemaps, dependencia de JS, alcance | ✅ | `m01` |
-| M2 | Scraper (datos crudos): sitemaps + BFS, robots, reintentos, manifest incremental | 🚧 en revisión (rama `feat/m02-scraper`) | — |
+| M2 | Scraper (datos crudos): sitemaps + BFS, robots, reintentos, manifest incremental | ✅ | `m02` |
 | M3 | Limpieza (datos limpios) | ⏳ | — |
 | M4 | Chunking + embeddings | ⏳ | — |
 | M5 | Indexación vectorial (Qdrant) | ⏳ | — |

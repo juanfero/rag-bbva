@@ -1,6 +1,8 @@
 """Pruebas de la CLI (M0)."""
 
 import json
+import os
+import signal
 from pathlib import Path
 
 import httpx
@@ -9,7 +11,7 @@ import respx
 from typer.testing import CliRunner
 
 from rag_bbva import __version__
-from rag_bbva.cli import EXIT_ABORTADO, app
+from rag_bbva.cli import EXIT_ABORTADO, EXIT_INTERRUMPIDO, app
 
 runner = CliRunner()
 
@@ -138,3 +140,31 @@ def test_cli_clean_sin_manifest_falla(clean_env: pytest.MonkeyPatch, tmp_path: P
 
     assert result.exit_code == 1
     assert not (tmp_path / "clean").exists()
+
+
+def test_cli_scrape_sigterm_cierra_reporte_con_lo_avanzado(entorno_scrape: Path) -> None:
+    """Un SIGTERM a mitad del crawl deja manifest y crawl_report.json con `interrumpido`."""
+    pedidas = 0
+    manejador_previo = signal.getsignal(signal.SIGTERM)
+
+    def pagina(_peticion: httpx.Request) -> httpx.Response:
+        nonlocal pedidas
+        pedidas += 1
+        if pedidas == 3:
+            os.kill(os.getpid(), signal.SIGTERM)
+        return httpx.Response(200, headers={"content-type": "text/html"}, text="<p>hola</p>")
+
+    with respx.mock(base_url=B) as router:
+        _sitio(router)
+        router.get(url__regex=r"/personas/\d").mock(side_effect=pagina)
+
+        result = runner.invoke(app, ["scrape"])
+
+    assert result.exit_code == EXIT_INTERRUMPIDO, result.output
+    reporte = json.loads((entorno_scrape / "crawl_report.json").read_text("utf-8"))
+    assert reporte["aborted"] is True
+    assert reporte["abort_reason"] == "interrumpido"
+    assert 2 <= reporte["processed"] < 5
+    manifest = (entorno_scrape / "manifest.jsonl").read_text("utf-8").splitlines()
+    assert len(manifest) == reporte["manifest_entries"] == reporte["processed"]
+    assert signal.getsignal(signal.SIGTERM) is manejador_previo  # se restaura al salir

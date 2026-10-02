@@ -146,6 +146,37 @@ class RawStorage:
         """Lee el manifest existente indexado por URL; líneas inválidas se ignoran."""
         return read_manifest(self.manifest_path)
 
+    def append_manifest(self, entry: ManifestEntry) -> None:
+        """Agrega la entrada al final del manifest y la fuerza a disco (modo incremental).
+
+        El manifest funciona como un registro: si una URL aparece varias veces gana la
+        última línea (`read_manifest`). Si el archivo termina en una línea cortada por
+        una interrupción previa, se cierra con un salto de línea antes de escribir, para
+        que esa línea inválida no arrastre a la nueva (se ignorará al leer).
+        """
+        linea = (json.dumps(entry.model_dump(mode="json"), ensure_ascii=False) + "\n").encode()
+        try:
+            with self.manifest_path.open("ab+") as archivo:
+                if archivo.tell() > 0:
+                    archivo.seek(-1, os.SEEK_END)
+                    if archivo.read(1) != b"\n":
+                        archivo.write(b"\n")
+                archivo.write(linea)
+                archivo.flush()
+                os.fsync(archivo.fileno())
+        except OSError as exc:
+            raise ScrapingError("No se pudo escribir en el manifest", detail=str(exc)) from exc
+
+    def compact_manifest(self) -> int:
+        """Reescribe el manifest con una sola línea por URL (la última) de forma atómica.
+
+        Returns:
+            Número total de entradas del manifest resultante.
+        """
+        if not self.manifest_path.exists():
+            return 0
+        return self.write_manifest([])
+
     def write_manifest(self, entries: Iterable[ManifestEntry]) -> int:
         """Fusiona las entradas con el manifest previo (gana la nueva) y lo reescribe.
 

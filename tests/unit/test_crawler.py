@@ -521,6 +521,68 @@ def test_reporte_resume_la_ejecucion(sitio: respx.MockRouter, tmp_path: Path) ->
     assert reporte.requests_made == len(sitio.calls)
 
 
+# ---------------------------------------------------------------- manifest incremental
+
+
+def _ctrl_c(_peticion: httpx.Request) -> httpx.Response:
+    """Simula Ctrl+C durante una petición (respx no acepta excepciones base como clase)."""
+    raise KeyboardInterrupt
+
+
+def test_manifest_se_escribe_durante_el_crawl(sitio: respx.MockRouter, tmp_path: Path) -> None:
+    """Al pedir una página, las ya procesadas ya están en el manifest en disco."""
+    vistas: list[int] = []
+
+    def negocios(_peticion: httpx.Request) -> httpx.Response:
+        vistas.append(len(_manifest(tmp_path)))
+        return _html_response(_html("Negocios"))
+
+    sitio.get("/negocios").mock(side_effect=negocios)
+
+    _crawler(tmp_path).crawl()
+
+    assert vistas and vistas[0] >= 1
+
+
+def test_interrupcion_conserva_lo_avanzado(sitio: respx.MockRouter, tmp_path: Path) -> None:
+    """Ctrl+C (o SIGTERM convertido) a mitad del crawl: el reporte dice `interrumpido` y
+    el manifest conserva todo lo procesado, compactado."""
+    sitio.get("/personas/cuentas").mock(side_effect=_ctrl_c)
+
+    reporte = _crawler(tmp_path).crawl()
+
+    assert reporte.aborted
+    assert reporte.abort_reason == "interrumpido"
+    manifest = _manifest(tmp_path)
+    assert f"{B}/personas" in manifest
+    assert f"{B}/personas/cuentas" not in manifest
+    assert reporte.manifest_entries == len(manifest) == reporte.processed
+    lineas = (tmp_path / "manifest.jsonl").read_text("utf-8").splitlines()
+    assert len(lineas) == len(manifest)  # compactado: una línea por URL
+
+
+def test_error_inesperado_conserva_lo_avanzado_y_se_relanza(
+    sitio: respx.MockRouter, tmp_path: Path
+) -> None:
+    sitio.get("/personas/cuentas").mock(side_effect=RuntimeError("fallo inesperado"))
+
+    with pytest.raises(RuntimeError):
+        _crawler(tmp_path).crawl()
+
+    assert f"{B}/personas" in _manifest(tmp_path)
+
+
+def test_html_huerfano_no_entra_al_manifest(sitio: respx.MockRouter, tmp_path: Path) -> None:
+    """Todo HTML guardado en este crawl tiene su línea en el manifest."""
+    sitio.get("/personas/cuentas").mock(side_effect=_ctrl_c)
+
+    _crawler(tmp_path).crawl()
+
+    rutas = {e.path for e in _manifest(tmp_path).values() if e.path}
+    guardados = {f"pages/{p.name}" for p in (tmp_path / "pages").glob("*.html")}
+    assert guardados == rutas
+
+
 # ---------------------------------------------------------------- exclusión por prefijo
 
 

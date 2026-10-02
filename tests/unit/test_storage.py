@@ -123,3 +123,54 @@ def test_outcome_invalido_es_rechazado() -> None:
     """El esquema del manifest valida el campo outcome."""
     with pytest.raises(ValueError, match="outcome"):
         _entrada(outcome="inventado")
+
+
+# ---------------------------------------------------------------- manifest incremental (M3)
+
+
+def test_append_manifest_escribe_una_linea_por_entrada(tmp_path: Path) -> None:
+    """Cada entrada queda en disco al agregarla; si una URL se repite gana la última."""
+    storage = RawStorage(tmp_path)
+
+    storage.append_manifest(_entrada())
+    assert storage.manifest_path.read_text("utf-8").count("\n") == 1
+    storage.append_manifest(_entrada(f"{URL}/2"))
+    storage.append_manifest(_entrada(outcome="sin_cambios"))
+
+    assert storage.manifest_path.read_text("utf-8").count("\n") == 3
+    manifest = storage.load_manifest()
+    assert set(manifest) == {URL, f"{URL}/2"}
+    assert manifest[URL].outcome == "sin_cambios"
+
+
+def test_append_manifest_tras_una_linea_cortada(tmp_path: Path) -> None:
+    """Un manifest que terminó a mitad de línea (proceso muerto al escribir) no
+    contamina la entrada siguiente: la línea cortada se ignora y la nueva se lee."""
+    storage = RawStorage(tmp_path)
+    storage.write_manifest([_entrada()])
+    with storage.manifest_path.open("a", encoding="utf-8") as f:
+        f.write('{"url": "https://www.banco.test/cortada", "outco')
+
+    storage.append_manifest(_entrada(f"{URL}/nueva"))
+
+    assert set(storage.load_manifest()) == {URL, f"{URL}/nueva"}
+
+
+def test_compact_manifest_deja_una_linea_por_url(tmp_path: Path) -> None:
+    storage = RawStorage(tmp_path)
+    for outcome in ("guardada", "sin_cambios", "guardada"):
+        storage.append_manifest(_entrada(outcome=outcome))
+    storage.append_manifest(_entrada(f"{URL}/2"))
+
+    total = storage.compact_manifest()
+
+    lineas = storage.manifest_path.read_text("utf-8").splitlines()
+    assert total == len(lineas) == 2
+    assert storage.load_manifest()[URL].outcome == "guardada"
+
+
+def test_compact_manifest_sin_archivo_no_lo_crea(tmp_path: Path) -> None:
+    storage = RawStorage(tmp_path)
+
+    assert storage.compact_manifest() == 0
+    assert not storage.manifest_path.exists()

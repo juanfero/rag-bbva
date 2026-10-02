@@ -6,6 +6,10 @@ siguientes (ingest, chat, metrics) se agregan en sus módulos respectivos.
 """
 
 import json
+import signal
+from collections.abc import Iterator
+from contextlib import contextmanager
+from types import FrameType
 from typing import Annotated
 from urllib.parse import urlsplit
 
@@ -17,13 +21,15 @@ from rag_bbva.config import get_settings
 from rag_bbva.exceptions import ProcessingError, ScrapingError
 from rag_bbva.logging_conf import configure_logging
 from rag_bbva.processing.pipeline import CleaningPipeline, CleanReport, write_clean_output
-from rag_bbva.scraping.base import CrawlReport
+from rag_bbva.scraping.base import MOTIVO_INTERRUMPIDO, CrawlReport
 from rag_bbva.scraping.crawler import SitemapBfsCrawler
 from rag_bbva.scraping.fetcher import PoliteFetcher
 from rag_bbva.scraping.storage import RawStorage, text_fingerprint
 
 # Código de salida cuando el crawl se aborta por posible bloqueo del sitio.
 EXIT_ABORTADO = 2
+# Código de salida cuando el crawl se interrumpe (Ctrl+C o SIGTERM), como 128 + SIGINT.
+EXIT_INTERRUMPIDO = 130
 
 app = typer.Typer(
     name="rag-bbva",
@@ -61,6 +67,21 @@ def _resumen_crawl(reporte: CrawlReport) -> str:
     return "\n".join(lineas)
 
 
+@contextmanager
+def _sigterm_como_interrupcion() -> Iterator[None]:
+    """Convierte SIGTERM en `KeyboardInterrupt` mientras dura el bloque, para que un
+    `kill` cierre el crawl igual que Ctrl+C (manifest y reporte con lo avanzado)."""
+
+    def _manejador(signum: int, frame: FrameType | None) -> None:
+        raise KeyboardInterrupt
+
+    anterior = signal.signal(signal.SIGTERM, _manejador)
+    try:
+        yield
+    finally:
+        signal.signal(signal.SIGTERM, anterior)
+
+
 @app.command()
 def scrape(
     max_pages: Annotated[
@@ -93,7 +114,8 @@ def scrape(
             exclude_path_prefixes=settings.crawl_exclude_path_prefixes,
         )
         try:
-            reporte = crawler.crawl()
+            with _sigterm_como_interrupcion():
+                reporte = crawler.crawl()
         except ScrapingError as exc:
             typer.echo(f"Error: {exc}", err=True)
             raise typer.Exit(code=1) from exc
@@ -104,6 +126,8 @@ def scrape(
     )
     typer.echo(_resumen_crawl(reporte))
     typer.echo(f"Datos crudos: {storage.root} (manifest.jsonl, pages/, crawl_report.json)")
+    if reporte.abort_reason == MOTIVO_INTERRUMPIDO:
+        raise typer.Exit(code=EXIT_INTERRUMPIDO)
     if reporte.aborted:
         raise typer.Exit(code=EXIT_ABORTADO)
 

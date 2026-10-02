@@ -2,8 +2,9 @@
 
 Garantiza en cada petición, incluidos los saltos de redirección: dominio objetivo,
 reglas de `robots.txt`, User-Agent propio y pausa entre peticiones. Opcionalmente
-reintenta con backoff exponencial **solo** los errores transitorios (5xx, fallos de
-red y timeouts); 403, 404 y 429 nunca se reintentan.
+reintenta con backoff exponencial **solo** los errores transitorios (HTTP 500, 502, 503
+y 504 y cualquier `httpx.TransportError`: timeouts y fallos de red); 403, 404, 429 y el
+resto de códigos nunca se reintentan.
 """
 
 import logging

@@ -103,7 +103,7 @@ Deja en `data/raw/` (ignorado por git):
 
 Comportamiento:
 - 1 s de pausa entre peticiones y User-Agent identificable.
-- Reintentos con backoff (2, 4, 8 s) solo ante 5xx y timeouts.
+- Reintentos con backoff exponencial (2, 4, 8 s con la configuración por defecto: `CRAWL_MAX_RETRIES=3`, `CRAWL_BACKOFF_SECONDS=2.0`; tope de 60 s por espera). Solo se reintentan las respuestas HTTP **500, 502, 503 y 504** y los **errores de red de httpx** (`httpx.TransportError`: timeouts y fallos de conexión, lectura, escritura, protocolo o proxy). Cualquier otro código (incluidos 403, 404 y 429) se registra al primer intento. Si se agotan los intentos, una 5xx queda como `error_http` y un fallo de red como `error_red`, sin detener el crawl.
 - Cada redirección se valida contra el dominio y `robots.txt`.
 - URLs normalizadas: sin `utm_*`, fragmentos ni barra final.
 - Si llegan 5 respuestas 403/429 seguidas, el crawl se aborta (código de salida 2) y se guarda lo avanzado.

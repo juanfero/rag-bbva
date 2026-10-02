@@ -95,9 +95,18 @@ def _mensaje_amigable(exc: Exception) -> str:
         )
     if isinstance(exc, openai.APITimeoutError):
         return "El servicio de respuestas tardó demasiado en contestar. Intenta de nuevo."
+    texto = str(exc).lower()
+    if isinstance(exc, openai.PermissionDeniedError) and (
+        "credits" in texto or "spending limit" in texto
+    ):
+        # xAI responde 403 cuando el equipo no tiene créditos o llegó al límite mensual.
+        return (
+            "La cuenta de xAI no tiene créditos disponibles o alcanzó su límite de gasto "
+            "mensual. Compre créditos o suba el límite en https://console.x.ai."
+        )
     if isinstance(exc, openai.AuthenticationError | openai.PermissionDeniedError) or (
         # xAI responde 400 (no 401) ante una clave inválida: "Incorrect API key provided".
-        isinstance(exc, openai.BadRequestError) and "api key" in str(exc).lower()
+        isinstance(exc, openai.BadRequestError) and "api key" in texto
     ):
         return (
             "La clave XAI_API_KEY no es válida o no tiene permisos para este modelo. "

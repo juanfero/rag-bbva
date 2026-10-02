@@ -147,6 +147,16 @@ def test_5xx_se_reintenta() -> None:
             {"code": "invalid-argument", "error": "Incorrect API key provided."},
             "empieza con 'xai-'",
         ),
+        # Respuesta real de xAI sin créditos (M07.md §7): 403 con este texto.
+        (
+            403,
+            {
+                "code": "permission-denied",
+                "error": "Your team has either used all available credits or reached its "
+                "monthly spending limit.",
+            },
+            "no tiene créditos disponibles",
+        ),
     ],
 )
 def test_errores_no_transitorios_no_se_reintentan(

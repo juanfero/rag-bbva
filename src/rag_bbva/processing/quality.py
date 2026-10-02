@@ -24,6 +24,11 @@ LEAK_PATTERNS: dict[str, re.Pattern[str]] = {
     "relacionados": re.compile(
         r"(?im)^\W*(contenido relacionado|art[ií]culos relacionados|te puede interesar)\W*$"
     ),
+    "venta_cruzada": re.compile(
+        r"Descubre otros canales que te van a interesar|"
+        r"Si te gustó este producto, estos te van a interesar"
+    ),
+    "interfaz": re.compile(r"(?i)link copiado en porta ?papeles"),
     "cookies": re.compile(r"(?i)(usamos|utilizamos) cookies|aceptar (todas las )?cookies"),
     # Frases tal como aparecen en el pie. "Bancolombia S.A. Establecimiento Bancario",
     # la línea 01 8000 o la dirección sueltas también aparecen en avisos legales y

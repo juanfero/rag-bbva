@@ -66,8 +66,18 @@ TEXTOS_INTERFAZ = frozenset(
     {
         "comparte este articulo", "comparte este artículo", "leer más", "conoce más",
         "ver más", "conocer todas", "entra ya", "buscadorfaqs",
+        "link copiado en porta papeles", "link copiado en portapapeles",
     }
 )  # fmt: skip
+# Títulos de bloques de venta cruzada que se repiten entre páginas (misma lógica que el
+# bloque rotativo de L-08): su contenido son enlaces a otras páginas, no a la propia.
+_TITULOS_VENTA_CRUZADA = re.compile(
+    r"^\s*(descubre otros canales que te van a interesar|"
+    r"si te gustó este producto, estos te van a interesar)\s*$",
+    re.I,
+)
+# Una sección cuenta como "el bloque" si tiene al menos este texto además del título.
+_MIN_CHARS_BLOQUE = 20
 _SUFIJO_TITULO = re.compile(r"\s*[|\-\u2013]\s*Bancolombia\s*$", re.I)
 _PALABRA = re.compile(r"\w{4,}")
 _INVISIBLES = dict.fromkeys([0x200B, 0x200C, 0x200D, 0x2060, 0xFEFF], None)
@@ -175,6 +185,25 @@ class ExtractMetadataStep(CleaningStep):
         return doc
 
 
+_ETIQUETAS_TITULO = ["h1", "h2", "h3", "h4", "h5", "h6"]
+
+
+def _bloque_de(titulo: Tag) -> Tag:
+    """Bloque completo de un título de venta cruzada: la primera `section` ancestra que
+    contiene algo más que el título (las tarjetas); si no hay, el propio título.
+
+    En la plantilla A el título está dentro de `section.cbc-heading`, que solo envuelve
+    el título, y el bloque es la `section.cbc-container--personalize` que la contiene.
+    """
+    largo_titulo = len(_texto(titulo))
+    for seccion in titulo.find_parents("section"):
+        if seccion.name in ("main", "body"):
+            break
+        if len(_texto(seccion)) > largo_titulo + _MIN_CHARS_BLOQUE:
+            return seccion
+    return titulo
+
+
 def _es_texto_interfaz(texto: str | None) -> bool:
     return bool(texto) and " ".join(str(texto).split()).lower() in TEXTOS_INTERFAZ
 
@@ -192,8 +221,10 @@ def _texto_sin_iconos(elemento: Tag) -> str:
 
 
 class RemoveBoilerplateStep(CleaningStep):
-    """Quita navegación, pie, menús de portlet, errores de WCM, iconos, cookies y el
-    bloque rotativo de contenido relacionado (L-08)."""
+    """Quita navegación, pie, menús de portlet, errores de WCM, iconos, cookies, el
+    bloque rotativo de contenido relacionado (L-08), los bloques repetidos de venta
+    cruzada ("Descubre otros canales…", "Si te gustó este producto…") y rótulos de
+    interfaz ("Link copiado en porta papeles")."""
 
     name = "boilerplate"
 
@@ -213,7 +244,35 @@ class RemoveBoilerplateStep(CleaningStep):
             texto.extract()
         for texto in soup.find_all(string=_es_texto_interfaz):
             texto.extract()
+        titulos = [
+            t for t in soup.find_all(_ETIQUETAS_TITULO) if _TITULOS_VENTA_CRUZADA.match(_texto(t))
+        ]
+        for titulo in titulos:
+            _bloque_de(titulo).decompose()
         return doc
+
+
+# Un bloque de la referencia se usa para verificar el orden si tiene al menos este
+# largo; se busca por su comienzo (las marcas de formato de trafilatura cambian el resto).
+_MIN_CHARS_BLOQUE_ORDEN = 20
+_PREFIJO_BLOQUE_ORDEN = 30
+
+
+def keeps_order(referencia: str, candidato: str) -> bool:
+    """Los bloques de `referencia` que aparecen en `candidato` están en el mismo orden.
+
+    Detecta extracciones que reordenan el contenido (p. ej. una frase del final
+    convertida en la primera línea).
+    """
+    posiciones = []
+    for bloque in referencia.split("\n\n"):
+        bloque = bloque.strip()
+        if len(bloque) < _MIN_CHARS_BLOQUE_ORDEN or bloque.startswith(("#", "|", "-")):
+            continue
+        posicion = candidato.find(bloque[:_PREFIJO_BLOQUE_ORDEN])
+        if posicion >= 0:
+            posiciones.append(posicion)
+    return posiciones == sorted(posiciones)
 
 
 def word_coverage(referencia: str, candidato: str) -> float:
@@ -229,10 +288,10 @@ class ExtractMainContentStep(CleaningStep):
     `[role=main]` → `body`), ya sin boilerplate.
 
     Se usa trafilatura si conserva al menos `min_coverage` del vocabulario del
-    contenedor; si extrae menos ("poco"), el *fallback* es el contenedor convertido a
-    markdown por selector. En el HTML real de M2 trafilatura nunca agregó palabras
-    ausentes del contenedor, pero en varias páginas omitió el título y secciones
-    enteras (`docs/modulos/M03.md` §4).
+    contenedor **y** el orden de sus bloques; si extrae menos ("poco") o reordena, el
+    *fallback* es el contenedor convertido a markdown por selector. En el HTML real
+    trafilatura nunca agregó palabras ausentes del contenedor, pero omitió títulos y
+    secciones enteras (`docs/modulos/M03.md` §4) y llegó a reordenar bloques (M04.md §7).
     """
 
     name = "contenido_principal"
@@ -264,7 +323,11 @@ class ExtractMainContentStep(CleaningStep):
             favor_recall=True,
             deduplicate=False,
         )
-        if extraido and word_coverage(selector_md, extraido) >= self.min_coverage:
+        if (
+            extraido
+            and word_coverage(selector_md, extraido) >= self.min_coverage
+            and keeps_order(selector_md, extraido)
+        ):
             doc.text, doc.extraction = extraido, "trafilatura"
         else:
             doc.text, doc.extraction = selector_md, "selector"

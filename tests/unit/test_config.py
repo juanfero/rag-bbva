@@ -27,6 +27,12 @@ def test_settings_defaults(clean_env: pytest.MonkeyPatch) -> None:
     assert settings.chunk_size == 800
     assert settings.chunk_overlap == 120
     assert settings.embedding_model == "intfloat/multilingual-e5-small"
+    assert settings.chunks_data_dir == Path("data/chunks")
+    assert settings.chunking_strategy == "heading_aware"
+    assert settings.chunk_min_chars == 100
+    assert settings.embedding_provider == "sentence_transformers"
+    assert settings.embedding_batch_size == 32
+    assert settings.model_cache_dir == Path("models")
     assert settings.qdrant_url == "http://qdrant:6333"
     assert settings.qdrant_collection == "bancolombia_docs"
     assert settings.retrieval_top_k == 20
@@ -81,6 +87,8 @@ def test_settings_env_file_override(clean_env: pytest.MonkeyPatch, tmp_path: Pat
         ({"CRAWL_TIMEOUT_SECONDS": "0"}, "crawl_timeout_seconds"),
         ({"CRAWL_MAX_RETRIES": "-1"}, "crawl_max_retries"),
         ({"CRAWL_BLOCK_THRESHOLD": "0"}, "crawl_block_threshold"),
+        ({"CHUNKING_STRATEGY": "semantico"}, "chunking_strategy"),
+        ({"EMBEDDING_PROVIDER": "openai"}, "embedding_provider"),
         ({"CRAWL_EXCLUDE_PATH_PREFIXES": '["acerca-de/"]'}, "CRAWL_EXCLUDE_PATH_PREFIXES"),
     ],
 )

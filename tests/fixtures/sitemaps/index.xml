@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <!--Urls de prioridad Bancolombia Creado 21 agosto 2025-->
+  <sitemap>
+    <loc>https://www.bancolombia.com/sitemap-personas.xml</loc>
+    <lastmod>2025-08-21</lastmod>
+  </sitemap>
+  <sitemap>
+    <loc>https://www.bancolombia.com/sitemap-empresas.xml</loc>
+  </sitemap>
+</sitemapindex>

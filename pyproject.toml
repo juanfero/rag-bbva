@@ -5,10 +5,13 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "rag-bbva"
 version = "0.1.0"
-description = "Asistente RAG sobre el contenido público de https://www.bbva.com.co/"
+description = "Asistente RAG para BBVA Colombia (caso ficticio) sobre el contenido público de https://www.bancolombia.com/"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "beautifulsoup4>=4.12",
+    "httpx>=0.27",
+    "lxml>=5.0",
     "pydantic>=2.6",
     "pydantic-settings>=2.2",
     "typer>=0.12",

@@ -26,11 +26,12 @@ class Settings(BaseSettings):
     )
 
     # Scraping
-    target_base_url: HttpUrl = HttpUrl("https://www.bbva.com.co/")
-    crawl_max_pages: int = Field(default=300, gt=0)
-    crawl_max_depth: int = Field(default=3, ge=0)
+    target_base_url: HttpUrl = HttpUrl("https://www.bancolombia.com/")
+    crawl_max_pages: int = Field(default=1200, gt=0)
+    crawl_max_depth: int = Field(default=1, ge=0)
     crawl_delay_seconds: float = Field(default=1.0, ge=0)
     crawl_user_agent: str = Field(default="RAG-BBVA-TechTest/1.0", min_length=1)
+    crawl_timeout_seconds: float = Field(default=20, gt=0)
 
     # Chunking y embeddings
     chunk_size: int = Field(default=800, gt=0)
@@ -39,7 +40,7 @@ class Settings(BaseSettings):
 
     # Base vectorial
     qdrant_url: str = "http://qdrant:6333"
-    qdrant_collection: str = Field(default="bbva_docs", min_length=1)
+    qdrant_collection: str = Field(default="bancolombia_docs", min_length=1)
 
     # Recuperación y reranking
     retrieval_top_k: int = Field(default=20, gt=0)

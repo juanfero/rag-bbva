@@ -96,7 +96,9 @@
 - Rate limiting (`CRAWL_DELAY_SECONDS`), reintentos con backoff exponencial (`tenacity`) solo en errores transitorios (5xx, timeouts), timeouts configurables.
 - Almacenamiento crudo: `data/raw/pages/<sha1(url)>.html` + `data/raw/manifest.jsonl` (url, status, content-type, fecha, hash del contenido, profundidad, ruta del archivo).
 - Re-ejecución incremental: si el hash no cambió, no se reescribe.
-- CLI: `python -m rag_bbva.cli scrape [--max-pages N]`.
+- CLI: `python -m rag_bbva.cli scrape [--max-pages N]` (defaults `CRAWL_MAX_PAGES=1200`, `CRAWL_MAX_DEPTH=1`; en desarrollo `--max-pages 50`).
+- Semillas desde **ambos** índices de sitemap (`sitemap-index.xml` declarado en robots y `/sitemap.xml`); reutiliza `scraping/robots.py`, `scraping/sitemap.py` y la validación de redirecciones de M1 (`docs/exploracion_sitio.md`).
+- Manifest: guardar también el `lastmod` del sitemap, como apoyo para la fecha de publicación de M3.
 
 **Pruebas de aceptación** (con `respx`, sin red real)
 - Respeta `robots.txt` (URL prohibida no se descarga).
@@ -105,7 +107,7 @@
 - Reintenta en 503 y se rinde tras N intentos registrando el error **sin romper el crawl**.
 - 404 se registra en el manifest y no se guarda HTML.
 - Manifest y archivos generados con el esquema esperado.
-- Manual: crawl real limitado (p. ej. 30 páginas) y revisión de una muestra.
+- Manual: crawl real limitado (`--max-pages 50`) y revisión de una muestra.
 
 ---
 
@@ -115,7 +117,8 @@
 
 **Diseño**
 - `CleaningPipeline` (**Chain of Responsibility / Pipeline**) con pasos: extraer contenido principal (trafilatura + fallback BeautifulSoup) → eliminar boilerplate (menú, footer, banners de cookies) → normalizar Unicode y espacios → conservar estructura (títulos `#`, listas, tablas simples) → filtrar documentos vacíos/cortos → deduplicar por hash de texto.
-- Documento limpio (`data/clean/documents.jsonl`): `doc_id, url, title, section, breadcrumbs, text, lang, scraped_at, content_hash, n_chars`.
+- Documento limpio (`data/clean/documents.jsonl`): `doc_id, url, title, section, breadcrumbs, text, lang, scraped_at, content_hash, n_chars, published_at`.
+- `published_at` (opcional): en `acerca-de`/sala de prensa, fecha de publicación extraída de metadatos (`article:published_time`, JSON-LD `datePublished`) o de la fecha visible; `null` si la página no la tiene (decisión del checkpoint de M1).
 - Reporte de calidad: documentos procesados, descartados (y motivo), longitud media.
 - CLI: `clean`.
 
@@ -255,7 +258,7 @@
 **Tareas**
 - Dockerfile multi-stage, `torch` CPU-only, usuario no root, pre-descarga de modelos de embeddings/reranker en build (o caché en volumen).
 - `docker-compose.yml`: `qdrant`, `init` (ingesta si la colección está vacía), `api`, `ui`; healthchecks, `depends_on: condition`, volúmenes, `env_file` (la `XAI_API_KEY` entra solo por `.env`).
-- Snapshot opcional de `data/clean/` en el repo para que la demo no dependa del scraping en vivo (*a decidir*).
+- **El arranque con `docker compose up` NO scrapea** (decisión del checkpoint de M1): se versiona un snapshot de `data/clean/` en el repo y `init` solo indexa ese snapshot si la colección está vacía. El scraping completo (`scrape` + `clean`) queda como comando opcional documentado en el README.
 
 **Pruebas de aceptación**
 - En una máquina Linux limpia: `cp .env.example .env` (+ `XAI_API_KEY`) y `docker compose up -d --build` → UI accesible y responde una pregunta con fuentes.
@@ -273,6 +276,8 @@
 
 ## M14 — README final y cierre
 
+- **Primera línea del README:** explica que la fuente de datos es Bancolombia y no BBVA (bbva.com.co bloquea crawlers) y enlaza la entrada ADR-008 de `docs/02_DECISIONES.md` (ancla de GitHub: `#adr-008--fuente-de-datos-bancolombia-en-lugar-de-bbva-colombia`).
+- Limitaciones: trasladar la tabla de `00_VISION_GENERAL.md §12`.
 - README con las 7 secciones exigidas + diagrama de arquitectura + tabla de patrones con rutas de archivo + limitaciones honestas + mejoras futuras.
 - Verificación: clonar en carpeta nueva y seguir el README literalmente.
 - Revisión del historial de commits; tag `v1.0.0`.

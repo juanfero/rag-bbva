@@ -1,7 +1,7 @@
 # CLAUDE.md — Reglas del proyecto RAG BBVA
 
 ## Contexto
-Prueba técnica de ML/AI Engineer: sistema RAG en Python sobre https://www.bbva.com.co/.
+Prueba técnica de ML/AI Engineer: sistema RAG en Python. Cliente ficticio: BBVA Colombia; fuente de datos: https://www.bancolombia.com/ (ADR-008, bbva.com.co bloquea crawlers).
 Leer siempre antes de trabajar: `docs/00_VISION_GENERAL.md` y `docs/01_PLAN_DE_MODULOS.md`.
 
 ## Forma de trabajo (obligatoria)
@@ -12,6 +12,9 @@ Leer siempre antes de trabajar: `docs/00_VISION_GENERAL.md` y `docs/01_PLAN_DE_M
 4. Si una prueba falla: corregir el código, nunca debilitar ni borrar la prueba para que pase.
 5. Ante cualquier ambigüedad del caso: **preguntar a Juan Felipe** antes de implementar; si se decide un supuesto, registrarlo en `00_VISION_GENERAL.md §9` y en `02_DECISIONES.md`.
 6. No cambiar el stack de `00_VISION_GENERAL.md §4` sin registrar la decisión (ADR).
+
+## Fuente de datos
+- La fuente de datos es **Bancolombia** (ADR-008). El código conserva el nombre `rag_bbva`, pero **todo texto visible al usuario (prompts, UI, respuestas, README) dice Bancolombia**.
 
 ## Entorno
 - Linux + Docker. Scripts en bash; rutas POSIX.

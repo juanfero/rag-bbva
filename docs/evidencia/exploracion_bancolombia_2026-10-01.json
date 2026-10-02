@@ -1,0 +1,1262 @@
+{
+  "generated_at": "2026-10-02T02:41:41+00:00",
+  "base_url": "https://www.bancolombia.com/",
+  "user_agent": "RAG-BBVA-TechTest/1.0",
+  "delay_seconds": 1.0,
+  "requests_made": 26,
+  "robots": {
+    "url": "https://www.bancolombia.com/robots.txt",
+    "status": 200,
+    "error": null,
+    "sitemaps": [
+      "https://www.bancolombia.com/sitemap-index.xml"
+    ],
+    "applicable_user_agents": [
+      "*",
+      "Googlebot",
+      "SemrushBot",
+      "SiteAuditBot",
+      "OAI-SearchBot",
+      "Claude-SearchBot",
+      "PerplexityBot",
+      "Perplexity-User",
+      "ChatGPT-User",
+      "Claude-User",
+      "AdsBot-Google",
+      "Mediapartners-Google"
+    ],
+    "allow_rules": [
+      "/connect/*.gif",
+      "/connect/*.jpg",
+      "/connect/*.jpeg",
+      "/connect/*.png",
+      "/connect/*.svg",
+      "/connect/*.css",
+      "/connect/*.js",
+      "/contenthandler/*.gif",
+      "/contenthandler/*.jpg",
+      "/contenthandler/*.jpeg",
+      "/contenthandler/*.png",
+      "/contenthandler/*.svg",
+      "/contenthandler/*.css",
+      "/contenthandler/*.js",
+      "/contenthandler/*!ut*",
+      "/themes/*.gif",
+      "/themes/*.jpg",
+      "/themes/*.jpeg",
+      "/themes/*.png",
+      "/themes/*.svg",
+      "/themes/*.css",
+      "/themes/*.js"
+    ],
+    "disallow_rules": [
+      "/*myportal",
+      "/rest/",
+      "/cgi/",
+      "/crypto-js/",
+      "/*formulario*",
+      "/*?ofertaId*",
+      "/*pdf*",
+      "/*!ut/p/z0/",
+      "/*!ut/p/z1/",
+      "/*buscador",
+      "/wps/portal/preguntas-frecuentes/preguntas/",
+      "/wps/portal/personas/productos-servicios/tarjetas-credito/preaprobados/general",
+      "/wps/portal/personas/productos-servicios/tarjetas-credito/preaprobados",
+      "/personas/solicitud-de-productos/",
+      "/personas/solicitud-de-productos/tarjeta-american-express-azul",
+      "/personas/solicitud-de-productos/tarjeta-american-express-verde",
+      "/personas/solicitud-de-productos/tarjeta-american-express-oro",
+      "/personas/solicitud-de-productos/tarjeta-american-express-platinum",
+      "/personas/solicitud-de-productos/tarjeta-visa-clasica",
+      "/personas/solicitud-de-productos/tarjeta-visa-oro",
+      "/personas/solicitud-de-productos/tarjeta-visa-platinum",
+      "/personas/solicitud-de-productos/tarjeta-oficial-seleccion-colombia",
+      "/personas/solicitud-de-productos/tarjeta-visa-infinite",
+      "/personas/solicitud-de-productos/tarjeta-mastercard-joven",
+      "/personas/solicitud-de-productos/tarjeta-mastercard-e-card",
+      "/personas/solicitud-de-productos/tarjeta-mastercard-ideal",
+      "/personas/solicitud-de-productos/tarjeta-mastercard-clasica",
+      "/personas/solicitud-de-productos/tarjeta-mastercard-oro",
+      "/personas/solicitud-de-productos/tarjeta-mastercard-platinum",
+      "/personas/solicitud-de-productos/tarjeta-mastercard-black",
+      "/personas/solicitud-de-productos/tarjeta-mastercard-sufi-oro",
+      "/personas/solicitud-de-productos/cuenta-plan-nomina",
+      "/personas/solicitud-de-productos/cuenta-plan-basico",
+      "/personas/solicitud-de-productos/cuenta-plan-estandar",
+      "/personas/solicitud-de-productos/cuenta-plan-premium",
+      "/personas/creditos/consumo/crediagil-credito-rotativo/ampliar-plazo",
+      "/personas/creditos/consumo/credito-libre-inversion/ampliar-plazo",
+      "/personas/solicitud-de-productos/cuentas/cuentas-ahorros",
+      "/personas/solicitud-de-productos/soat/escoger-seguro",
+      "/personas/productos-servicios/creditos/preaprobados/fondo-nacional-garantias",
+      "/personas/productos-servicios/tarjetas-credito/oferta/general",
+      "/personas/productos-servicios/creditos/preaprobados/libre-inversion",
+      "/personas/productos-servicios/tarjetas-credito/preaprobados/general",
+      "/personas/productos-servicios/tarjetas-credito/preaprobados/american-express",
+      "/personas/productos-servicios/creditos/consumo/libre-inversion/preaprobados",
+      "/personas/productos-servicios/tarjetas-credito/preaprobados/ecard",
+      "/personas/aprender-es-facil/como-usar-banco/asesoria-productos-documentos/preaprobado-tarjeta-credito",
+      "/personas/productos-servicios/tarjetas-credito/preaprobados/visa",
+      "/personas/productos-servicios/tarjetas-credito/preaprobados/mastercard",
+      "/personas/productos-servicios/creditos/preaprobados-digitales",
+      "/personas/productos-servicios/tarjetas-credito/preaprobados",
+      "/personas/formulario-preaprobados",
+      "/personas/creditos/consumo/credito-libre-inversion/preaprobados",
+      "/centro-de-ayuda/preguntas-frecuentes/resultados/",
+      "/centro-de-ayuda/preguntas-frecuentes/resultados?consultaFiltroTema=/PreguntasFrecuentes/taxoTemasPreguntas/catGestionarmidiaadia/",
+      "/centro-de-ayuda/preguntas-frecuentes/resultados?consultaFiltroTema=/PreguntasFrecuentes/taxoTemasPreguntas/catSolicituddedocumentosycertificados/",
+      "/personas/beneficios/reconocimientos/simulador-credito-consumo-old",
+      "/personas/nueva-raza-old",
+      "/negocios/comercio-internacional/importar/empezar/incoterms-old",
+      "/personas/prueba-script",
+      "/personas/banco-script",
+      "/personas/temp-test-rotador",
+      "/personas/test-banner-footer",
+      "/negocios/actualizate/perspectivas-economicas/prueba-interesar",
+      "/negocios/comercio-internacional/exportar/empezar/incoterms/prueba-incoterm",
+      "/personas/aprender-es-facil/como-manejar-dinero/endeudamiento-responsable/que-es-credito/simulador-credito-consumo-old",
+      "/personas/beneficios/puntos-colombia-old",
+      "/personas/eventos/navidad-edicion-especial-old",
+      "/personas/productos-servicios/canales-servicio/sucursal-web/old-sucursal-virtual-personas",
+      "/web/transfer-gateway/checkout/jO3eB5CDqq",
+      "/personas/buscador",
+      "/wps/portal/innovacion/buscador",
+      "/empresas/capital-inteligente/buscador",
+      "/negocios/buscador",
+      "/empresas/buscador",
+      "/tramites-digitales-news"
+    ],
+    "crawl_delay": null,
+    "fully_blocked_agents": [
+      "GPTBot",
+      "Google-Extended",
+      "ClaudeBot",
+      "Applebot-Extended",
+      "cohere-ai"
+    ]
+  },
+  "sitemaps": [
+    {
+      "url": "https://www.bancolombia.com/sitemap-index.xml",
+      "status": 200,
+      "kind": "index",
+      "entries": 4,
+      "error": null
+    },
+    {
+      "url": "https://www.bancolombia.com/sitemap.xml",
+      "status": 200,
+      "kind": "index",
+      "entries": 7,
+      "error": null
+    },
+    {
+      "url": "https://www.bancolombia.com/sitemap-personas.xml",
+      "status": 200,
+      "kind": "urlset",
+      "entries": 440,
+      "error": null
+    },
+    {
+      "url": "https://www.bancolombia.com/sitemap-acerca-de.xml",
+      "status": 200,
+      "kind": "urlset",
+      "entries": 119,
+      "error": null
+    },
+    {
+      "url": "https://www.bancolombia.com/sitemap-centro-de-ayuda.xml",
+      "status": 200,
+      "kind": "urlset",
+      "entries": 170,
+      "error": null
+    },
+    {
+      "url": "https://www.bancolombia.com/sitemap-educacion-financiera.xml",
+      "status": 200,
+      "kind": "urlset",
+      "entries": 28,
+      "error": null
+    },
+    {
+      "url": "https://www.bancolombia.com/sitemap-empresas.xml",
+      "status": 200,
+      "kind": "urlset",
+      "entries": 201,
+      "error": null
+    },
+    {
+      "url": "https://www.bancolombia.com/sitemap-negocios.xml",
+      "status": 200,
+      "kind": "urlset",
+      "entries": 93,
+      "error": null
+    },
+    {
+      "url": "https://www.bancolombia.com/sitemap-sala-de-prensa.xml",
+      "status": 200,
+      "kind": "urlset",
+      "entries": 73,
+      "error": null
+    }
+  ],
+  "url_stats": {
+    "total_unique": 1118,
+    "on_domain": 1118,
+    "off_domain_hosts": {},
+    "allowed_by_robots": 1113,
+    "disallowed_by_robots": 5,
+    "disallowed_examples": [
+      "https://www.bancolombia.com/personas/solicitud-de-productos/cambio-plan-cuentas-ahorro",
+      "https://www.bancolombia.com/personas/solicitud-de-productos/cuentas",
+      "https://www.bancolombia.com/personas/formulario-legal",
+      "https://www.bancolombia.com/personas/solicitud-de-productos/cuentas/cuentas-ahorros",
+      "https://www.bancolombia.com/personas/solicitud-de-productos/tarjeta-american-express-verde"
+    ],
+    "by_section": {
+      "personas": 438,
+      "empresas": 201,
+      "acerca-de": 189,
+      "centro-de-ayuda": 169,
+      "negocios": 93,
+      "educacion-financiera": 28
+    },
+    "by_extension": {
+      "html (sin extensión)": 1113,
+      "sass": 4,
+      "com": 1
+    },
+    "with_query": 0,
+    "wps_portal": 0
+  },
+  "sample": [
+    {
+      "section": "personas",
+      "fetch": {
+        "url": "https://www.bancolombia.com/personas",
+        "final_url": "https://www.bancolombia.com/personas",
+        "status": 200,
+        "content_type": "text/html; type=SSA; charset=UTF-8",
+        "size_bytes": 219354,
+        "elapsed_ms": 750,
+        "error": null,
+        "skipped": null
+      },
+      "title": "Bancolombia Personas",
+      "words": 901,
+      "scripts": 34,
+      "verdict": "parcial",
+      "placeholders": [
+        "${title}",
+        "${loading}",
+        "${badge}"
+      ],
+      "spa_markers": [],
+      "common_selectors": {
+        "main": 0,
+        "article": 0,
+        "[role=main]": 9815,
+        "#main-content": 0,
+        "#content": 0,
+        ".main-content": 0
+      },
+      "top_containers": [
+        {
+          "selector": "div#layoutContainers",
+          "chars": 7603,
+          "link_density": 0.86
+        },
+        {
+          "selector": "div.wpthemeInner",
+          "chars": 7603,
+          "link_density": 0.86
+        },
+        {
+          "selector": "div.wptheme1Col",
+          "chars": 7603,
+          "link_density": 0.86
+        },
+        {
+          "selector": "div.component-container.wpthemeLeft.wpthemeCol",
+          "chars": 7603,
+          "link_density": 0.86
+        },
+        {
+          "selector": "div.component-control.id-Z7_OHHGG4G0P8KT30Q35AQQH3PAU4",
+          "chars": 701,
+          "link_density": 0.14
+        }
+      ],
+      "rendered_coverage": 0.859,
+      "rendered_words": 440,
+      "only_rendered_sample": [
+        "000",
+        "100",
+        "acciones",
+        "aceptar",
+        "acompaña",
+        "activarán",
+        "amigo",
+        "autorizas",
+        "beneficio",
+        "categorías",
+        "cobertura",
+        "como",
+        "componente",
+        "conforme",
+        "consulta"
+      ],
+      "only_rendered_segments": [
+        "Disfruta este beneficio en vuelos, paquetes, hoteles y más si pagas con nuestras tarjetas. *Descuento máximo $100.000.",
+        "Protege tu viaje con el Seguro de Viajes Cero estrés.",
+        "Tu peludo tiene cobertura cuando más la necesita. El seguro para mascotas los acompaña",
+        "BANCOLOMBIA S.A., como responsable del sitio, utiliza cookies y tecnologías propias o de terceros para garantizar el funcionamiento de las plataformas digitales, mejorar tu experiencia de navegación, optimizar el rendimiento y ofrecer contenidos y publicidad.",
+        "Al aceptar todo, autorizas el uso de las tecnologías seleccionadas conforme a la política de cookies. Si decides rechazar, solo se activarán las cookies necesarias para el funcionamiento del sitio. Para más información sobre categorías, terceros y tratamiento de datos, consulta nuestra"
+      ],
+      "render_error": null
+    },
+    {
+      "section": "personas",
+      "fetch": {
+        "url": "https://www.bancolombia.com/personas/creditos/negocios",
+        "final_url": "https://www.bancolombia.com/negocios/productos/financiacion/creditos?utm_source=redirect&utm_medium=organic&utm_campaign=personas",
+        "status": 200,
+        "content_type": "text/html; charset=utf-8",
+        "size_bytes": 224533,
+        "elapsed_ms": 1320,
+        "error": null,
+        "skipped": null
+      },
+      "title": "Créditos para negocios, empresas, pymes y corporaciones",
+      "words": 558,
+      "scripts": 14,
+      "verdict": "no_requiere_js",
+      "placeholders": [],
+      "spa_markers": [],
+      "common_selectors": {
+        "main": 3239,
+        "article": 37,
+        "[role=main]": 0,
+        "#main-content": 0,
+        "#content": 0,
+        ".main-content": 0
+      },
+      "top_containers": [
+        {
+          "selector": "div.bc-overflow-hidden",
+          "chars": 4653,
+          "link_density": 0.29
+        },
+        {
+          "selector": "main.flex.flex-1",
+          "chars": 3239,
+          "link_density": 0.19
+        },
+        {
+          "selector": "section.cbc-container--personalize.bc-position-relative",
+          "chars": 3052,
+          "link_density": 0.19
+        },
+        {
+          "selector": "div.bc-container.cbc-mw-xxl.bc-flex",
+          "chars": 3052,
+          "link_density": 0.19
+        },
+        {
+          "selector": "div.bc-flex.bc-direction-column.bc-w-100",
+          "chars": 3052,
+          "link_density": 0.19
+        }
+      ],
+      "rendered_coverage": 0.877,
+      "rendered_words": 301,
+      "only_rendered_sample": [
+        "aceptar",
+        "activarán",
+        "autorizas",
+        "categorías",
+        "como",
+        "conforme",
+        "consulta",
+        "contenidos",
+        "cookies",
+        "decides",
+        "entrar",
+        "experiencia",
+        "funcionamiento",
+        "garantizar",
+        "mejorar"
+      ],
+      "only_rendered_segments": [
+        "BANCOLOMBIA S.A., como responsable del sitio, utiliza cookies y tecnologías propias o de terceros para garantizar el funcionamiento de las plataformas digitales, mejorar tu experiencia de navegación, optimizar el rendimiento y ofrecer contenidos y publicidad.",
+        "Al aceptar todo, autorizas el uso de las tecnologías seleccionadas conforme a la política de cookies. Si decides rechazar, solo se activarán las cookies necesarias para el funcionamiento del sitio. Para más información sobre categorías, terceros y tratamiento de datos, consulta nuestra"
+      ],
+      "render_error": null
+    },
+    {
+      "section": "personas",
+      "fetch": {
+        "url": "https://www.bancolombia.com/personas/productos-servicios/leasing/vehiculo/referido-leasing-vehiculo",
+        "final_url": "https://www.bancolombia.com/personas/productos-servicios/leasing/vehiculo/referido-leasing-vehiculo",
+        "status": 200,
+        "content_type": "text/html; charset=UTF-8",
+        "size_bytes": 99635,
+        "elapsed_ms": 590,
+        "error": null,
+        "skipped": null
+      },
+      "title": "Solicitud de Leasing para Vehículo",
+      "words": 511,
+      "scripts": 24,
+      "verdict": "no_requiere_js",
+      "placeholders": [],
+      "spa_markers": [],
+      "common_selectors": {
+        "main": 0,
+        "article": 0,
+        "[role=main]": 0,
+        "#main-content": 0,
+        "#content": 0,
+        ".main-content": 0
+      },
+      "top_containers": [
+        {
+          "selector": "div.component-control.id-Z7_OHHGG4G0P8FA8061V7ABVP02J4",
+          "chars": 450,
+          "link_density": 0.0
+        },
+        {
+          "selector": "div.lrpError.lrpErrorLtr",
+          "chars": 450,
+          "link_density": 0.0
+        },
+        {
+          "selector": "div.lrpErrorBox",
+          "chars": 450,
+          "link_density": 0.0
+        },
+        {
+          "selector": "div.lrpErrorContent",
+          "chars": 450,
+          "link_density": 0.0
+        },
+        {
+          "selector": "div.lrpErrorForm",
+          "chars": 450,
+          "link_density": 0.0
+        }
+      ],
+      "rendered_coverage": 0.896,
+      "rendered_words": 202,
+      "only_rendered_sample": [
+        "aviso",
+        "contenido",
+        "correlacionada",
+        "creación",
+        "del",
+        "desarrollador",
+        "diseñador",
+        "elemento",
+        "este",
+        "está",
+        "frontal",
+        "hecho",
+        "mostrar",
+        "notifique",
+        "plantilla"
+      ],
+      "only_rendered_segments": [
+        "El sistema no puede mostrar el elemento de contenido al que se ha hecho referencia. La plantilla de creación \"Bancolombia/Generales/Iframe Responsive/Iframe Responsive\" del elemento de contenido \"BancolombiaPersonas/Personas/Productos y Servicios/Leasing/Leasing de Vehiculo/Formulario Referido Leasing para Vehículo/Formulario de Solicitud de Leasing para Vehículo Bancolombia\" no está correlacionada en una plantilla de presentación. Notifique este problema a su diseñador o desarrollador frontal."
+      ],
+      "render_error": null
+    },
+    {
+      "section": "empresas",
+      "fetch": {
+        "url": "https://www.bancolombia.com/empresas",
+        "final_url": "https://www.bancolombia.com/negocios?utm_source=redirect&utm_medium=organic&utm_campaign=empresas",
+        "status": 200,
+        "content_type": "text/html; charset=utf-8",
+        "size_bytes": 167857,
+        "elapsed_ms": 1393,
+        "error": null,
+        "skipped": null
+      },
+      "title": "Productos Bancarios para empresas, Pymes y Corporaciones",
+      "words": 237,
+      "scripts": 19,
+      "verdict": "no_requiere_js",
+      "placeholders": [],
+      "spa_markers": [],
+      "common_selectors": {
+        "main": 684,
+        "article": 37,
+        "[role=main]": 0,
+        "#main-content": 0,
+        "#content": 0,
+        ".main-content": 0
+      },
+      "top_containers": [
+        {
+          "selector": "div.bc-overflow-hidden",
+          "chars": 2098,
+          "link_density": 0.41
+        },
+        {
+          "selector": "main.flex.flex-1",
+          "chars": 684,
+          "link_density": 0.17
+        },
+        {
+          "selector": "section.cbc-container--personalize.bc-position-relative",
+          "chars": 684,
+          "link_density": 0.17
+        },
+        {
+          "selector": "div.bc-container.cbc-mw-xxl.bc-flex",
+          "chars": 684,
+          "link_density": 0.17
+        },
+        {
+          "selector": "div.bc-flex.bc-direction-column.bc-w-100",
+          "chars": 684,
+          "link_density": 0.17
+        }
+      ],
+      "rendered_coverage": 0.798,
+      "rendered_words": 188,
+      "only_rendered_sample": [
+        "aceptar",
+        "activarán",
+        "ahora",
+        "autorizas",
+        "categorías",
+        "como",
+        "conforme",
+        "consulta",
+        "contenidos",
+        "cookies",
+        "decides",
+        "experiencia",
+        "funcionamiento",
+        "garantizar",
+        "llamar"
+      ],
+      "only_rendered_segments": [
+        "BANCOLOMBIA S.A., como responsable del sitio, utiliza cookies y tecnologías propias o de terceros para garantizar el funcionamiento de las plataformas digitales, mejorar tu experiencia de navegación, optimizar el rendimiento y ofrecer contenidos y publicidad.",
+        "Al aceptar todo, autorizas el uso de las tecnologías seleccionadas conforme a la política de cookies. Si decides rechazar, solo se activarán las cookies necesarias para el funcionamiento del sitio. Para más información sobre categorías, terceros y tratamiento de datos, consulta nuestra"
+      ],
+      "render_error": null
+    },
+    {
+      "section": "empresas",
+      "fetch": {
+        "url": "https://www.bancolombia.com/empresas/productos-servicios/canales-servicio/sucursal-telefonica/fiduciaria-bancolombia",
+        "final_url": "https://fiduciaria.bancolombia.com/contactanos?utm_source=redirect&utm_medium=organic&utm_campaign=empresas",
+        "status": 301,
+        "content_type": null,
+        "size_bytes": 0,
+        "elapsed_ms": 0,
+        "error": null,
+        "skipped": "redirige a una URL fuera del dominio objetivo"
+      },
+      "title": null,
+      "words": null,
+      "scripts": null,
+      "verdict": null,
+      "placeholders": [],
+      "spa_markers": [],
+      "common_selectors": {},
+      "top_containers": [],
+      "rendered_coverage": null,
+      "rendered_words": null,
+      "only_rendered_sample": [],
+      "only_rendered_segments": [],
+      "render_error": null
+    },
+    {
+      "section": "empresas",
+      "fetch": {
+        "url": "https://www.bancolombia.com/empresas/productos-servicios/negocios-fiduciarios/administracion-pagos",
+        "final_url": "https://fiduciaria.bancolombia.com/productos-servicios/negocios-fiduciarios/administracion-pagos?utm_source=redirect&utm_medium=organic&utm_campaign=empresas",
+        "status": 301,
+        "content_type": null,
+        "size_bytes": 0,
+        "elapsed_ms": 0,
+        "error": null,
+        "skipped": "redirige a una URL fuera del dominio objetivo"
+      },
+      "title": null,
+      "words": null,
+      "scripts": null,
+      "verdict": null,
+      "placeholders": [],
+      "spa_markers": [],
+      "common_selectors": {},
+      "top_containers": [],
+      "rendered_coverage": null,
+      "rendered_words": null,
+      "only_rendered_sample": [],
+      "only_rendered_segments": [],
+      "render_error": null
+    },
+    {
+      "section": "acerca-de",
+      "fetch": {
+        "url": "https://www.bancolombia.com/acerca-de",
+        "final_url": "https://www.bancolombia.com/acerca-de",
+        "status": 200,
+        "content_type": "text/html; charset=UTF-8",
+        "size_bytes": 115387,
+        "elapsed_ms": 1036,
+        "error": null,
+        "skipped": null
+      },
+      "title": "Bancolombia: Promovemos desarrollo económico sostenible. ¡Conoce más!",
+      "words": 538,
+      "scripts": 33,
+      "verdict": "no_requiere_js",
+      "placeholders": [],
+      "spa_markers": [],
+      "common_selectors": {
+        "main": 0,
+        "article": 0,
+        "[role=main]": 0,
+        "#main-content": 1815,
+        "#content": 0,
+        ".main-content": 0
+      },
+      "top_containers": [
+        {
+          "selector": "div#main-content",
+          "chars": 1814,
+          "link_density": 0.3
+        },
+        {
+          "selector": "div.component-control.id-Z7_2G9I1K41N8AD50QDBM0JIM34D1",
+          "chars": 1107,
+          "link_density": 0.27
+        },
+        {
+          "selector": "section.innovation.py-4",
+          "chars": 1107,
+          "link_density": 0.27
+        },
+        {
+          "selector": "div.container-fluid.px-4",
+          "chars": 1107,
+          "link_density": 0.27
+        },
+        {
+          "selector": "div.row.row-cols-1.row-cols-md-2",
+          "chars": 1107,
+          "link_density": 0.27
+        }
+      ],
+      "rendered_coverage": 0.924,
+      "rendered_words": 302,
+      "only_rendered_sample": [
+        "2026",
+        "además",
+        "cibest",
+        "contenidos",
+        "cookies",
+        "copyright",
+        "estados",
+        "estadística",
+        "fiducia",
+        "financiamiento",
+        "mejorar",
+        "monitorear",
+        "nuestro",
+        "ofrecido",
+        "portafolio"
+      ],
+      "only_rendered_segments": [
+        "Copyright © 2026 Grupo Cibest. Productos y servicios de Banca, Fiducia, Banca de Inversión, Financiamiento, además del portafolio ofrecido",
+        "por las entidades del exterior en Panamá, Estados Unidos y Puerto Rico.",
+        "Utilizamos cookies propias y de terceros para mejorar nuestro servicio, monitorear información estadística y presentarte contenidos y publicidad relacionados con tus preferencias."
+      ],
+      "render_error": null
+    },
+    {
+      "section": "acerca-de",
+      "fetch": {
+        "url": "https://www.bancolombia.com/acerca-de/informacion-corporativa/historias-que-transforman/origenes/sostenibilidad/frutalia-colombia",
+        "final_url": "https://www.bancolombia.com/acerca-de/informacion-corporativa/historias-que-transforman/origenes/sostenibilidad/frutalia-colombia",
+        "status": 200,
+        "content_type": "text/html; charset=UTF-8",
+        "size_bytes": 129789,
+        "elapsed_ms": 387,
+        "error": null,
+        "skipped": null
+      },
+      "title": "Transformando el sabor del campo con la aromática de frutas",
+      "words": 1009,
+      "scripts": 37,
+      "verdict": "no_requiere_js",
+      "placeholders": [],
+      "spa_markers": [],
+      "common_selectors": {
+        "main": 0,
+        "article": 0,
+        "[role=main]": 0,
+        "#main-content": 5863,
+        "#content": 0,
+        ".main-content": 0
+      },
+      "top_containers": [
+        {
+          "selector": "div#main-content",
+          "chars": 5759,
+          "link_density": 0.24
+        },
+        {
+          "selector": "div.wptheme1Col",
+          "chars": 5759,
+          "link_density": 0.24
+        },
+        {
+          "selector": "div.component-container.wpthemeLeft.wpthemeCol",
+          "chars": 5759,
+          "link_density": 0.24
+        },
+        {
+          "selector": "div.component-control.id-Z7_OHHGG4G0P0EMA06Q0L2CE1IJH4",
+          "chars": 3969,
+          "link_density": 0.0
+        },
+        {
+          "selector": "section#contenidoGaleria",
+          "chars": 3902,
+          "link_density": 0.0
+        }
+      ],
+      "rendered_coverage": 1.0,
+      "rendered_words": 544,
+      "only_rendered_sample": [],
+      "only_rendered_segments": [],
+      "render_error": null
+    },
+    {
+      "section": "centro-de-ayuda",
+      "fetch": {
+        "url": "https://www.bancolombia.com/centro-de-ayuda",
+        "final_url": "https://www.bancolombia.com/centro-de-ayuda",
+        "status": 200,
+        "content_type": "text/html; charset=UTF-8",
+        "size_bytes": 234541,
+        "elapsed_ms": 330,
+        "error": null,
+        "skipped": null
+      },
+      "title": "Centro de Ayuda Bancolombia: resolvemos tus inquietudes",
+      "words": 1065,
+      "scripts": 37,
+      "verdict": "parcial",
+      "placeholders": [
+        "${title}",
+        "${loading}",
+        "${badge}"
+      ],
+      "spa_markers": [],
+      "common_selectors": {
+        "main": 0,
+        "article": 0,
+        "[role=main]": 10897,
+        "#main-content": 0,
+        "#content": 0,
+        ".main-content": 0
+      },
+      "top_containers": [
+        {
+          "selector": "div#layoutContainers",
+          "chars": 9038,
+          "link_density": 0.84
+        },
+        {
+          "selector": "div.wpthemeInner",
+          "chars": 9038,
+          "link_density": 0.84
+        },
+        {
+          "selector": "div.fullWidthContainer",
+          "chars": 9038,
+          "link_density": 0.84
+        },
+        {
+          "selector": "div.component-container.fullWidthColumn.wpthemeCol",
+          "chars": 9038,
+          "link_density": 0.84
+        },
+        {
+          "selector": "div.component-control.id-Z7_OHHGG4G0POVU30QTQ792VO3883",
+          "chars": 902,
+          "link_density": 0.15
+        }
+      ],
+      "rendered_coverage": 0.913,
+      "rendered_words": 414,
+      "only_rendered_sample": [
+        "acciones",
+        "aceptar",
+        "activarán",
+        "autorizas",
+        "categorías",
+        "como",
+        "componente",
+        "conforme",
+        "consulta",
+        "contenidos",
+        "cookies",
+        "decides",
+        "experiencia",
+        "funcionamiento",
+        "garantizar"
+      ],
+      "only_rendered_segments": [
+        "BANCOLOMBIA S.A., como responsable del sitio, utiliza cookies y tecnologías propias o de terceros para garantizar el funcionamiento de las plataformas digitales, mejorar tu experiencia de navegación, optimizar el rendimiento y ofrecer contenidos y publicidad.",
+        "Al aceptar todo, autorizas el uso de las tecnologías seleccionadas conforme a la política de cookies. Si decides rechazar, solo se activarán las cookies necesarias para el funcionamiento del sitio. Para más información sobre categorías, terceros y tratamiento de datos, consulta nuestra"
+      ],
+      "render_error": null
+    },
+    {
+      "section": "centro-de-ayuda",
+      "fetch": {
+        "url": "https://www.bancolombia.com/centro-de-ayuda/preguntas-frecuentes/cuanto-retirar-diariamente",
+        "final_url": "https://www.bancolombia.com/centro-de-ayuda/preguntas-frecuentes/cuanto-retirar-diariamente",
+        "status": 200,
+        "content_type": "text/html; charset=UTF-8",
+        "size_bytes": 173743,
+        "elapsed_ms": 301,
+        "error": null,
+        "skipped": null
+      },
+      "title": "¿Cuánto dinero puedo retirar diariamente en Bancolombia?",
+      "words": 564,
+      "scripts": 35,
+      "verdict": "parcial",
+      "placeholders": [
+        "${title}",
+        "${loading}",
+        "${badge}"
+      ],
+      "spa_markers": [],
+      "common_selectors": {
+        "main": 0,
+        "article": 0,
+        "[role=main]": 6553,
+        "#main-content": 0,
+        "#content": 0,
+        ".main-content": 0
+      },
+      "top_containers": [
+        {
+          "selector": "div.bc-row.bc-no-gutters",
+          "chars": 1283,
+          "link_density": 0.16
+        },
+        {
+          "selector": "div.component-container.bc-col-lg-8.wpthemeCol",
+          "chars": 1167,
+          "link_density": 0.12
+        },
+        {
+          "selector": "div.component-control.id-Z7_OHHGG4G0POVU30QTQ792VO3CR5",
+          "chars": 1052,
+          "link_density": 0.08
+        },
+        {
+          "selector": "div.wpthemeHiddenPlus",
+          "chars": 1052,
+          "link_density": 0.08
+        },
+        {
+          "selector": "section.ibmPortalControl.wpthemeControl.wpthemeHiddenPlusControl",
+          "chars": 1052,
+          "link_density": 0.08
+        }
+      ],
+      "rendered_coverage": 0.78,
+      "rendered_words": 296,
+      "only_rendered_sample": [
+        "abro",
+        "acciones",
+        "aceptar",
+        "activarán",
+        "apertura",
+        "arrow2",
+        "autorizas",
+        "categorías",
+        "celular",
+        "como",
+        "componente",
+        "conforme",
+        "consulta",
+        "contenido",
+        "contenidos"
+      ],
+      "only_rendered_segments": [
+        "¿Cómo funciona la Cuenta de Ahorros y Corriente en el exterior?",
+        "¿Me puedo vincular a Bancolombia si soy independiente?",
+        "¿El RUT es un documento indispensable para la apertura de cuenta?",
+        "¿Cómo abro una Cuenta de Ahorros tradicional de Bancolombia por la página web desde el celular?",
+        "BANCOLOMBIA S.A., como responsable del sitio, utiliza cookies y tecnologías propias o de terceros para garantizar el funcionamiento de las plataformas digitales, mejorar tu experiencia de navegación, optimizar el rendimiento y ofrecer contenidos y publicidad.",
+        "Al aceptar todo, autorizas el uso de las tecnologías seleccionadas conforme a la política de cookies. Si decides rechazar, solo se activarán las cookies necesarias para el funcionamiento del sitio. Para más información sobre categorías, terceros y tratamiento de datos, consulta nuestra"
+      ],
+      "render_error": null
+    },
+    {
+      "section": "negocios",
+      "fetch": {
+        "url": "https://www.bancolombia.com/negocios",
+        "final_url": "https://www.bancolombia.com/negocios",
+        "status": 200,
+        "content_type": "text/html; charset=utf-8",
+        "size_bytes": 166329,
+        "elapsed_ms": 323,
+        "error": null,
+        "skipped": null
+      },
+      "title": "Productos Bancarios para empresas, Pymes y Corporaciones",
+      "words": 237,
+      "scripts": 14,
+      "verdict": "no_requiere_js",
+      "placeholders": [],
+      "spa_markers": [],
+      "common_selectors": {
+        "main": 684,
+        "article": 37,
+        "[role=main]": 0,
+        "#main-content": 0,
+        "#content": 0,
+        ".main-content": 0
+      },
+      "top_containers": [
+        {
+          "selector": "div.bc-overflow-hidden",
+          "chars": 2098,
+          "link_density": 0.41
+        },
+        {
+          "selector": "main.flex.flex-1",
+          "chars": 684,
+          "link_density": 0.17
+        },
+        {
+          "selector": "section.cbc-container--personalize.bc-position-relative",
+          "chars": 684,
+          "link_density": 0.17
+        },
+        {
+          "selector": "div.bc-container.cbc-mw-xxl.bc-flex",
+          "chars": 684,
+          "link_density": 0.17
+        },
+        {
+          "selector": "div.bc-flex.bc-direction-column.bc-w-100",
+          "chars": 684,
+          "link_density": 0.17
+        }
+      ],
+      "rendered_coverage": 0.798,
+      "rendered_words": 188,
+      "only_rendered_sample": [
+        "aceptar",
+        "activarán",
+        "ahora",
+        "autorizas",
+        "categorías",
+        "como",
+        "conforme",
+        "consulta",
+        "contenidos",
+        "cookies",
+        "decides",
+        "experiencia",
+        "funcionamiento",
+        "garantizar",
+        "llamar"
+      ],
+      "only_rendered_segments": [
+        "BANCOLOMBIA S.A., como responsable del sitio, utiliza cookies y tecnologías propias o de terceros para garantizar el funcionamiento de las plataformas digitales, mejorar tu experiencia de navegación, optimizar el rendimiento y ofrecer contenidos y publicidad.",
+        "Al aceptar todo, autorizas el uso de las tecnologías seleccionadas conforme a la política de cookies. Si decides rechazar, solo se activarán las cookies necesarias para el funcionamiento del sitio. Para más información sobre categorías, terceros y tratamiento de datos, consulta nuestra"
+      ],
+      "render_error": null
+    },
+    {
+      "section": "negocios",
+      "fetch": {
+        "url": "https://www.bancolombia.com/negocios/productos/financiacion/creditos/cartera-ordinaria",
+        "final_url": "https://www.bancolombia.com/negocios/productos/financiacion/creditos/cartera-ordinaria",
+        "status": 200,
+        "content_type": "text/html; charset=utf-8",
+        "size_bytes": 217199,
+        "elapsed_ms": 361,
+        "error": null,
+        "skipped": null
+      },
+      "title": "Crédito cartera ordinaria para empresas, pymes y corporaciones",
+      "words": 430,
+      "scripts": 14,
+      "verdict": "no_requiere_js",
+      "placeholders": [],
+      "spa_markers": [],
+      "common_selectors": {
+        "main": 2274,
+        "article": 37,
+        "[role=main]": 0,
+        "#main-content": 0,
+        "#content": 0,
+        ".main-content": 0
+      },
+      "top_containers": [
+        {
+          "selector": "div.bc-overflow-hidden",
+          "chars": 3688,
+          "link_density": 0.24
+        },
+        {
+          "selector": "main.flex.flex-1",
+          "chars": 2274,
+          "link_density": 0.07
+        },
+        {
+          "selector": "section.cbc-container--personalize.bc-position-relative",
+          "chars": 599,
+          "link_density": 0.0
+        },
+        {
+          "selector": "div.bc-container.cbc-mw-xxl.bc-flex",
+          "chars": 599,
+          "link_density": 0.0
+        },
+        {
+          "selector": "div.bc-flex.bc-direction-column.bc-w-100",
+          "chars": 599,
+          "link_density": 0.0
+        }
+      ],
+      "rendered_coverage": 0.884,
+      "rendered_words": 310,
+      "only_rendered_sample": [
+        "aceptar",
+        "activarán",
+        "autorizas",
+        "categorías",
+        "como",
+        "conforme",
+        "contenidos",
+        "cookies",
+        "decides",
+        "entrar",
+        "experiencia",
+        "funcionamiento",
+        "garantizar",
+        "llamar",
+        "mejorar"
+      ],
+      "only_rendered_segments": [
+        "BANCOLOMBIA S.A., como responsable del sitio, utiliza cookies y tecnologías propias o de terceros para garantizar el funcionamiento de las plataformas digitales, mejorar tu experiencia de navegación, optimizar el rendimiento y ofrecer contenidos y publicidad.",
+        "Al aceptar todo, autorizas el uso de las tecnologías seleccionadas conforme a la política de cookies. Si decides rechazar, solo se activarán las cookies necesarias para el funcionamiento del sitio. Para más información sobre categorías, terceros y tratamiento de datos, consulta nuestra"
+      ],
+      "render_error": null
+    },
+    {
+      "section": "educacion-financiera",
+      "fetch": {
+        "url": "https://www.bancolombia.com/educacion-financiera",
+        "final_url": "https://www.bancolombia.com/educacion-financiera",
+        "status": 200,
+        "content_type": "text/html; charset=UTF-8",
+        "size_bytes": 214168,
+        "elapsed_ms": 538,
+        "error": null,
+        "skipped": null
+      },
+      "title": "Educación Financiera - Bancolombia",
+      "words": 895,
+      "scripts": 33,
+      "verdict": "parcial",
+      "placeholders": [
+        "${title}",
+        "${loading}",
+        "${badge}"
+      ],
+      "spa_markers": [],
+      "common_selectors": {
+        "main": 0,
+        "article": 0,
+        "[role=main]": 9317,
+        "#main-content": 0,
+        "#content": 0,
+        ".main-content": 0
+      },
+      "top_containers": [
+        {
+          "selector": "div#layoutContainers",
+          "chars": 7458,
+          "link_density": 0.75
+        },
+        {
+          "selector": "div.wpthemeInner",
+          "chars": 7458,
+          "link_density": 0.75
+        },
+        {
+          "selector": "div.wptheme1Col",
+          "chars": 7458,
+          "link_density": 0.75
+        },
+        {
+          "selector": "div.component-container.wpthemeLeft.wpthemeCol",
+          "chars": 7458,
+          "link_density": 0.75
+        },
+        {
+          "selector": "div.component-control.id-Z7_OHHGG4G0P0MTA06QV3G1FJPGA3",
+          "chars": 1364,
+          "link_density": 0.08
+        }
+      ],
+      "rendered_coverage": 0.804,
+      "rendered_words": 464,
+      "only_rendered_sample": [
+        "2022",
+        "2023",
+        "acciones",
+        "aceptar",
+        "acorde",
+        "activarán",
+        "afecta",
+        "ajedrez",
+        "aprender",
+        "artículo",
+        "autorizas",
+        "bienestar",
+        "colectiva",
+        "comiences",
+        "como"
+      ],
+      "only_rendered_segments": [
+        "¿Qué son los gastos hormiga y cómo manejarlos?",
+        "¿Qué es la información exógena y qué se reporta en ella?",
+        "Opciones para vivir en la casa que quieres.",
+        "Artículo Educación financiera- crédito vivienda",
+        "Descubre cómo la inflación afecta tu crédito de vivienda en UVR y cómo modificarlo acorde a tus necesidades. ¡Conoce más y mejora tu bienestar financiero!",
+        "¿Qué tener en cuenta con un Leasing habitacional no familiar?",
+        "Aprende ¿Qué es y cómo funciona? el Leasing habitacional no familiar. Puedes financiar hasta el 90% del valor de la vivienda. Conoce más aquí.",
+        "La historia del ajedrez y el interés compuesto."
+      ],
+      "render_error": null
+    },
+    {
+      "section": "educacion-financiera",
+      "fetch": {
+        "url": "https://www.bancolombia.com/educacion-financiera/la-casa-de-la-plata",
+        "final_url": "https://www.bancolombia.com/educacion-financiera/la-casa-de-la-plata",
+        "status": 200,
+        "content_type": "text/html; charset=UTF-8",
+        "size_bytes": 167241,
+        "elapsed_ms": 368,
+        "error": null,
+        "skipped": null
+      },
+      "title": "La Casa de la Plata: un punto de encuentro para que hablemos de plata.",
+      "words": 631,
+      "scripts": 25,
+      "verdict": "parcial",
+      "placeholders": [
+        "${title}",
+        "${loading}",
+        "${badge}"
+      ],
+      "spa_markers": [],
+      "common_selectors": {
+        "main": 0,
+        "article": 0,
+        "[role=main]": 7219,
+        "#main-content": 0,
+        "#content": 0,
+        ".main-content": 0
+      },
+      "top_containers": [
+        {
+          "selector": "div.component-control.id-Z7_OHHGG4G0P0MTA06QV3G1FJLUA7",
+          "chars": 777,
+          "link_density": 0.15
+        },
+        {
+          "selector": "div.wpthemeHiddenPlus",
+          "chars": 777,
+          "link_density": 0.15
+        },
+        {
+          "selector": "section.ibmPortalControl.wpthemeControl.wpthemeHiddenPlusControl",
+          "chars": 777,
+          "link_density": 0.15
+        },
+        {
+          "selector": "div.wpthemeControlBody.wpthemeHiddenPlusControlBody.wpthemeOverflowAuto",
+          "chars": 695,
+          "link_density": 0.08
+        },
+        {
+          "selector": "section#seccion-home-menu-grilla",
+          "chars": 695,
+          "link_density": 0.08
+        }
+      ],
+      "rendered_coverage": 0.892,
+      "rendered_words": 325,
+      "only_rendered_sample": [
+        "acciones",
+        "aceptar",
+        "activarán",
+        "autorizas",
+        "categorías",
+        "componente",
+        "conforme",
+        "consulta",
+        "contenidos",
+        "cookies",
+        "decides",
+        "experiencia",
+        "funcionamiento",
+        "garantizar",
+        "mejorar"
+      ],
+      "only_rendered_segments": [
+        "BANCOLOMBIA S.A., como responsable del sitio, utiliza cookies y tecnologías propias o de terceros para garantizar el funcionamiento de las plataformas digitales, mejorar tu experiencia de navegación, optimizar el rendimiento y ofrecer contenidos y publicidad.",
+        "Al aceptar todo, autorizas el uso de las tecnologías seleccionadas conforme a la política de cookies. Si decides rechazar, solo se activarán las cookies necesarias para el funcionamiento del sitio. Para más información sobre categorías, terceros y tratamiento de datos, consulta nuestra"
+      ],
+      "render_error": null
+    }
+  ],
+  "verdict_counts": {
+    "parcial": 5,
+    "no_requiere_js": 7,
+    "sin análisis": 2
+  },
+  "content_types": {
+    "text/html": 12,
+    "sin respuesta": 2
+  },
+  "status_codes": {
+    "200": 12,
+    "301": 2
+  },
+  "redirects": {
+    "https://www.bancolombia.com/personas/creditos/negocios": "https://www.bancolombia.com/negocios/productos/financiacion/creditos?utm_source=redirect&utm_medium=organic&utm_campaign=personas",
+    "https://www.bancolombia.com/empresas": "https://www.bancolombia.com/negocios?utm_source=redirect&utm_medium=organic&utm_campaign=empresas",
+    "https://www.bancolombia.com/empresas/productos-servicios/canales-servicio/sucursal-telefonica/fiduciaria-bancolombia": "https://fiduciaria.bancolombia.com/contactanos?utm_source=redirect&utm_medium=organic&utm_campaign=empresas",
+    "https://www.bancolombia.com/empresas/productos-servicios/negocios-fiduciarios/administracion-pagos": "https://fiduciaria.bancolombia.com/productos-servicios/negocios-fiduciarios/administracion-pagos?utm_source=redirect&utm_medium=organic&utm_campaign=empresas"
+  },
+  "duplicate_titles": {
+    "Productos Bancarios para empresas, Pymes y Corporaciones": [
+      "https://www.bancolombia.com/empresas",
+      "https://www.bancolombia.com/negocios"
+    ]
+  }
+}

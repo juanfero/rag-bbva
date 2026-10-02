@@ -240,8 +240,8 @@ Salida: comando CLI `metrics`, endpoint `GET /analytics/summary`, página "Métr
 |---|---|---|
 | S-01 | La fecha de entrega del PDF no aplica; se trabaja sin fecha límite fija y M13 (evaluación) entra en alcance | Confirmado |
 | S-02 | Se usa el sitio de **Bancolombia** (`www.bancolombia.com`) como fuente de datos: `www.bbva.com.co` responde 403 (WAF) a `robots.txt`, home y sitemap para cualquier cliente no navegador. BBVA Colombia sigue siendo el cliente ficticio y se mantienen los nombres del proyecto (`rag-bbva`, `rag_bbva`) | Confirmado (2026-10-01, ADR-008) |
-| S-03 | Alcance del scraping: páginas públicas HTML del dominio `www.bancolombia.com`; se excluyen PDFs, áreas transaccionales/login y otros dominios. Los PDFs pueden quedar como mejora futura | Propuesto, se valida en M1 |
-| S-04 | El crawl se limita (`CRAWL_MAX_PAGES`) para respetar al sitio y el tiempo de la prueba; no es un espejo completo | Propuesto |
+| S-03 | Alcance del scraping: páginas públicas HTML del dominio `www.bancolombia.com` (secciones `personas`, `negocios`, `empresas`, `centro-de-ayuda`, `educacion-financiera`, `acerca-de`); se excluyen PDFs (además prohibidos por robots), formularios/solicitudes, áreas transaccionales/login, redirecciones a otros dominios (p. ej. `fiduciaria.bancolombia.com`) y URLs no HTML. Los PDFs pueden quedar como mejora futura | Propuesto en M1 (`docs/exploracion_sitio.md` §7), **pendiente de validar con Juan Felipe** |
+| S-04 | El crawl se limita (`CRAWL_MAX_PAGES`) para respetar al sitio y el tiempo de la prueba. M1 propone `CRAWL_MAX_PAGES=1200` (cubre las 1.113 URLs permitidas de los sitemaps) y `CRAWL_MAX_DEPTH=1` | Propuesto en M1, **pendiente de validar** |
 | S-05 | "Usuarios internos" no implica autenticación; el `conversation_id` lo genera la UI o lo envía el cliente | Propuesto |
 | S-06 | El asistente responde solo con el contexto recuperado; si no hay información suficiente, lo dice explícitamente (no inventa) | Propuesto |
 | S-07 | El índice es una foto del sitio en una fecha; la actualización periódica queda como mejora futura | Propuesto |

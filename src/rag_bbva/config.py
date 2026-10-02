@@ -27,8 +27,8 @@ class Settings(BaseSettings):
 
     # Scraping
     target_base_url: HttpUrl = HttpUrl("https://www.bancolombia.com/")
-    crawl_max_pages: int = Field(default=300, gt=0)
-    crawl_max_depth: int = Field(default=3, ge=0)
+    crawl_max_pages: int = Field(default=1200, gt=0)
+    crawl_max_depth: int = Field(default=1, ge=0)
     crawl_delay_seconds: float = Field(default=1.0, ge=0)
     crawl_user_agent: str = Field(default="RAG-BBVA-TechTest/1.0", min_length=1)
     crawl_timeout_seconds: float = Field(default=20, gt=0)

@@ -14,8 +14,8 @@ def test_settings_defaults(clean_env: pytest.MonkeyPatch) -> None:
     settings = Settings(_env_file=None)
 
     assert str(settings.target_base_url) == "https://www.bancolombia.com/"
-    assert settings.crawl_max_pages == 300
-    assert settings.crawl_max_depth == 3
+    assert settings.crawl_max_pages == 1200
+    assert settings.crawl_max_depth == 1
     assert settings.crawl_delay_seconds == 1.0
     assert settings.crawl_user_agent == "RAG-BBVA-TechTest/1.0"
     assert settings.crawl_timeout_seconds == 20

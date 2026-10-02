@@ -192,8 +192,8 @@ El caso pide mínimo 3. Se implementan 6 para tener margen, pero el README desta
 | Variable | Default propuesto | Descripción |
 |---|---|---|
 | `TARGET_BASE_URL` | `https://www.bancolombia.com/` | Sitio a scrapear (ADR-008) |
-| `CRAWL_MAX_PAGES` | `300` | Límite de páginas |
-| `CRAWL_MAX_DEPTH` | `3` | Profundidad máxima del BFS |
+| `CRAWL_MAX_PAGES` | `1200` | Límite de páginas (cubre el sitemap completo, S-04; en desarrollo `--max-pages 50`) |
+| `CRAWL_MAX_DEPTH` | `1` | Profundidad máxima del BFS desde las semillas del sitemap (S-04) |
 | `CRAWL_DELAY_SECONDS` | `1.0` | Pausa entre peticiones (cortesía) |
 | `CRAWL_USER_AGENT` | `RAG-BBVA-TechTest/1.0` | User-Agent identificable |
 | `CRAWL_TIMEOUT_SECONDS` | `20` | Timeout por petición HTTP (agregada en M1) |

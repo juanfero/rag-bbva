@@ -1,7 +1,7 @@
 # Visión general del proyecto — Asistente RAG sobre el sitio de BBVA Colombia
 
 > Documento maestro del proyecto. Todo módulo, decisión y prueba debe ser trazable a este documento.
-> Estado: **v0.3 — decisiones confirmadas** (LLM: Grok de xAI · UI: Streamlit · Entorno: Linux · Fuente: Bancolombia, ADR-008).
+> Estado: **v0.3 — decisiones confirmadas** (LLM: Gemini 2.5 Flash, ADR-012 · UI: Streamlit · Entorno: Linux · Fuente: Bancolombia, ADR-008).
 
 ---
 
@@ -43,7 +43,7 @@
 | R4 | Al menos **3 patrones de diseño** documentados en el README | Se implementan 6 (ver §6); se documentan dónde y por qué | Todos / M14 |
 | R5 | Historial de conversación: recordar contexto en sesión y **persistir** | SQLite en volumen Docker; se reconstruye contexto por `conversation_id` | M8 |
 | R6 | Interfaz CLI, web sencilla o notebook; funcional y limpia | Streamlit (chat + analítica) y CLI de respaldo | M10 |
-| R7 | Herramientas sin costo preferidas | Embeddings y reranker open source (Hugging Face) y Qdrant self-hosted, todo gratis y local. El LLM es **Grok (xAI)**, API de pago: válido según el caso pero no suma puntos → se declara en el README (ADR-003) y queda aislado tras `LLMProvider` para poder cambiarlo por uno open source | M4–M7 |
+| R7 | Herramientas sin costo preferidas | Embeddings y reranker open source (Hugging Face) y Qdrant self-hosted, todo gratis y local. El LLM es **Gemini 2.5 Flash** con la clave gratuita de Google AI Studio (ADR-012, reemplaza a ADR-003); Grok (xAI, de pago) queda como alternativa. Es un servicio externo, aislado tras `LLMProvider` para poder cambiarlo por uno open source | M4–M7 |
 | R8 | Análisis de datos: recorrer el histórico para extraer **métricas y valores de impacto** | Módulo de analítica (CLI + página en la UI + export CSV) | M11 |
 | R9 | README completo (ver lista en §2.4) | README final redactado y verificado desde cero | M14 |
 
@@ -89,7 +89,7 @@ Usuario ─► UI (Streamlit) ─► API (FastAPI) ─► RAGService (Facade)
                                                ├─ 2. Reformular pregunta autónoma usando el historial
                                                ├─ 3. Recuperar top-k chunks (Qdrant)
                                                ├─ 4. Reranking → top-n (cross-encoder)
-                                               ├─ 5. Generar respuesta con citas (Grok vía API de xAI)
+                                               ├─ 5. Generar respuesta con citas (Gemini vía API compatible con OpenAI)
                                                └─ 6. Persistir pregunta, respuesta, fuentes, latencias y scores
 ```
 
@@ -102,7 +102,7 @@ Usuario ─► UI (Streamlit) ─► API (FastAPI) ─► RAGService (Facade)
 | `ui` | build propio (misma imagen) | Streamlit: chat + panel de métricas | — |
 | `init` (one-shot) | build propio | Ingesta (scrape → clean → index) si la colección está vacía | — |
 
-> El LLM no corre en Docker: es un servicio externo (API de xAI) al que la `api` llama con `XAI_API_KEY`.
+> El LLM no corre en Docker: es un servicio externo (Gemini; Grok como alternativa) al que la `api` llama con `GEMINI_API_KEY` (o `XAI_API_KEY`).
 
 ---
 
@@ -116,7 +116,7 @@ Usuario ─► UI (Streamlit) ─► API (FastAPI) ─► RAGService (Facade)
 | Embeddings | `intfloat/multilingual-e5-small` (384 dim) | Gratis, multilingüe (español), corre en CPU | `bge-m3` (mejor calidad, mucho más pesado) |
 | Base vectorial | Qdrant self-hosted | Gratis, Docker oficial, filtros por metadatos, modo `:memory:` para tests | Chroma (menos robusto como servicio), FAISS (no es servicio) |
 | Reranker | `cross-encoder/mmarco-mMiniLMv2-L12-H384-v1` | Multilingüe, liviano, CPU | `bge-reranker-v2-m3` (más preciso, ~4× más pesado) |
-| LLM | **Grok (xAI)** vía API compatible con OpenAI (`https://api.x.ai/v1`, SDK `openai`) | Calidad alta en español, sin GPU/RAM local, baja latencia; el SDK `openai` evita dependencias propietarias | Ollama + modelo open source (gratis pero lento en CPU; proveedor alternativo futuro) |
+| LLM | **Gemini 2.5 Flash** vía endpoint compatible con OpenAI (SDK `openai`); Grok (xAI) como alternativa (ADR-012) | Nivel gratuito, buena calidad en español, baja latencia, sin GPU/RAM local; el SDK `openai` permite cambiar de proveedor solo con configuración | Ollama + modelo open source (gratis pero lento en CPU; proveedor alternativo futuro) |
 | Orquestación RAG | Código propio (sin LangChain) | Control total, patrones de diseño visibles y defendibles | LangChain/LlamaIndex (ocultan los patrones) |
 | Historial | SQLite + SQLAlchemy | Cero infraestructura extra, persistente en volumen | Redis/Postgres (sobredimensionado) |
 | API | FastAPI + Pydantic v2 | Validación, OpenAPI automático, TestClient | Flask |
@@ -227,10 +227,13 @@ El caso pide mínimo 3. Se implementan 6 para tener margen, pero el README desta
 | `RERANK_MIN_SCORE` | `1.6` | Score mínimo del reranker (#1) para responder; por debajo, "sin información suficiente". Calibrado en M6 |
 | `RERANKER_MAX_LENGTH` | `512` | Tokens máximos del par pregunta + fragmento en el cross-encoder (M6) |
 | `RERANKER_BATCH_SIZE` | `16` | Pares por lote en el cross-encoder (M6) |
-| `LLM_PROVIDER` | `xai` | Proveedor (Strategy): `xai` o `fake` (tests) |
-| `XAI_API_KEY` | — (**obligatoria, secreta**) | Clave de la API de xAI; solo en `.env`, nunca en git |
-| `XAI_BASE_URL` | `https://api.x.ai/v1` | Endpoint compatible con OpenAI |
-| `LLM_MODEL` | `grok-4.7` *(verificar en M7 con `GET /v1/models`)* | Modelo de Grok |
+| `LLM_PROVIDER` | `gemini` | Proveedor (Strategy): `gemini`, `xai` o `fake` (tests) (ADR-012) |
+| `GEMINI_API_KEY` | — (**obligatoria con `gemini`, secreta**) | Clave gratuita de Google AI Studio; solo en `.env`, nunca en git |
+| `GEMINI_BASE_URL` | `https://generativelanguage.googleapis.com/v1beta/openai/` | Endpoint de Gemini compatible con OpenAI |
+| `XAI_API_KEY` | — (**obligatoria con `xai`, secreta**) | Clave de la API de xAI; solo en `.env`, nunca en git |
+| `XAI_BASE_URL` | `https://api.x.ai/v1` | Endpoint de xAI compatible con OpenAI |
+| `LLM_MODEL` | `gemini-2.5-flash` | Modelo; se verifica con `llm-check` |
+| `LLM_REASONING_EFFORT` | `none` | Solo Gemini: `none` apaga el razonamiento interno (menos latencia y tokens) |
 | `LLM_TEMPERATURE` | `0.1` | Temperatura |
 | `LLM_MAX_TOKENS` | `800` | Tope de tokens de salida (controla costo) |
 | `LLM_TIMEOUT_SECONDS` | `60` | Timeout por llamada |
@@ -281,8 +284,8 @@ Salida: comando CLI `metrics`, endpoint `GET /analytics/summary`, página "Métr
 |---|---|---|
 | Contenido cargado por JavaScript | Scraping vacío | M1 lo detecta; plan B con Playwright solo en las rutas afectadas |
 | Bloqueo/rate limit del sitio (WAF) | Sin datos | Delay, reintentos con backoff, User-Agent claro, snapshot de `data/raw` versionado como muestra |
-| Dependencia de un servicio externo de pago (xAI) | Sin clave o sin saldo no hay respuestas; costo por token | `LLM_MAX_TOKENS`, contexto acotado (top-n chunks + N mensajes), error claro si falta la clave, `FakeLLMProvider` en tests (nunca gastan créditos) |
-| Rate limit / caída de la API de xAI | Errores intermitentes | Reintentos con backoff en 429/5xx, timeout, mensaje amigable al usuario |
+| Dependencia de un servicio externo (Gemini; Grok como alternativa) | Sin clave, sin cupo gratuito o sin saldo no hay respuestas; en el nivel gratuito Google puede usar las consultas para mejorar sus productos | `LLM_MAX_TOKENS`, contexto acotado (top-n chunks + N mensajes), error claro si falta la clave, `FakeLLMProvider` en tests (nunca gastan créditos) |
+| Rate limit / caída de la API del LLM | Errores intermitentes | Reintentos con backoff en 429/5xx, timeout, mensaje amigable al usuario |
 | Fuga de la API key | Riesgo de seguridad | `.env` en `.gitignore` desde el primer commit, `.env.example` sin valores, `SecretStr` en config |
 | Imágenes Docker pesadas (torch) | Build lento | `torch` CPU-only, cache de modelos en volumen |
 | Alucinaciones | Respuestas incorrectas | Prompt restrictivo, citas obligatorias, umbral mínimo de score para responder |

@@ -28,6 +28,10 @@ logger = logging.getLogger(__name__)
 
 ESTADOS_DE_BLOQUEO = frozenset({403, 429})
 _LOG_CADA = 25
+# Cuerpos de error de hasta este tamaño se resumen en el manifest para diagnóstico
+# (p. ej. distinguir un 403 "AccessDenied" de S3 de una página de bloqueo del WAF).
+MAX_BYTES_CUERPO_ERROR = 1024
+_LARGO_FRAGMENTO = 200
 
 
 @dataclass(frozen=True)
@@ -80,6 +84,19 @@ class BlockGuard:
 
 def _ahora() -> str:
     return datetime.now(tz=UTC).isoformat(timespec="seconds")
+
+
+def _describir_error(result: FetchResult) -> str | None:
+    """Mensaje de error para el manifest; en respuestas HTTP de error con cuerpo
+    pequeño incluye un fragmento normalizado del cuerpo."""
+    if result.error or result.skipped:
+        return result.error or result.skipped
+    if result.ok or result.status is None:
+        return None
+    if not result.content or len(result.content) > MAX_BYTES_CUERPO_ERROR:
+        return f"HTTP {result.status}"
+    fragmento = " ".join(result.content.decode("utf-8", errors="replace").split())
+    return f"HTTP {result.status}: {fragmento[:_LARGO_FRAGMENTO]}"
 
 
 class BaseCrawler(ABC):
@@ -203,7 +220,7 @@ class BaseCrawler(ABC):
             size_bytes=result.size_bytes,
             elapsed_ms=result.elapsed_ms,
             attempts=result.attempts,
-            error=result.error or result.skipped,
+            error=_describir_error(result),
         )
         if outcome != "guardada":
             return entrada

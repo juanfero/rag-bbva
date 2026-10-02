@@ -340,6 +340,31 @@ def test_404_se_registra_sin_guardar_html(sitio: respx.MockRouter, tmp_path: Pat
     assert not (tmp_path / RawStorage(tmp_path).relative_path(no_existe.url)).exists()
 
 
+def test_error_http_con_cuerpo_pequeno_guarda_fragmento(tmp_path: Path) -> None:
+    """Un 403 de S3 (AccessDenied, 111 B) deja su cuerpo resumido en el manifest."""
+    cuerpo = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        "<Error><Code>AccessDenied</Code><Message>Access Denied</Message></Error>"
+    )
+    with respx.mock(base_url=B) as router:
+        router.get("/robots.txt").respond(200, text=f"User-agent: *\nSitemap: {B}/s.xml\n")
+        router.get("/s.xml").respond(200, text=_urlset("/negocios/viejo", "/negocios/grande"))
+        router.get("/sitemap.xml").respond(404)
+        router.get("/negocios/viejo").respond(
+            403, headers={"content-type": "application/xml"}, text=cuerpo
+        )
+        router.get("/negocios/grande").respond(500, text="x" * 5000)
+
+        _crawler(tmp_path, max_retries=0).crawl()
+
+    manifest = _manifest(tmp_path)
+    viejo = manifest[f"{B}/negocios/viejo"].error
+    assert viejo is not None
+    assert viejo.startswith("HTTP 403: <?xml")
+    assert "<Code>AccessDenied</Code>" in viejo
+    assert manifest[f"{B}/negocios/grande"].error == "HTTP 500"
+
+
 def test_contenido_no_html_no_se_guarda(sitio: respx.MockRouter, tmp_path: Path) -> None:
     """Un 200 con image/png se registra como no_html."""
     _crawler(tmp_path).crawl()

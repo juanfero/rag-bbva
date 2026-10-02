@@ -1,0 +1,33 @@
+# Secretos (nunca versionar)
+.env
+.env.*
+!.env.example
+
+# Datos generados (raw, clean, historial)
+data/
+
+# Modelos y cachés de Hugging Face
+models/
+.cache/
+*.safetensors
+*.bin
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+
+# Herramientas
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Editores / SO
+.vscode/
+.idea/
+.DS_Store

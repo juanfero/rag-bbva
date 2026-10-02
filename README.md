@@ -17,7 +17,7 @@ Prueba técnica de ML/AI Engineer: un sistema RAG (*Retrieval-Augmented Generati
 | M2 | Scraper (datos crudos): sitemaps + BFS, robots, reintentos, manifest incremental | ✅ | `m02` |
 | M3 | Limpieza (datos limpios): pipeline de pasos, metadatos, idioma, deduplicación, chequeo de fugas | ✅ | `m03` |
 | M4 | Chunking + embeddings: estrategias de chunking, e5-small en CPU, fábrica de componentes | ✅ | `m04` |
-| M5 | Indexación vectorial (Qdrant): `ingest` idempotente con sincronización y caché de embeddings | 🚧 en revisión (rama `feat/m05-qdrant`) | — |
+| M5 | Indexación vectorial (Qdrant): `ingest` idempotente con sincronización y caché de embeddings | ✅ | `m05` |
 | M6 | Recuperación + reranker | ⏳ | — |
 | M7 | Generación con LLM (Grok) | ⏳ | — |
 | M8 | Memoria conversacional | ⏳ | — |
@@ -166,7 +166,7 @@ python -m rag_bbva.cli ingest --recreate    # borra la colección y la reconstru
   - Los puntos de chunks que ya no existen se **borran** (sincronización completa).
 - **Caché de embeddings** en `EMBEDDINGS_CACHE_DIR` (`data/embeddings/`, ignorada por git): `--recreate` o un cambio de ids reutilizan los vectores ya calculados.
 - **Reporte:** chunks, nuevos, actualizados, sin cambios, eliminados, embebidos, desde caché, puntos y tiempos por etapa.
-- **Corrida real:** 3506 puntos en 2,5 min (casi todo embeddings en CPU). La re-ingesta sin cambios toma 0,2 s y no embebe nada ([evidencia M05](docs/modulos/M05.md#6-evidencia-manual)).
+- **Corrida real:** 3506 puntos en 2,5 min (casi todo embeddings en CPU). La re-ingesta sin cambios toma 0,2 s y no embebe nada; con Qdrant vacío y la caché llena, `--recreate` reconstruye los 3506 puntos en 1,6 s ([evidencia M05](docs/modulos/M05.md#6-evidencia-manual)).
 - **Configuración:** por defecto `QDRANT_URL=http://localhost:6333` (el Qdrant del compose); dentro de la red de Docker (M12) será `http://qdrant:6333`. Si Qdrant no responde, `ingest` termina con un error claro (código 1).
 
 **Docker.** Hoy existen la imagen base (`docker build .`; `docker compose run --rm api` ejecuta el comando `version`) y el servicio `qdrant` para desarrollo (`docker compose up -d qdrant`).

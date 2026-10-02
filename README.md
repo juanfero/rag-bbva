@@ -14,7 +14,7 @@ Prueba técnica de ML/AI Engineer: un sistema RAG (*Retrieval-Augmented Generati
 |---|---|---|---|
 | M0 | Fundaciones: estructura, configuración, excepciones, logging, CLI, Docker base | ✅ | `m00` |
 | M1 | Exploración del sitio: robots.txt, sitemaps, dependencia de JS, alcance | ✅ | `m01` |
-| M2 | Scraper (datos crudos) | ⏳ | — |
+| M2 | Scraper (datos crudos): sitemaps + BFS, robots, reintentos, manifest incremental | 🚧 en revisión (rama `feat/m02-scraper`) | — |
 | M3 | Limpieza (datos limpios) | ⏳ | — |
 | M4 | Chunking + embeddings | ⏳ | — |
 | M5 | Indexación vectorial (Qdrant) | ⏳ | — |
@@ -34,7 +34,7 @@ Detalle de cada módulo: [plan de módulos](docs/01_PLAN_DE_MODULOS.md) y bitác
 
 ## Arquitectura
 
-Diseño objetivo ([visión general §3](docs/00_VISION_GENERAL.md)). Hoy existen las piezas de M0 y M1: configuración, CLI y los componentes de scraping que usa la exploración (robots, sitemaps, fetcher).
+Diseño objetivo ([visión general §3](docs/00_VISION_GENERAL.md)). Hoy existe la primera etapa de la ingesta: **Crawler → `data/raw/`** (M2), además de la configuración, la CLI y la exploración del sitio (M0–M1).
 
 **Ingesta (offline)**
 ```
@@ -92,6 +92,25 @@ python scripts/explore_site.py --sample-size 10
 ```
 El análisis de una corrida real está en [`docs/exploracion_sitio.md`](docs/exploracion_sitio.md).
 
+**Scraping a datos crudos (M2).** Lee `robots.txt` (sin él no scrapea), toma las semillas de los dos índices de sitemap y sigue enlaces internos hasta `CRAWL_MAX_DEPTH`:
+```bash
+python -m rag_bbva.cli scrape --max-pages 50   # desarrollo; sin --max-pages usa CRAWL_MAX_PAGES=1200
+```
+Deja en `data/raw/` (ignorado por git):
+- `pages/<sha1(url)>.html`: HTML tal como lo sirvió el sitio.
+- `manifest.jsonl`: una línea por URL procesada, con `url`, `final_url`, `status`, `outcome` (`guardada`, `sin_cambios`, `duplicada`, `error_http`, `no_html`, `error_red`, `redireccion_omitida`), `depth`, `source`, `lastmod` del sitemap, huella del contenido, ruta del HTML, intentos y error.
+- `crawl_report.json`: resumen de la corrida.
+
+Comportamiento:
+- 1 s de pausa entre peticiones y User-Agent identificable.
+- Reintentos con backoff (2, 4, 8 s) solo ante 5xx y timeouts.
+- Cada redirección se valida contra el dominio y `robots.txt`.
+- URLs normalizadas: sin `utm_*`, fragmentos ni barra final.
+- Si llegan 5 respuestas 403/429 seguidas, el crawl se aborta (código de salida 2) y se guarda lo avanzado.
+- Re-ejecutarlo no reescribe los HTML cuyo texto visible no cambió.
+
+Corrida real de referencia (50 páginas, ~77 s): [bitácora M02](docs/modulos/M02.md#6-evidencia-manual).
+
 **Docker.** Hoy solo existe la imagen base: `docker build .` y `docker compose run --rm api` ejecutan el comando `version`.
 🚧 **El despliegue completo con `docker compose up -d --build` (Qdrant, API, UI) se completa en M12.** Ese arranque no scrapeará el sitio: usará un snapshot versionado de datos limpios.
 
@@ -110,8 +129,8 @@ El caso exige al menos 3. Previstos en la [visión general §6](docs/00_VISION_G
 | Patrón | Dónde | Por qué | Estado |
 |---|---|---|---|
 | **Singleton (vía caché)** | [`src/rag_bbva/config.py`](src/rag_bbva/config.py): `get_settings()` con `lru_cache` | La configuración se lee y valida una sola vez; todo el código la obtiene del mismo punto | ✅ M0 |
-| **Strategy** (inyección de dependencias) | [`src/rag_bbva/scraping/exploration.py`](src/rag_bbva/scraping/exploration.py): `Renderer` (`Protocol`) | El explorador funciona con un renderizador real (Playwright), con un doble en tests o sin ninguno, sin cambiar su código | ✅ parcial (M1). Las estrategias principales (`ChunkingStrategy`, `LLMProvider`, `Reranker`) llegan en M4, M6 y M7 |
-| **Template Method** | `scraping/base.py` | Esqueleto fijo del crawl (descubrir → descargar → validar → guardar) con pasos sobrescribibles | ⏳ M2 |
+| **Strategy** (inyección de dependencias) | [`src/rag_bbva/scraping/exploration.py`](src/rag_bbva/scraping/exploration.py): `Renderer` (`Protocol`); [`src/rag_bbva/scraping/storage.py`](src/rag_bbva/scraping/storage.py): función de huella inyectable en `RawStorage` | El explorador funciona con Playwright, con un doble o sin renderizador. El almacenamiento detecta cambios con la huella que se le inyecte (bytes por defecto, texto visible en el crawler) sin cambiar su código | ✅ parcial (M1–M2). Las estrategias principales (`ChunkingStrategy`, `LLMProvider`, `Reranker`) llegan en M4, M6 y M7 |
+| **Template Method** | [`src/rag_bbva/scraping/base.py`](src/rag_bbva/scraping/base.py): `BaseCrawler.crawl()`; subclase concreta [`SitemapBfsCrawler`](src/rag_bbva/scraping/crawler.py) | `crawl()` fija el algoritmo (`prepare` → `discover_urls` → `fetch` → `validate` → `persist` → `extract_links`) y aplica en un solo lugar los límites, la deduplicación y el corte por bloqueo. Las subclases solo redefinen los pasos | ✅ M2 |
 | **Chain of Responsibility / Pipeline** | `processing/pipeline.py` | Limpieza como cadena de pasos independientes y testeables | ⏳ M3 |
 | **Factory** | `indexing/factory.py`, `llm/factory.py` | Crear embedder, LLM, vector store y reranker desde la configuración sin acoplarse a clases concretas | ⏳ M4–M7 |
 | **Repository** | `memory/repository.py` | Aislar la persistencia del historial (SQLite en producción, memoria en tests) | ⏳ M8 |
@@ -128,7 +147,8 @@ El caso exige al menos 3. Previstos en la [visión general §6](docs/00_VISION_G
 | Renderizado JS | Playwright | Solo se usó, de forma temporal, para medir la dependencia de JS en M1; no es dependencia del proyecto ([ADR-009](docs/02_DECISIONES.md)) | descartado |
 | Configuración | `pydantic-settings` + `.env` | Toda la configuración tipada y validada en un solo lugar | ✅ en uso (M0) |
 | CLI | Typer | Comandos con ayuda y validación automáticas | ✅ en uso (M0) |
-| Calidad | `pytest`, `ruff` | Tests rápidos sin red; lint y formato uniformes | ✅ en uso |
+| Reintentos | `tenacity` | Backoff exponencial declarativo, solo ante errores transitorios | ✅ en uso (M2) |
+| Calidad | `pytest`, `respx`, `ruff` | Tests rápidos sin red (`respx` simula el sitio por HTTP); lint y formato uniformes | ✅ en uso |
 | Extracción de texto | `trafilatura` + reglas propias | Elimina boilerplate de forma robusta | ⏳ M3 |
 | Embeddings | `intfloat/multilingual-e5-small` | Gratis, multilingüe, corre en CPU ([ADR-005](docs/02_DECISIONES.md)) | ⏳ M4 |
 | Base vectorial | Qdrant self-hosted | Gratis, Docker oficial, filtros por metadatos ([ADR-002](docs/02_DECISIONES.md)) | ⏳ M5 |
@@ -150,6 +170,9 @@ Registro completo: [`docs/02_DECISIONES.md`](docs/02_DECISIONES.md) (ADR) y supu
 - **Alcance del scraping:** 6 secciones públicas (`personas`, `negocios`, `empresas`, `centro-de-ayuda`, `educacion-financiera`, `acerca-de`), sin PDFs, formularios ni otros dominios (S-03).
 - **Límites:** `CRAWL_MAX_PAGES=1200` (cubre el sitemap completo) y `CRAWL_MAX_DEPTH=1` (S-04).
 - **Parser de `robots.txt` propio** (RFC 9309), porque el de la librería estándar no soporta los comodines `*`/`$` que usa Bancolombia.
+- **Semillas intercaladas por sección:** un crawl parcial (`--max-pages 50`) cubre las 6 secciones en vez de solo la primera del sitemap (M2).
+- **Cambios detectados por texto visible:** Bancolombia inyecta ids aleatorios en cada respuesta, así que el hash de bytes nunca coincidiría (M2).
+- **Deduplicación por URL final:** muchas URLs de `empresas` redirigen a `/negocios`; se guarda una sola copia (M2).
 - **`XAI_API_KEY` opcional** al cargar la configuración; se exige al crear el proveedor del LLM (ADR-006).
 - **Dependencias incrementales:** cada módulo agrega solo lo que usa (ADR-007).
 - **Orquestación propia, sin LangChain** (ADR-001).
@@ -165,6 +188,9 @@ Registro completo: [`docs/02_DECISIONES.md`](docs/02_DECISIONES.md) (ADR) y supu
 | L-03 | **Contenido dinámico no capturado:** sin renderizar JS no se obtienen el banner de cookies, carruseles ni listas de enlaces dinámicas; su contenido llega por las páginas enlazadas | ADR-009 |
 | L-04 | **Sin PDFs:** quedan fuera del alcance y además `robots.txt` los prohíbe (`/*pdf*`) | S-03 |
 | L-05 | **Foto del sitio:** el índice refleja el sitio en la fecha del scraping; la demo usará un snapshot versionado de datos limpios | S-07, M12 |
+| L-06 | **Sala de prensa fuera del dominio:** las URLs `/acerca-de/sala-prensa/…` del sitemap (74) redirigen a `prensa.bancolombia.com` (verificado en 4 de ellas), que con el alcance actual (S-03) no se descarga. **Pendiente de decisión** | M2 |
+| L-07 | **URLs muertas en el sitemap:** algunas páginas listadas responden 403 `AccessDenied` (origen S3; p. ej. `/negocios/especiales/wobi…`). Se registran como `error_http` con un fragmento del cuerpo | M2 |
+| L-08 | **Bloques que rotan:** varias páginas de educación financiera y del centro de ayuda muestran "artículos relacionados" aleatorios en cada petición, por lo que se reescriben aunque su contenido principal no cambie. Se quitarán en la limpieza (M3) | M2 |
 
 ---
 
@@ -191,7 +217,7 @@ rag-bbva/
 ├── pyproject.toml · .env.example · Dockerfile · docker-compose.yml
 ├── src/rag_bbva/
 │   ├── config.py · exceptions.py · logging_conf.py · cli.py
-│   ├── scraping/          # robots.py, sitemap.py, page_analysis.py, exploration.py
+│   ├── scraping/          # robots, sitemap, urls, fetcher, discovery, storage, base (Template Method), crawler, page_analysis, exploration
 │   └── processing/ indexing/ retrieval/ llm/ memory/ services/ api/ ui/ analytics/   # vacíos (próximos módulos)
 ├── scripts/explore_site.py
 ├── tests/unit/ · tests/fixtures/ (robots, sitemaps, html) · tests/integration/
@@ -204,5 +230,5 @@ Documentación:
 - [Plan de módulos](docs/01_PLAN_DE_MODULOS.md): tareas, pruebas de aceptación y Definition of Done.
 - [Decisiones (ADR)](docs/02_DECISIONES.md).
 - [Exploración del sitio](docs/exploracion_sitio.md) y su [evidencia JSON](docs/evidencia/).
-- Bitácoras por módulo: [M00](docs/modulos/M00.md) · [M01](docs/modulos/M01.md).
+- Bitácoras por módulo: [M00](docs/modulos/M00.md) · [M01](docs/modulos/M01.md) · [M02](docs/modulos/M02.md).
 - [CHANGELOG](CHANGELOG.md).

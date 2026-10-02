@@ -3,6 +3,22 @@
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Sin publicar]
+
+### M2 — Scraper (datos crudos) (en revisión, rama `feat/m02-scraper`)
+#### Añadido
+- `BaseCrawler` (Template Method) y `SitemapBfsCrawler`: semillas de los dos índices de sitemap, BFS acotado, deduplicación por URL normalizada y por URL final, corte ante ráfagas de 403/429.
+- Normalización de URLs (`utm_*`, fragmentos, barra final) y filtro de extensiones no HTML; semillas intercaladas por sección.
+- Reintentos con backoff exponencial (`tenacity`) solo ante 5xx y fallos de red o timeouts.
+- `RawStorage`: `data/raw/pages/<sha1>.html` + `manifest.jsonl` (con `lastmod`) con escritura atómica, fusión del manifest y re-ejecución incremental por huella del texto visible.
+- Comando `scrape [--max-pages N]` y `crawl_report.json`.
+- Configuración: `CRAWL_MAX_RETRIES`, `CRAWL_BACKOFF_SECONDS`, `CRAWL_BLOCK_THRESHOLD`, `RAW_DATA_DIR`. Dependencias: `tenacity`, `respx` (dev).
+- README: estado de M2, uso de `scrape`, patrón Template Method, limitaciones L-06 a L-08.
+#### Cambiado
+- `PoliteFetcher`, la lectura de robots y la de sitemaps se extraen de la exploración a módulos compartidos (`fetcher`, `discovery`, `urls`).
+- La ayuda de la CLI dice Bancolombia.
+#### Corregido
+- La detección incremental ya no usa el hash de bytes, que el marcado volátil del sitio hacía inútil.
+
 ### Añadido
 - README inicial e incremental: estado M0–M14, nota de fuente Bancolombia (ADR-008), arquitectura, instalación verificada, patrones, stack, decisiones, limitaciones y mejoras futuras.
 ### Cambiado

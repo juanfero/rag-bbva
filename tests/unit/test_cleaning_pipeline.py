@@ -97,6 +97,19 @@ def test_lee_solo_entradas_con_html_y_url_final(raw_dir: Path) -> None:
     assert urls == sorted(urls, key=lambda u: (len(u), u))
 
 
+def test_html_huerfano_sin_entrada_en_el_manifest_se_ignora(raw_dir: Path) -> None:
+    """`clean` solo lee las rutas del manifest: un HTML suelto en pages/ (p. ej. de un
+    crawl interrumpido antes del manifest incremental) no genera documento."""
+    huerfano = raw_dir / "pages" / "huerfano.html"
+    huerfano.write_bytes((FIXTURES / "plantilla_b_gmf_iva.html").read_bytes())
+    antes = _pipeline().process_directory(raw_dir).report
+
+    lectura = read_raw_pages(raw_dir)
+
+    assert "pages/huerfano.html" not in {p.path for p in lectura.pages}
+    assert antes.processed == 7
+
+
 def test_sin_manifest_lanza_processing_error(tmp_path: Path) -> None:
     with pytest.raises(ProcessingError, match="scrape"):
         read_raw_pages(tmp_path)

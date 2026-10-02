@@ -9,6 +9,9 @@ description = "Asistente RAG para BBVA Colombia (caso ficticio) sobre el conteni
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "beautifulsoup4>=4.12",
+    "httpx>=0.27",
+    "lxml>=5.0",
     "pydantic>=2.6",
     "pydantic-settings>=2.2",
     "typer>=0.12",

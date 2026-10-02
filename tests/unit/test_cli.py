@@ -31,6 +31,7 @@ def test_cli_sin_argumentos_muestra_ayuda(clean_env: pytest.MonkeyPatch) -> None
     assert "version" in result.output
     assert "scrape" in result.output
     assert "clean" in result.output
+    assert "chunk" in result.output
     # Regla del proyecto: todo texto visible al usuario dice Bancolombia (ADR-008).
     assert "Bancolombia" in result.output
     assert "BBVA" not in result.output
@@ -168,3 +169,32 @@ def test_cli_scrape_sigterm_cierra_reporte_con_lo_avanzado(entorno_scrape: Path)
     manifest = (entorno_scrape / "manifest.jsonl").read_text("utf-8").splitlines()
     assert len(manifest) == reporte["manifest_entries"] == reporte["processed"]
     assert signal.getsignal(signal.SIGTERM) is manejador_previo  # se restaura al salir
+
+
+def test_cli_chunk_escribe_chunks_y_reporte(clean_env: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """`chunk` trocea CLEAN_DATA_DIR y verifica tokens (aquí con el embedder falso)."""
+    glosario = (Path(__file__).parent.parent / "fixtures" / "clean" / "glosario.json").read_text(
+        "utf-8"
+    )
+    limpio = tmp_path / "clean"
+    limpio.mkdir()
+    (limpio / "documents.jsonl").write_text(json.dumps(json.loads(glosario)) + "\n", "utf-8")
+    clean_env.setenv("CLEAN_DATA_DIR", str(limpio))
+    clean_env.setenv("CHUNKS_DATA_DIR", str(tmp_path / "chunks"))
+    clean_env.setenv("EMBEDDING_PROVIDER", "fake")
+
+    result = runner.invoke(app, ["chunk", "--strategy", "fixed_size"])
+
+    assert result.exit_code == 0, result.output
+    assert "Estrategia: fixed_size" in result.stdout
+    assert "lo superan: 0" in result.stdout
+    reporte = json.loads((tmp_path / "chunks" / "chunk_report.json").read_text("utf-8"))
+    assert reporte["total"] == len((tmp_path / "chunks" / "chunks.jsonl").read_text().splitlines())
+
+
+def test_cli_chunk_errores(clean_env: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    clean_env.setenv("CLEAN_DATA_DIR", str(tmp_path / "vacio"))
+    clean_env.setenv("EMBEDDING_PROVIDER", "fake")
+
+    assert runner.invoke(app, ["chunk"]).exit_code == 1
+    assert runner.invoke(app, ["chunk", "--strategy", "semantico"]).exit_code == 1

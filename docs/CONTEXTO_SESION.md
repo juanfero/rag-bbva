@@ -19,7 +19,7 @@ Después de `m01`, `main` recibió tres commits `docs` directos, hechos a pedido
 - `9a6e3ce`: regla del README incremental. Es la punta actual de `main` y `origin/main`.
 
 ### Módulo en curso: M2 — Scraper (datos crudos)
-- **Rama activa:** `feat/m02-scraper`, publicada en `origin` y con punta en `55d24de`. **Sin merge ni tag `m02`.**
+- **Rama activa:** `feat/m02-scraper`, publicada en `origin`. El último commit de M2 es `55d24de`; después solo hay commits de este traspaso (`docs: agrega contexto de sesión…` y su corrección). **Sin merge ni tag `m02`.**
 - **Estado:** implementación, tests (176 en verde), corridas reales y documentación listas. Está **en revisión**, esperando la aprobación de Juan Felipe y su respuesta a la pregunta abierta de §3.
 - Hecho en M2, ver `docs/modulos/M02.md`:
   - `BaseCrawler` (Template Method) y `SitemapBfsCrawler`, que leen los dos índices de sitemap.

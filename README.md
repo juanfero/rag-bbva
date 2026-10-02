@@ -15,7 +15,7 @@ Prueba técnica de ML/AI Engineer: un sistema RAG (*Retrieval-Augmented Generati
 | M0 | Fundaciones: estructura, configuración, excepciones, logging, CLI, Docker base | ✅ | `m00` |
 | M1 | Exploración del sitio: robots.txt, sitemaps, dependencia de JS, alcance | ✅ | `m01` |
 | M2 | Scraper (datos crudos): sitemaps + BFS, robots, reintentos, manifest incremental | ✅ | `m02` |
-| M3 | Limpieza (datos limpios) | ⏳ | — |
+| M3 | Limpieza (datos limpios): pipeline de pasos, metadatos, idioma, deduplicación, chequeo de fugas | 🚧 en revisión (rama `feat/m03-limpieza`) | — |
 | M4 | Chunking + embeddings | ⏳ | — |
 | M5 | Indexación vectorial (Qdrant) | ⏳ | — |
 | M6 | Recuperación + reranker | ⏳ | — |
@@ -34,7 +34,7 @@ Detalle de cada módulo: [plan de módulos](docs/01_PLAN_DE_MODULOS.md) y bitác
 
 ## Arquitectura
 
-Diseño objetivo ([visión general §3](docs/00_VISION_GENERAL.md)). Hoy existe la primera etapa de la ingesta: **Crawler → `data/raw/`** (M2), además de la configuración, la CLI y la exploración del sitio (M0–M1).
+Diseño objetivo ([visión general §3](docs/00_VISION_GENERAL.md)). Hoy existen las dos primeras etapas de la ingesta: **Crawler → `data/raw/`** (M2) y **Limpieza → `data/clean/`** (M3), además de la configuración, la CLI y la exploración del sitio (M0–M1).
 
 **Ingesta (offline)**
 ```
@@ -107,10 +107,30 @@ Comportamiento:
 - Cada redirección se valida contra el dominio y `robots.txt`.
 - URLs normalizadas: sin `utm_*`, fragmentos ni barra final.
 - Las rutas de `CRAWL_EXCLUDE_PATH_PREFIXES` no se piden. Por defecto es `/acerca-de/sala-prensa/` ([ADR-010](docs/02_DECISIONES.md#adr-010--sala-de-prensa-fuera-del-alcance-del-scraping)). Quedan en el manifest como `excluida` y no consumen cupo de `--max-pages`.
-- Si llegan 5 respuestas 403/429 seguidas, el crawl se aborta (código de salida 2) y se guarda lo avanzado.
+- El manifest se escribe de forma incremental: una línea por URL apenas se procesa, forzada a disco. Al final se compacta. Qué queda en cada caso:
+  - **Termina normal** (código 0): manifest y `crawl_report.json` completos.
+  - **5 respuestas 403/429 seguidas** (código 2): el crawl se aborta y queda lo avanzado en el manifest y el reporte.
+  - **Ctrl+C o `kill`/SIGTERM** (código 130): igual, con `abort_reason: "interrumpido"`.
+  - **Error inesperado** (código 1): el manifest conserva lo avanzado; no hay reporte.
+  - **`kill -9` o corte de energía:** no se puede atrapar. El manifest conserva todo lo ya escrito, no hay reporte y puede quedar como mucho un HTML sin su línea; `clean` lo ignora.
 - Re-ejecutarlo no reescribe los HTML cuyo texto visible no cambió.
 
-Corrida real de referencia (50 páginas, ~77 s): [bitácora M02](docs/modulos/M02.md#6-evidencia-manual).
+Corridas reales de referencia: 50 páginas en [M02](docs/modulos/M02.md#6-evidencia-manual) y crawl completo en [M03](docs/modulos/M03.md#6-evidencia-manual).
+
+**Limpieza a datos limpios (M3).** Lee `data/raw/manifest.jsonl` (solo páginas con HTML guardado; URL canónica = URL final) y deja en `data/clean/` (ignorado por git):
+```bash
+python -m rag_bbva.cli clean
+```
+- `documents.jsonl`: un documento por página, con `doc_id`, `url`, `title`, `section`, `breadcrumbs`, `text` (markdown: títulos `#`, listas y tablas simples), `html_lang` (lo que declara la página), `lang` (idioma detectado en el texto), `lang_source`, `lastmod`, `published_at` (solo si la página lo trae en metadatos), `scraped_at`, `content_hash`, `n_chars`, `template` y `extraction`.
+- `clean_report.json`: procesados, conservados, descartados por motivo (con la lista de URLs), distribución de longitudes, documentos por sección, plantilla, método de extracción e idioma, y el chequeo de **fugas de boilerplate**.
+
+Cómo limpia (pasos en [`processing/steps.py`](src/rag_bbva/processing/steps.py)):
+1. Quita del HTML la navegación, la cabecera y el pie, los menús de portlet con `${…}`, las cajas de error `.lrpError`, los iconos, el banner de cookies y el bloque rotativo de contenido relacionado (L-08).
+2. Toma el contenedor de cada plantilla del sitio (`main` → `#main-content` → `[role=main]`). Usa trafilatura si conserva al menos el 90 % del vocabulario del contenedor; si no, convierte el contenedor a markdown por selector.
+3. Normaliza Unicode y espacios, y detecta el idioma.
+4. Descarta los textos de menos de 200 caracteres y los duplicados (soft-404), registrando el motivo.
+
+El resultado es determinista: la misma entrada produce la misma salida.
 
 **Docker.** Hoy solo existe la imagen base: `docker build .` y `docker compose run --rm api` ejecutan el comando `version`.
 🚧 **El despliegue completo con `docker compose up -d --build` (Qdrant, API, UI) se completa en M12.** Ese arranque no scrapeará el sitio: usará un snapshot versionado de datos limpios.
@@ -132,7 +152,7 @@ El caso exige al menos 3. Previstos en la [visión general §6](docs/00_VISION_G
 | **Singleton (vía caché)** | [`src/rag_bbva/config.py`](src/rag_bbva/config.py): `get_settings()` con `lru_cache` | La configuración se lee y valida una sola vez; todo el código la obtiene del mismo punto | ✅ M0 |
 | **Strategy** (inyección de dependencias) | [`src/rag_bbva/scraping/exploration.py`](src/rag_bbva/scraping/exploration.py): `Renderer` (`Protocol`); [`src/rag_bbva/scraping/storage.py`](src/rag_bbva/scraping/storage.py): función de huella inyectable en `RawStorage` | El explorador funciona con Playwright, con un doble o sin renderizador. El almacenamiento detecta cambios con la huella que se le inyecte (bytes por defecto, texto visible en el crawler) sin cambiar su código | ✅ parcial (M1–M2). Las estrategias principales (`ChunkingStrategy`, `LLMProvider`, `Reranker`) llegan en M4, M6 y M7 |
 | **Template Method** | [`src/rag_bbva/scraping/base.py`](src/rag_bbva/scraping/base.py): `BaseCrawler.crawl()`; subclase concreta [`SitemapBfsCrawler`](src/rag_bbva/scraping/crawler.py) | `crawl()` fija el algoritmo (`prepare` → `discover_urls` → `fetch` → `validate` → `persist` → `extract_links`) y aplica en un solo lugar los límites, la deduplicación y el corte por bloqueo. Las subclases solo redefinen los pasos | ✅ M2 |
-| **Chain of Responsibility / Pipeline** | `processing/pipeline.py` | Limpieza como cadena de pasos independientes y testeables | ⏳ M3 |
+| **Chain of Responsibility / Pipeline** | [`src/rag_bbva/processing/steps.py`](src/rag_bbva/processing/steps.py): `CleaningStep` (`set_next`/`handle`) y sus pasos; [`src/rag_bbva/processing/pipeline.py`](src/rag_bbva/processing/pipeline.py): `CleaningPipeline` | Cada paso de la limpieza (parseo, metadatos, boilerplate, extracción, normalización, idioma, longitud, duplicados) es una clase que transforma el documento y lo pasa al siguiente, o corta la cadena con el motivo del descarte. Se prueban por separado y se pueden reordenar o sustituir | ✅ M3 |
 | **Factory** | `indexing/factory.py`, `llm/factory.py` | Crear embedder, LLM, vector store y reranker desde la configuración sin acoplarse a clases concretas | ⏳ M4–M7 |
 | **Repository** | `memory/repository.py` | Aislar la persistencia del historial (SQLite en producción, memoria en tests) | ⏳ M8 |
 | **Facade** | `services/rag_service.py` | Un único punto de entrada `ask(conversation_id, pregunta)` que orquesta todo el flujo | ⏳ M9 |
@@ -150,7 +170,7 @@ El caso exige al menos 3. Previstos en la [visión general §6](docs/00_VISION_G
 | CLI | Typer | Comandos con ayuda y validación automáticas | ✅ en uso (M0) |
 | Reintentos | `tenacity` | Backoff exponencial declarativo, solo ante errores transitorios | ✅ en uso (M2) |
 | Calidad | `pytest`, `respx`, `ruff` | Tests rápidos sin red (`respx` simula el sitio por HTTP); lint y formato uniformes | ✅ en uso |
-| Extracción de texto | `trafilatura` + reglas propias | Elimina boilerplate de forma robusta | ⏳ M3 |
+| Extracción de texto | `trafilatura` + reglas propias | Reglas por selector para el boilerplate conocido del sitio y trafilatura para el contenido principal, con *fallback* por selector cuando omite contenido | ✅ en uso (M3) |
 | Embeddings | `intfloat/multilingual-e5-small` | Gratis, multilingüe, corre en CPU ([ADR-005](docs/02_DECISIONES.md)) | ⏳ M4 |
 | Base vectorial | Qdrant self-hosted | Gratis, Docker oficial, filtros por metadatos ([ADR-002](docs/02_DECISIONES.md)) | ⏳ M5 |
 | Reranker | `cross-encoder/mmarco-mMiniLMv2-L12-H384-v1` | Multilingüe y liviano ([ADR-005](docs/02_DECISIONES.md)) | ⏳ M6 |
@@ -175,6 +195,9 @@ Registro completo: [`docs/02_DECISIONES.md`](docs/02_DECISIONES.md) (ADR) y supu
 - **Semillas intercaladas por sección:** un crawl parcial (`--max-pages 50`) cubre las 6 secciones en vez de solo la primera del sitemap (M2).
 - **Cambios detectados por texto visible:** Bancolombia inyecta ids aleatorios en cada respuesta, así que el hash de bytes nunca coincidiría (M2).
 - **Deduplicación por URL final:** muchas URLs de `empresas` redirigen a `/negocios`; se guarda una sola copia (M2).
+- **Boilerplate por reglas antes de extraer:** trafilatura sola sobre la página completa tomaba el bloque rotativo como título. Además, la plantilla de WebSphere mete el menú del sitio dentro del contenedor principal (M3).
+- **trafilatura solo si conserva ≥ 90 % del vocabulario:** en el HTML real omitió títulos y secciones enteras en 19 de 30 páginas, sin agregar nunca texto propio (M3).
+- **`html_lang` y `lang` separados:** la plantilla de WebSphere declara `lang="en"` en páginas en español. `lang` se detecta en el texto por palabras funcionales, sin dependencias nuevas (M3).
 - **`XAI_API_KEY` opcional** al cargar la configuración; se exige al crear el proveedor del LLM (ADR-006).
 - **Dependencias incrementales:** cada módulo agrega solo lo que usa (ADR-007).
 - **Orquestación propia, sin LangChain** (ADR-001).
@@ -192,8 +215,9 @@ Registro completo: [`docs/02_DECISIONES.md`](docs/02_DECISIONES.md) (ADR) y supu
 | L-05 | **Foto del sitio:** el índice refleja el sitio en la fecha del scraping; la demo usará un snapshot versionado de datos limpios | S-07, M12 |
 | L-06 | **Sin sala de prensa (noticias y comunicados):** los sitemaps listan 74 URLs únicas bajo `/acerca-de/sala-prensa/`: 73 en `sitemap-sala-de-prensa.xml` y 1 solo en `sitemap-personas.xml`. Responden 301 hacia otro host, `prensa.bancolombia.com`. En el manifest de M2, la única procesada (1 de 1) redirige a la **portada** `https://prensa.bancolombia.com/`, no a la noticia, así que seguir la redirección no daría su contenido. Incluirlas exigiría explorar y crawlear un segundo sitio. Se excluyen sin pedirlas (`CRAWL_EXCLUDE_PATH_PREFIXES`, desde M3; quedan como `excluida`), y el asistente no responde sobre noticias. El resto de `acerca-de` sí se incluye | [ADR-010](docs/02_DECISIONES.md#adr-010--sala-de-prensa-fuera-del-alcance-del-scraping), M2 |
 | L-07 | **URLs muertas en el sitemap:** algunas páginas listadas responden 403 `AccessDenied` (origen S3; p. ej. `/negocios/especiales/wobi…`). Se registran como `error_http` con un fragmento del cuerpo | M2 |
-| L-08 | **Bloques que rotan:** varias páginas de educación financiera y del centro de ayuda muestran "artículos relacionados" aleatorios en cada petición, por lo que se reescriben aunque su contenido principal no cambie. Se quitarán en la limpieza (M3) | M2 |
-| L-09 | **Simuladores y páginas cargadas por JS, sin contenido:** su contenido llega por JavaScript, así que en el HTML estático no queda texto propio. La limpieza las descarta como `texto_corto` (menos de `CLEAN_MIN_CHARS`=200 caracteres) y **el asistente no podrá responder sobre ellas**. Ejemplos en los datos de M2: los simuladores de libre inversión, crédito de vivienda y CDT (0–8 caracteres) y la portada de finanzas personales de educación financiera (19 caracteres). El listado completo de cada corrida queda en `data/clean/clean_report.json` (`discarded_documents`) | ADR-009, M3 |
+| L-08 | **Bloques que rotan (resuelta en la limpieza, M3):** varias páginas de educación financiera y del centro de ayuda muestran "contenido relacionado" aleatorio en cada petición. Por eso se reescribe su HTML crudo aunque el contenido principal no cambie. La limpieza quita ese bloque: en el crawl completo, 34 páginas lo traían y en ninguna quedó en el texto limpio | M2, M3 |
+| L-09 | **Simuladores y páginas cargadas por JS, sin contenido:** su contenido llega por JavaScript, así que el HTML estático no tiene texto propio. La limpieza las descarta como `texto_corto` (menos de `CLEAN_MIN_CHARS`=200 caracteres) y **el asistente no podrá responder sobre ellas**. En el crawl completo fueron 56 de 685 páginas: 10 simuladores y calculadoras, 17 páginas de resultados de búsqueda de preguntas frecuentes y 29 páginas con contenido por JS o solo con errores de WCM. Otros 4 simuladores muestran solo la pantalla de ingreso (`/personas/login`) y se descartan como duplicados. El listado está en `data/clean/clean_report.json` (`discarded_documents`) | ADR-009, M3 |
+| L-10 | **Cobertura del enlace a enlace (BFS) acotada:** con `CRAWL_MAX_PAGES=1200` se procesan todas las semillas del sitemap, pero solo 173 de los 639 enlaces internos de profundidad 1 encontrados. Además, 250 URLs retiradas redirigen a la portada de su sección (p. ej. `…/sostenibilidad/novacampo` → `/personas`) y consumen cupo, aunque no generan documentos (un solo documento por portada) | M3 |
 
 ---
 
@@ -222,9 +246,10 @@ rag-bbva/
 ├── src/rag_bbva/
 │   ├── config.py · exceptions.py · logging_conf.py · cli.py
 │   ├── scraping/          # robots, sitemap, urls, fetcher, discovery, storage, base (Template Method), crawler, page_analysis, exploration
-│   └── processing/ indexing/ retrieval/ llm/ memory/ services/ api/ ui/ analytics/   # vacíos (próximos módulos)
-├── scripts/explore_site.py
-├── tests/unit/ · tests/fixtures/ (robots, sitemaps, html) · tests/integration/
+│   ├── processing/        # models, markdown, steps (Chain of Responsibility), pipeline, quality
+│   └── indexing/ retrieval/ llm/ memory/ services/ api/ ui/ analytics/   # vacíos (próximos módulos)
+├── scripts/explore_site.py · scripts/trim_html_fixture.py
+├── tests/unit/ · tests/fixtures/ (robots, sitemaps, html: páginas reales recortadas de las 3 plantillas) · tests/integration/
 ├── eval/                  # golden set (M13)
 └── docs/
 ```
@@ -234,5 +259,5 @@ Documentación:
 - [Plan de módulos](docs/01_PLAN_DE_MODULOS.md): tareas, pruebas de aceptación y Definition of Done.
 - [Decisiones (ADR)](docs/02_DECISIONES.md).
 - [Exploración del sitio](docs/exploracion_sitio.md) y su [evidencia JSON](docs/evidencia/).
-- Bitácoras por módulo: [M00](docs/modulos/M00.md) · [M01](docs/modulos/M01.md) · [M02](docs/modulos/M02.md).
+- Bitácoras por módulo: [M00](docs/modulos/M00.md) · [M01](docs/modulos/M01.md) · [M02](docs/modulos/M02.md) · [M03](docs/modulos/M03.md).
 - [CHANGELOG](CHANGELOG.md).

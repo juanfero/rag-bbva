@@ -4,12 +4,12 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Sin publicar]
 
-### M6 — Recuperación + reranker (en revisión, rama `feat/m06-retrieval`)
-#### Añadido
+## [m06] - 2026-10-02 — Recuperación + reranker
+### Añadido
 - `Retriever`: consulta con `query: `, top-k del `VectorStore` con filtro por sección, reranking, diversidad y marca `no_answer`. `RetrievalResult` con candidatos, scores y tiempos (`retrieval_ms`, `rerank_ms`). Incluye `warm_up()`.
 - `Reranker` (Strategy): `CrossEncoderReranker` (mmarco-mMiniLMv2, CPU, `max_length` 512) y `NoOpReranker`; `select_diverse` (como mucho `RERANK_MAX_CHUNKS_PER_DOC` chunks por página).
 - Fábrica: `create_reranker` (según `RERANKER_ENABLED`) y `create_retriever`.
-- Calibración del umbral: `eval/calibration.jsonl` (15 respondibles + 15 no respondibles), `retrieval/calibration.py` y `scripts/calibrate_reranker.py`. `RERANK_MIN_SCORE=1.6` (27/30 aciertos).
+- Calibración del umbral: `eval/calibration.jsonl` (15 respondibles + 15 no respondibles), `retrieval/calibration.py` y `scripts/calibrate_reranker.py`. `RERANK_MIN_SCORE=1.6` (27/30 aciertos dentro de la muestra de calibración; M13 lo valida aparte).
 - Comando `search "pregunta" [--no-rerank] [--section X] [--top-n N]`.
 - Configuración: `RERANK_MAX_CHUNKS_PER_DOC`, `RERANK_MIN_SCORE`, `RERANKER_MAX_LENGTH`, `RERANKER_BATCH_SIZE`.
 - README: búsqueda, bonus del reranker, umbral y su justificación, patrón Strategy del reranker.

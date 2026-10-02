@@ -18,7 +18,7 @@ Prueba técnica de ML/AI Engineer: un sistema RAG (*Retrieval-Augmented Generati
 | M3 | Limpieza (datos limpios): pipeline de pasos, metadatos, idioma, deduplicación, chequeo de fugas | ✅ | `m03` |
 | M4 | Chunking + embeddings: estrategias de chunking, e5-small en CPU, fábrica de componentes | ✅ | `m04` |
 | M5 | Indexación vectorial (Qdrant): `ingest` idempotente con sincronización y caché de embeddings | ✅ | `m05` |
-| M6 | Recuperación + reranker: cross-encoder, diversidad por página, umbral calibrado de "sin información" | 🚧 en revisión (rama `feat/m06-retrieval`) | — |
+| M6 | Recuperación + reranker: cross-encoder, diversidad por página, umbral calibrado de "sin información" | ✅ | `m06` |
 | M7 | Generación con LLM (Grok) | ⏳ | — |
 | M8 | Memoria conversacional | ⏳ | — |
 | M9 | Servicio RAG + API | ⏳ | — |
@@ -187,7 +187,7 @@ Cómo funciona la búsqueda:
 - En "¿cómo descargo un comprobante…?", los pasos concretos pasan por delante de la introducción.
 
 **Umbral de "sin información suficiente"** (`RERANK_MIN_SCORE=1.6`). Si el #1 no lo alcanza, el asistente debe decir que no tiene información en vez de inventar.
-- Se calibró con `eval/calibration.jsonl`: 15 preguntas que el sitio responde y 15 que no (fuera de dominio, otros bancos, prensa, simuladores). Acierta 27 de 30.
+- Se calibró con `eval/calibration.jsonl`: 15 preguntas que el sitio responde y 15 que no (fuera de dominio, otros bancos, prensa, simuladores). Acierta 27 de 30, **medido en la misma muestra con la que se eligió el umbral**: es un resultado dentro de la muestra y probablemente optimista. M13 lo valida con un golden set separado.
 - Va sobre el score del reranker y **no sobre el coseno**: los cosenos de e5 están comprimidos (≈ 0,79–0,92 para todo). El mejor umbral posible sobre el coseno acierta 24 de 30 y queda pegado a los datos (margen 0,001).
 - Sin reranker (`--no-rerank` o `RERANKER_ENABLED=false`) no se aplica umbral.
 - **Latencia en CPU:** retrieval ~19 ms; rerank ~0,9 s (p50).

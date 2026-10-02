@@ -15,50 +15,56 @@
 | M2 — Scraper (datos crudos) | `m02` | `4a31943` | `docs/modulos/M02.md` |
 | M3 — Limpieza (datos limpios) | `m03` | `731c389` | `docs/modulos/M03.md` |
 | M4 — Chunking + embeddings | `m04` | `777402b` | `docs/modulos/M04.md` |
-| M5 — Indexación vectorial (Qdrant) | `m05` | merge `--no-ff` de `feat/m05-qdrant` en `main` (2026-10-02); el hash se ve con `git rev-parse --short m05^{commit}` | `docs/modulos/M05.md` |
+| M5 — Indexación vectorial (Qdrant) | `m05` | `a47323a` | `docs/modulos/M05.md` |
+| M6 — Recuperación + reranker | `m06` | merge `--no-ff` de `feat/m06-retrieval` en `main` (2026-10-02); el hash se ve con `git rev-parse --short m06^{commit}` | `docs/modulos/M06.md` |
 
 - Commits `docs` directos en `main`, pedidos de forma explícita por Juan Felipe:
   - `5edf0dd`, entre `m00` y `m01`.
   - `c38abdc` y `9a6e3ce`, entre `m01` y `m02`.
 - Cada merge incluye las correcciones de su revisión (§10 de cada bitácora).
 
-### Siguiente módulo: M6 — Recuperación + reranker
-- Juan Felipe pidió empezarlo junto con el cierre de M5, en la rama `feat/m06-retrieval`.
-- Pedido, resumido; el texto completo está en la conversación y en `M06.md` cuando exista:
-  - `Retriever` (consulta con `query: `, top-k `RETRIEVAL_TOP_K` del `VectorStore`, filtro por sección) que devuelve un `RetrievalResult` con candidatos, scores y tiempos (`retrieval_ms`, `rerank_ms`).
-  - `Reranker` (Strategy): `CrossEncoderReranker` (`RERANKER_MODEL`, CPU, `max_length` 512) y `NoOpReranker`. La fábrica elige según `RERANKER_ENABLED`. Devuelve top-n `RERANK_TOP_N`, con diversidad `RERANK_MAX_CHUNKS_PER_DOC` (2).
-  - Calibrar `RERANK_MIN_SCORE` con `eval/calibration.jsonl` (~15 preguntas respondibles y ~15 no: fuera de dominio, otros bancos, prensa L-06, simuladores L-09), sobre el score del reranker y no sobre el coseno.
-  - CLI `search "pregunta" [--no-rerank] [--section X] [--top-n N]`.
-  - Tests; los del cross-encoder real como `slow`, saltados si no está en caché.
-  - Evidencia:
-    - posiciones antes y después del rerank en las 5 preguntas;
-    - tabla de calibración;
-    - latencias p50 y p95;
-    - tamaño del modelo.
+### Siguiente módulo: M7 — Generación con LLM
+- Juan Felipe pidió empezarlo junto con el cierre de M6, en la rama `feat/m07-llm`. Ya creó `.env` con `XAI_API_KEY`: **no leerla ni imprimirla**; solo verificar que exista y que `.env` esté ignorado.
+- Pedido, resumido; el texto completo está en la conversación y en `M07.md` cuando exista:
+  - **`LLMProvider` (Strategy):**
+    - `XaiGrokProvider` con el SDK `openai` (`base_url=XAI_BASE_URL`), timeout y reintentos solo en 429/5xx/timeouts (un solo mecanismo, documentado), streaming y registro de tokens;
+    - `FakeLLMProvider`;
+    - sin clave → `ConfigurationError`;
+    - comando `llm-check`: si `LLM_MODEL` no existe, mostrar la lista y **preguntar antes de cambiarlo**.
+  - **Prompts versionados en español:**
+    - solo contexto, citas [n], no inventar;
+    - aclarar si preguntan por otra entidad;
+    - contexto delimitado con defensa contra inyección;
+    - `QueryRewriter` (pregunta autónoma + expansión de siglas, p. ej. "4 por mil" → GMF), con `QUERY_REWRITE_MODE=off|history_only|always`.
+  - **`no_answer`** del umbral de M6 → respuesta fija, sin llamar al LLM.
+  - **Post-proceso de citas:** [n] → URL, índices inválidos fuera, deduplicadas.
+  - **Tests** con respx, sin gastar créditos; el real contra Grok como `integration`, que se salta sin clave.
+  - **Evidencia** (pocas llamadas reales):
+    - `llm-check`;
+    - 6 preguntas de punta a punta con tokens, latencias y costo según el precio **oficial** de xAI citado;
+    - experimento `off` frente a `always` sobre `eval/calibration.jsonl`;
+    - system prompt completo en M07.md.
   - **Sin merge.**
 
-### Estado del árbol (al cerrar M5)
-- `main` con el merge de M5 y el tag `m05`, publicados en `origin`. Las ramas `feat/m00…m05` siguen a sus pares en `origin`.
+### Estado del árbol (al cerrar M6)
+- `main` con el merge de M6 y el tag `m06`, publicados en `origin`. Las ramas `feat/m00…m06` siguen a sus pares en `origin`.
 - **Qdrant del compose levantado** (`docker compose up -d qdrant`), volumen `qdrant_data`, colección `bancolombia_docs` con 3506 puntos.
-- Solo en local, ignorado por git: `.venv/`, `models/` (e5-small, 471 MB) y `data/`.
+- Solo en local, ignorado por git: `.venv/`, `.env` (con `XAI_API_KEY`, creado por Juan Felipe), `models/` (e5-small y cross-encoder, 936 MB) y `data/`.
   - `data/raw/`: crawl completo.
   - `data/clean/`: 597 documentos.
   - `data/chunks/`: 3506 chunks.
   - `data/embeddings/`: caché de 6 MB.
-  - No hay `.env`; ningún comando lo necesita hasta M7.
+  - `data/eval/calibration_report.json`: última corrida de la calibración de M6.
 
 ---
 
 ## 2. Último pedido de Juan Felipe y hasta dónde se llegó
 
-Revisión de M5: **aprobado tras dos verificaciones**, ya hechas:
-- `ingest --recreate` con la caché caliente: 0 embebidos, 3506 desde caché, 1,63 s.
-- El ajuste de M4 deja 597 → 597 documentos:
-  - sale `/personas/canales/puntos-atencion` (texto corto);
-  - entra `…/tarjetas-credito/american-express`, que antes era un falso duplicado de Mastercard porque trafilatura recortaba los títulos;
-  - "¿dónde hay cajeros?" → `cajeros`, `cajeros > consejos de seguridad`, `/puntos-de-atencion`.
+Revisión de M6: **aprobado**. Antes del cierre:
+- se declaró que el 27/30 del umbral es un resultado dentro de la muestra (M13 lo valida aparte);
+- se anotaron para M7 Banco de Bogotá (prompt) y "4 por mil" (reformulación).
 
-Se cerró M5 (bitácora ✅, CHANGELOG `[m05]`, README ✅, merge `--no-ff`, tag `m05` y push). A continuación se empieza M6 (§1).
+Se cerró M6 (bitácora ✅, CHANGELOG `[m06]`, README ✅, merge `--no-ff`, tag `m06` y push). A continuación se empieza M7 (§1).
 
 ---
 
@@ -67,8 +73,8 @@ Se cerró M5 (bitácora ✅, CHANGELOG `[m05]`, README ✅, merge `--no-ff`, tag
 ### Preguntas abiertas
 - Ninguna al cerrar M3.
 
-### Decisiones de implementación de M2 a M5
-Están en `M02.md §4` a `M05.md §4` y en la sección "Decisiones" del README, **no** en ADR:
+### Decisiones de implementación de M2 a M6
+Están en `M02.md §4` a `M06.md §4` y en la sección "Decisiones" del README, **no** en ADR:
 - **M2:**
   - semillas intercaladas por sección;
   - detección incremental por huella del texto visible;
@@ -98,6 +104,12 @@ Están en `M02.md §4` a `M05.md §4` y en la sección "Decisiones" del README, 
   - la caché de embeddings no se poda;
   - puerto de Qdrant solo en `127.0.0.1`;
   - con 3506 vectores Qdrant busca de forma exacta (sin HNSW: `indexed_vectors_count = 0`).
+- **M6:**
+  - umbral `RERANK_MIN_SCORE=1.6` sobre el logit del cross-encoder (27/30 dentro de la muestra; el coseno, 24/30 con margen 0,001);
+  - sin reranker no hay umbral;
+  - diversidad de 2 chunks por página;
+  - top-k 20 (el chunk de requisitos de vivienda venía del puesto 20);
+  - `warm_up()` excluye la carga de modelos de las latencias.
 
 ### Prácticas acordadas en la conversación
 No están escritas en `CLAUDE.md`; la forma de trabajo de §4 las recoge:
@@ -150,7 +162,7 @@ Comandos de verificación:
 cd /home/pipe/Inetum/rag-bbva-docs/rag-bbva
 source .venv/bin/activate
 git status && git branch -vv && git log --oneline --graph --decorate -15 && git tag
-pytest                                   # al cerrar M5: 342 passed (slow: requieren el modelo en models/; integration: Qdrant levantado; si no, se saltan)
+pytest                                   # al cerrar M6: 358 passed (slow: requieren el modelo en models/; integration: Qdrant levantado; si no, se saltan)
 pytest -m "not integration and not slow"
 ruff check . && ruff format --check .
 python -m rag_bbva.cli version
@@ -160,6 +172,8 @@ python -m rag_bbva.cli clean                   # ~51 s sobre el crawl completo
 python -m rag_bbva.cli chunk                   # ~10 s (carga el tokenizer del modelo)
 docker compose up -d qdrant
 python -m rag_bbva.cli ingest                  # ~2,5 min sin caché; 0,2 s si no hay cambios; --recreate con caché: 1,6 s
+python -m rag_bbva.cli search "¿qué es un CDT?" # retrieval ~19 ms + rerank ~0,9 s en CPU
+python scripts/calibrate_reranker.py           # recalibra el umbral con eval/calibration.jsonl
 docker build -t rag-bbva:latest .
 ```
 
@@ -169,7 +183,9 @@ docker build -t rag-bbva:latest .
 
 Fuentes: `docs/01_PLAN_DE_MODULOS.md`, las bitácoras §8 y el README.
 
-- **M6 — Recuperación + reranker:** ver §1. Umbral de "sin información suficiente" sobre el score del reranker, no sobre el coseno de e5.
+- **M7 — LLM:** ver §1. Casos que vienen de M6: Banco de Bogotá (prompt) y "4 por mil" (reformulación).
+- **M11:** guardar `retrieval_ms`, `rerank_ms`, `top_score` y `no_answer` por mensaje.
+- **M13:** golden set separado para validar el umbral; varias URLs válidas por pregunta.
 - **M7 — LLM:**
   - Exigir `XAI_API_KEY` al crear `XaiGrokProvider`, con error claro (ADR-006).
   - Verificar que `LLM_MODEL` exista con `GET /v1/models`.
@@ -190,10 +206,10 @@ Fuentes: `docs/01_PLAN_DE_MODULOS.md`, las bitácoras §8 y el README.
 
 ## 7. Lo que la próxima sesión NO debe romper
 
-- **Los tags publicados no se mueven ni se reescriben:** `m00` → `bc14425`, `m01` → `f48a0d3`, `m02` → `4a31943`, `m03` → `731c389`, `m04` → `777402b`, `m05` → merge de M5. Tampoco se reescribe historial ya publicado en `origin`: nada de `push --force` ni rebase de ramas publicadas.
+- **Los tags publicados no se mueven ni se reescriben:** `m00` → `bc14425`, `m01` → `f48a0d3`, `m02` → `4a31943`, `m03` → `731c389`, `m04` → `777402b`, `m05` → `a47323a`, `m06` → merge de M6. Tampoco se reescribe historial ya publicado en `origin`: nada de `push --force` ni rebase de ramas publicadas.
 - **Nunca escribir la `XAI_API_KEY`** en código, docs, tests ni commits; solo en `.env`, que está en `.gitignore`.
 - **Bancolombia en todo texto visible al usuario** (prompts, UI, respuestas, README, ayuda de la CLI). El código conserva `rag_bbva`. Un test de `tests/unit/test_cli.py` verifica que la ayuda de la CLI diga Bancolombia y no BBVA.
-- **Ningún módulo se mergea sin la aprobación explícita** de Juan Felipe; M6 tampoco.
+- **Ningún módulo se mergea sin la aprobación explícita** de Juan Felipe; M7 tampoco.
 - **Cortesía con el sitio:** respetar `robots.txt`, User-Agent `RAG-BBVA-TechTest/1.0`, pausa ≥ 1 s, sin seguir redirecciones a otros dominios y sin eludir el WAF o el bot-manager.
 - `data/`, `models/` y `.env` no se versionan.
 
@@ -207,6 +223,6 @@ Fuentes: `docs/01_PLAN_DE_MODULOS.md`, las bitácoras §8 y el README.
 4. `docs/00_VISION_GENERAL.md`: requisitos, arquitectura, configuración §7 y supuestos §9.
 5. `docs/01_PLAN_DE_MODULOS.md`: Definition of Done y el módulo en curso o siguiente.
 6. `docs/02_DECISIONES.md`: ADR-001 a ADR-011.
-7. `docs/modulos/M05.md` (último cerrado; §8 tiene los pendientes) y `M06.md` si existe; luego las bitácoras anteriores si hace falta.
+7. `docs/modulos/M06.md` (último cerrado; §8 tiene los pendientes) y `M07.md` si existe; luego las bitácoras anteriores si hace falta.
 8. `docs/exploracion_sitio.md`: hallazgos del sitio, selectores y riesgos.
 9. `CHANGELOG.md`.

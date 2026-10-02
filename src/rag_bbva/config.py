@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     )
 
     # Scraping
-    target_base_url: HttpUrl = HttpUrl("https://www.bbva.com.co/")
+    target_base_url: HttpUrl = HttpUrl("https://www.bancolombia.com/")
     crawl_max_pages: int = Field(default=300, gt=0)
     crawl_max_depth: int = Field(default=3, ge=0)
     crawl_delay_seconds: float = Field(default=1.0, ge=0)
@@ -39,7 +39,7 @@ class Settings(BaseSettings):
 
     # Base vectorial
     qdrant_url: str = "http://qdrant:6333"
-    qdrant_collection: str = Field(default="bbva_docs", min_length=1)
+    qdrant_collection: str = Field(default="bancolombia_docs", min_length=1)
 
     # Recuperación y reranking
     retrieval_top_k: int = Field(default=20, gt=0)

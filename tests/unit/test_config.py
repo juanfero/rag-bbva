@@ -13,7 +13,7 @@ def test_settings_defaults(clean_env: pytest.MonkeyPatch) -> None:
     """Sin `.env` ni variables de entorno se cargan los defaults documentados."""
     settings = Settings(_env_file=None)
 
-    assert str(settings.target_base_url) == "https://www.bbva.com.co/"
+    assert str(settings.target_base_url) == "https://www.bancolombia.com/"
     assert settings.crawl_max_pages == 300
     assert settings.crawl_max_depth == 3
     assert settings.crawl_delay_seconds == 1.0
@@ -22,7 +22,7 @@ def test_settings_defaults(clean_env: pytest.MonkeyPatch) -> None:
     assert settings.chunk_overlap == 120
     assert settings.embedding_model == "intfloat/multilingual-e5-small"
     assert settings.qdrant_url == "http://qdrant:6333"
-    assert settings.qdrant_collection == "bbva_docs"
+    assert settings.qdrant_collection == "bancolombia_docs"
     assert settings.retrieval_top_k == 20
     assert settings.reranker_enabled is True
     assert settings.reranker_model == "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1"

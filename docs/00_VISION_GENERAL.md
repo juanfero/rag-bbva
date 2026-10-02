@@ -1,7 +1,7 @@
 # Visión general del proyecto — Asistente RAG sobre el sitio de BBVA Colombia
 
 > Documento maestro del proyecto. Todo módulo, decisión y prueba debe ser trazable a este documento.
-> Estado: **v0.2 — decisiones confirmadas** (LLM: Grok de xAI · UI: Streamlit · Entorno: Linux).
+> Estado: **v0.3 — decisiones confirmadas** (LLM: Grok de xAI · UI: Streamlit · Entorno: Linux · Fuente: Bancolombia, ADR-008).
 
 ---
 
@@ -15,7 +15,7 @@
 | Fecha de entrega | Sin fecha límite fija (ver S-01) |
 | Entorno de desarrollo | Linux + Docker |
 | Cliente ficticio | BBVA Colombia |
-| Fuente de datos | https://www.bbva.com.co/ (se permite otro banco) |
+| Fuente de datos | ~~https://www.bbva.com.co/~~ → **https://www.bancolombia.com/** (el caso permite otro banco; bbva.com.co bloquea a todo cliente no navegador con 403, ver ADR-008 y S-02) |
 
 **Problema de negocio:** usuarios internos de BBVA Colombia necesitan consultar la información publicada en el sitio institucional sin hacer búsquedas manuales. Se requiere un asistente conversacional que responda **solo con base en el contenido del sitio**, citando las fuentes.
 
@@ -74,9 +74,9 @@
 ### 3.1 Flujo de ingesta (offline)
 
 ```
-bbva.com.co ──► Crawler ──► data/raw/ ──► Limpieza ──► data/clean/ ──► Chunking ──► Embeddings ──► Qdrant
+bancolombia.com ► Crawler ──► data/raw/ ──► Limpieza ──► data/clean/ ──► Chunking ──► Embeddings ──► Qdrant
               (robots,      (HTML +       (pipeline     (JSONL con     (por          (multilingüe)   (colección
-               sitemap,      metadatos)    de pasos)     metadatos)     secciones)                    bbva_docs)
+               sitemap,      metadatos)    de pasos)     metadatos)     secciones)             bancolombia_docs)
                rate limit)
 ```
 
@@ -191,7 +191,7 @@ El caso pide mínimo 3. Se implementan 6 para tener margen, pero el README desta
 
 | Variable | Default propuesto | Descripción |
 |---|---|---|
-| `TARGET_BASE_URL` | `https://www.bbva.com.co/` | Sitio a scrapear |
+| `TARGET_BASE_URL` | `https://www.bancolombia.com/` | Sitio a scrapear (ADR-008) |
 | `CRAWL_MAX_PAGES` | `300` | Límite de páginas |
 | `CRAWL_MAX_DEPTH` | `3` | Profundidad máxima del BFS |
 | `CRAWL_DELAY_SECONDS` | `1.0` | Pausa entre peticiones (cortesía) |
@@ -200,7 +200,7 @@ El caso pide mínimo 3. Se implementan 6 para tener margen, pero el README desta
 | `CHUNK_OVERLAP` | `120` | Solapamiento |
 | `EMBEDDING_MODEL` | `intfloat/multilingual-e5-small` | Modelo de embeddings |
 | `QDRANT_URL` | `http://qdrant:6333` | URL de Qdrant |
-| `QDRANT_COLLECTION` | `bbva_docs` | Colección |
+| `QDRANT_COLLECTION` | `bancolombia_docs` | Colección |
 | `RETRIEVAL_TOP_K` | `20` | Candidatos recuperados |
 | `RERANKER_ENABLED` | `true` | Activar reranker |
 | `RERANKER_MODEL` | `cross-encoder/mmarco-mMiniLMv2-L12-H384-v1` | Modelo de reranking |
@@ -238,8 +238,8 @@ Salida: comando CLI `metrics`, endpoint `GET /analytics/summary`, página "Métr
 | ID | Supuesto | Estado |
 |---|---|---|
 | S-01 | La fecha de entrega del PDF no aplica; se trabaja sin fecha límite fija y M13 (evaluación) entra en alcance | Confirmado |
-| S-02 | Se usa el sitio de BBVA Colombia (no otro banco) | Propuesto |
-| S-03 | Alcance del scraping: páginas públicas HTML del dominio `www.bbva.com.co`; se excluyen PDFs, áreas transaccionales/login y otros dominios. Los PDFs pueden quedar como mejora futura | Propuesto, se valida en M1 |
+| S-02 | Se usa el sitio de **Bancolombia** (`www.bancolombia.com`) como fuente de datos: `www.bbva.com.co` responde 403 (WAF) a `robots.txt`, home y sitemap para cualquier cliente no navegador. BBVA Colombia sigue siendo el cliente ficticio y se mantienen los nombres del proyecto (`rag-bbva`, `rag_bbva`) | Confirmado (2026-10-01, ADR-008) |
+| S-03 | Alcance del scraping: páginas públicas HTML del dominio `www.bancolombia.com`; se excluyen PDFs, áreas transaccionales/login y otros dominios. Los PDFs pueden quedar como mejora futura | Propuesto, se valida en M1 |
 | S-04 | El crawl se limita (`CRAWL_MAX_PAGES`) para respetar al sitio y el tiempo de la prueba; no es un espejo completo | Propuesto |
 | S-05 | "Usuarios internos" no implica autenticación; el `conversation_id` lo genera la UI o lo envía el cliente | Propuesto |
 | S-06 | El asistente responde solo con el contexto recuperado; si no hay información suficiente, lo dice explícitamente (no inventa) | Propuesto |

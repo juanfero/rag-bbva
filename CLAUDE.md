@@ -1,0 +1,37 @@
+# CLAUDE.md — Reglas del proyecto RAG BBVA
+
+## Contexto
+Prueba técnica de ML/AI Engineer: sistema RAG en Python sobre https://www.bbva.com.co/.
+Leer siempre antes de trabajar: `docs/00_VISION_GENERAL.md` y `docs/01_PLAN_DE_MODULOS.md`.
+
+## Forma de trabajo (obligatoria)
+1. Se trabaja **un módulo a la vez** (M0 → M14). No adelantar código de módulos futuros.
+2. Al iniciar un módulo: crear rama `feat/mXX-nombre` y copiar `docs/modulos/_PLANTILLA.md` a `docs/modulos/MXX.md`.
+3. Un módulo se cierra **solo** si cumple la Definition of Done de `01_PLAN_DE_MODULOS.md`:
+   `pytest` en verde (incluye módulos anteriores), `ruff check .` limpio, bitácora y CHANGELOG actualizados.
+4. Si una prueba falla: corregir el código, nunca debilitar ni borrar la prueba para que pase.
+5. Ante cualquier ambigüedad del caso: **preguntar a Juan Felipe** antes de implementar; si se decide un supuesto, registrarlo en `00_VISION_GENERAL.md §9` y en `02_DECISIONES.md`.
+6. No cambiar el stack de `00_VISION_GENERAL.md §4` sin registrar la decisión (ADR).
+
+## Entorno
+- Linux + Docker. Scripts en bash; rutas POSIX.
+- LLM: Grok (xAI) vía SDK `openai` con `XAI_BASE_URL`. **Nunca** escribir la `XAI_API_KEY` en código, docs, tests ni commits; solo en `.env` (ignorado por git).
+- Los tests unitarios usan `FakeLLMProvider`: nunca consumen créditos de xAI.
+
+## Convenciones de código
+- Python 3.11, type hints en todo, docstrings en español.
+- Toda configuración sale de `rag_bbva.config.get_settings()`; nada hardcodeado.
+- Errores: lanzar excepciones de `rag_bbva.exceptions`; nunca `except Exception: pass`.
+- Logging con `logging.getLogger(__name__)`, nunca `print` en el core.
+- Dependencias externas (red, Qdrant, API de xAI, modelos) detrás de interfaces para poder usar dobles en tests.
+- Tests unitarios **sin red**. Tests que requieren servicios reales: `@pytest.mark.integration`; modelos pesados: `@pytest.mark.slow`.
+
+## Git
+- Conventional Commits en español: `feat(scraping): …`, `fix(api): …`, `test(memory): …`, `docs: …`, `build: …`, `chore: …`.
+- Commits pequeños y lógicos (nunca un solo commit por módulo).
+- Al cerrar módulo: merge a `main`, tag `mXX`.
+
+## Comandos
+- Tests: `pytest -m "not integration and not slow"` (rápidos) · `pytest` (todos)
+- Lint: `ruff check . && ruff format --check .`
+- Docker: `docker compose up -d --build`

@@ -1,0 +1,30 @@
+{"id": "r01", "question": "¿cómo bloqueo mi tarjeta de crédito?", "answerable": true, "category": "respondible", "expected_url": "https://www.bancolombia.com/centro-de-ayuda/preguntas-frecuentes/bloquear-tarjeta-debito"}
+{"id": "r02", "question": "requisitos para crédito de vivienda", "answerable": true, "category": "respondible", "expected_url": "https://www.bancolombia.com/personas/creditos/vivienda/credito-hipotecario-para-comprar-vivienda"}
+{"id": "r03", "question": "¿qué es un CDT?", "answerable": true, "category": "respondible", "expected_url": "https://www.bancolombia.com/acerca-de/glosario"}
+{"id": "r04", "question": "¿dónde hay cajeros?", "answerable": true, "category": "respondible", "expected_url": "https://www.bancolombia.com/personas/canales/cajeros"}
+{"id": "r05", "question": "¿cómo descargo un comprobante de transferencia?", "answerable": true, "category": "respondible", "expected_url": "https://www.bancolombia.com/centro-de-ayuda/preguntas-frecuentes/enviar-descargar-comprobante-trasnferencias"}
+{"id": "r06", "question": "¿cómo cambio la clave principal en un cajero?", "answerable": true, "category": "respondible", "expected_url": "https://www.bancolombia.com/centro-de-ayuda/preguntas-frecuentes/cambiar-clave-principal-cajero"}
+{"id": "r07", "question": "¿qué es el GMF o 4 por mil?", "answerable": true, "category": "respondible", "expected_url": "https://www.bancolombia.com/personas/documentos-legales/gmf-iva"}
+{"id": "r08", "question": "¿cuánto cuesta la cuota de manejo de la cuenta de ahorros?", "answerable": true, "category": "respondible", "expected_url": "https://www.bancolombia.com/centro-de-ayuda/preguntas-frecuentes/cuota-de-manejo-cuenta-ahorros"}
+{"id": "r09", "question": "¿dónde registro mis llaves Bre-B?", "answerable": true, "category": "respondible", "expected_url": "https://www.bancolombia.com/centro-de-ayuda/preguntas-frecuentes/donde-registrar-llaves-bre-b"}
+{"id": "r10", "question": "¿cómo consulto mi certificado tributario?", "answerable": true, "category": "respondible", "expected_url": "https://www.bancolombia.com/centro-de-ayuda/preguntas-frecuentes/consultar-certificado-tributario"}
+{"id": "r11", "question": "¿qué beneficios tienen las tarjetas American Express?", "answerable": true, "category": "respondible", "expected_url": "https://www.bancolombia.com/personas/productos/tarjetas-credito/american-express"}
+{"id": "r12", "question": "¿qué puedo hacer en un corresponsal bancario?", "answerable": true, "category": "respondible", "expected_url": "https://www.bancolombia.com/personas/canales/corresponsal-bancario"}
+{"id": "r13", "question": "¿cómo radico un siniestro de un seguro?", "answerable": true, "category": "respondible", "expected_url": "https://www.bancolombia.com/personas/seguros/radicar-siniestro"}
+{"id": "r14", "question": "¿qué es el leasing habitacional?", "answerable": true, "category": "respondible", "expected_url": "https://www.bancolombia.com/personas/creditos/vivienda/leasing-habitacional"}
+{"id": "r15", "question": "¿cómo descargo el extracto de mi cuenta?", "answerable": true, "category": "respondible", "expected_url": "https://www.bancolombia.com/centro-de-ayuda/preguntas-frecuentes/medios-descarga-extractos"}
+{"id": "n01", "question": "¿quién ganó el Mundial de fútbol de 2022?", "answerable": false, "category": "fuera_de_dominio", "expected_url": null}
+{"id": "n02", "question": "receta de arepas de queso", "answerable": false, "category": "fuera_de_dominio", "expected_url": null}
+{"id": "n03", "question": "¿cuál es la capital de Australia?", "answerable": false, "category": "fuera_de_dominio", "expected_url": null}
+{"id": "n04", "question": "¿cómo instalo Python en Windows?", "answerable": false, "category": "fuera_de_dominio", "expected_url": null}
+{"id": "n05", "question": "¿qué tiempo hará mañana en Medellín?", "answerable": false, "category": "fuera_de_dominio", "expected_url": null}
+{"id": "n06", "question": "¿cuáles son los requisitos del crédito de vivienda de Davivienda?", "answerable": false, "category": "otro_banco", "expected_url": null}
+{"id": "n07", "question": "¿cómo abro una cuenta de ahorros en el Banco de Bogotá?", "answerable": false, "category": "otro_banco", "expected_url": null}
+{"id": "n08", "question": "¿cuál es la tasa de las tarjetas de crédito de Itaú?", "answerable": false, "category": "otro_banco", "expected_url": null}
+{"id": "n09", "question": "¿cuáles fueron las utilidades de Bancolombia del segundo trimestre de 2026 según su comunicado de prensa?", "answerable": false, "category": "prensa_L06", "expected_url": null}
+{"id": "n10", "question": "últimas noticias de la sala de prensa de Bancolombia", "answerable": false, "category": "prensa_L06", "expected_url": null}
+{"id": "n11", "question": "¿qué anunció el presidente de Bancolombia a los medios esta semana?", "answerable": false, "category": "prensa_L06", "expected_url": null}
+{"id": "n12", "question": "simula la cuota de un crédito de libre inversión de 10 millones a 36 meses", "answerable": false, "category": "simulador_L09", "expected_url": null}
+{"id": "n13", "question": "¿cuánto me rinde un CDT de 5 millones a 90 días?", "answerable": false, "category": "simulador_L09", "expected_url": null}
+{"id": "n14", "question": "calcula la cuota mensual de un crédito de vivienda de 200 millones a 20 años", "answerable": false, "category": "simulador_L09", "expected_url": null}
+{"id": "n15", "question": "¿a cuánto está el dólar hoy?", "answerable": false, "category": "dato_en_tiempo_real", "expected_url": null}

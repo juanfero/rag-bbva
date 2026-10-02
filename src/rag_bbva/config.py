@@ -72,7 +72,14 @@ class Settings(BaseSettings):
     retrieval_top_k: int = Field(default=20, gt=0)
     reranker_enabled: bool = True
     reranker_model: str = "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1"
+    reranker_max_length: int = Field(default=512, gt=0)
+    reranker_batch_size: int = Field(default=16, gt=0)
     rerank_top_n: int = Field(default=5, gt=0)
+    # Máximo de chunks de un mismo documento en el top-n (0 = sin límite).
+    rerank_max_chunks_per_doc: int = Field(default=2, ge=0)
+    # Score mínimo del reranker (top-1) para responder; por debajo: "sin información
+    # suficiente". Calibrado con eval/calibration.jsonl: 27/30 aciertos (M06.md §6).
+    rerank_min_score: float = 1.6
 
     # LLM (Grok vía API compatible con OpenAI)
     llm_provider: LLMProviderName = "xai"

@@ -42,6 +42,10 @@ def test_settings_defaults(clean_env: pytest.MonkeyPatch) -> None:
     assert settings.reranker_enabled is True
     assert settings.reranker_model == "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1"
     assert settings.rerank_top_n == 5
+    assert settings.rerank_max_chunks_per_doc == 2
+    assert settings.rerank_min_score == 1.6
+    assert settings.reranker_max_length == 512
+    assert settings.reranker_batch_size == 16
     assert settings.llm_provider == "xai"
     assert settings.xai_api_key is None
     assert settings.xai_base_url == "https://api.x.ai/v1"

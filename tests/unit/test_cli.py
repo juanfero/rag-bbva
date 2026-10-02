@@ -33,6 +33,7 @@ def test_cli_sin_argumentos_muestra_ayuda(clean_env: pytest.MonkeyPatch) -> None
     assert "clean" in result.output
     assert "chunk" in result.output
     assert "ingest" in result.output
+    assert "search" in result.output
     # Regla del proyecto: todo texto visible al usuario dice Bancolombia (ADR-008).
     assert "Bancolombia" in result.output
     assert "BBVA" not in result.output
@@ -237,3 +238,61 @@ def test_cli_ingest_sin_qdrant_falla_con_mensaje_claro(
 
     assert result.exit_code == 1
     assert "No se pudo conectar con Qdrant en http://127.0.0.1:9" in result.output
+
+
+def test_cli_search_muestra_scores_y_umbral(
+    clean_env: pytest.MonkeyPatch, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`search` imprime url, heading_path, coseno, score del reranker y el veredicto."""
+    import numpy as np
+    from qdrant_client import QdrantClient
+
+    from rag_bbva.indexing.embedding import FakeEmbedder
+    from rag_bbva.indexing.factory import ComponentFactory
+    from rag_bbva.indexing.vector_store import QdrantVectorStore, VectorPoint, point_id
+    from rag_bbva.retrieval.reranker import NoOpReranker
+    from rag_bbva.retrieval.retriever import Retriever
+
+    embedder = FakeEmbedder(dimension=32)
+    store = QdrantVectorStore(QdrantClient(":memory:"), "c")
+    store.ensure_collection(32)
+    texto = "Un CDT es un certificado de depósito a término"
+    store.upsert(
+        [
+            VectorPoint(
+                point_id("cdt"),
+                np.asarray(embedder.embed_documents([texto])[0]),
+                {"chunk_id": "cdt", "doc_id": "d", "url": f"{B}/glosario", "title": "Glosario",
+                 "heading_path": "Glosario > C > CDT", "text": texto, "section": "acerca-de"},
+            )
+        ]
+    )  # fmt: skip
+    capturados: dict[str, object] = {}
+
+    def falso(
+        self: ComponentFactory, *, rerank: bool | None = None, top_n: int | None = None
+    ) -> Retriever:
+        capturados.update(rerank=rerank, top_n=top_n)
+        return Retriever(embedder=embedder, store=store, reranker=NoOpReranker(), top_n=top_n or 5)
+
+    monkeypatch.setattr(ComponentFactory, "create_retriever", falso)
+
+    result = runner.invoke(app, ["search", "¿qué es un CDT?", "--no-rerank", "--top-n", "2"])
+
+    assert result.exit_code == 0, result.output
+    assert capturados == {"rerank": False, "top_n": 2}
+    assert f"{B}/glosario" in result.stdout
+    assert "Glosario > C > CDT" in result.stdout
+    assert "coseno" in result.stdout
+    assert "Umbral: no se aplica sin reranker." in result.stdout
+
+
+def test_cli_search_sin_qdrant_falla(clean_env: pytest.MonkeyPatch) -> None:
+    clean_env.setenv("QDRANT_URL", "http://127.0.0.1:9")
+    clean_env.setenv("QDRANT_TIMEOUT_SECONDS", "2")
+    clean_env.setenv("EMBEDDING_PROVIDER", "fake")
+
+    result = runner.invoke(app, ["search", "hola", "--no-rerank"])
+
+    assert result.exit_code == 1
+    assert "No se pudo conectar con Qdrant" in result.output

@@ -10,6 +10,8 @@ from rag_bbva.indexing.chunking import ChunkingStrategy, FixedSizeChunker, Headi
 from rag_bbva.indexing.embedding import Embedder, FakeEmbedder, SentenceTransformerEmbedder
 from rag_bbva.indexing.embedding_cache import EmbeddingCache
 from rag_bbva.indexing.vector_store import QdrantVectorStore, VectorStore
+from rag_bbva.retrieval.reranker import CrossEncoderReranker, NoOpReranker, Reranker
+from rag_bbva.retrieval.retriever import Retriever
 
 _CHUNKERS: dict[str, type[ChunkingStrategy]] = {
     HeadingAwareChunker.name: HeadingAwareChunker,
@@ -18,7 +20,8 @@ _CHUNKERS: dict[str, type[ChunkingStrategy]] = {
 
 
 class ComponentFactory:
-    """Crea chunker, embedder, caché de embeddings y almacén vectorial desde `Settings`."""
+    """Crea chunker, embedder, caché, almacén vectorial, reranker y retriever desde
+    `Settings`."""
 
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
@@ -56,4 +59,35 @@ class ComponentFactory:
             self.settings.qdrant_collection,
             timeout=self.settings.qdrant_timeout_seconds,
             batch_size=self.settings.qdrant_batch_size,
+        )
+
+    def create_reranker(self, enabled: bool | None = None) -> Reranker:
+        """Cross-encoder si `RERANKER_ENABLED` (o `enabled`) es verdadero; si no, NoOp."""
+        activo = self.settings.reranker_enabled if enabled is None else enabled
+        if not activo:
+            return NoOpReranker()
+        return CrossEncoderReranker(
+            self.settings.reranker_model,
+            self.settings.model_cache_dir,
+            max_length=self.settings.reranker_max_length,
+            batch_size=self.settings.reranker_batch_size,
+        )
+
+    def create_retriever(
+        self,
+        *,
+        rerank: bool | None = None,
+        top_n: int | None = None,
+        embedder: Embedder | None = None,
+        store: VectorStore | None = None,
+    ) -> Retriever:
+        """Retriever con la configuración de `RETRIEVAL_TOP_K`, `RERANK_*`."""
+        return Retriever(
+            embedder=embedder or self.create_embedder(),
+            store=store or self.create_vector_store(),
+            reranker=self.create_reranker(rerank),
+            top_k=self.settings.retrieval_top_k,
+            top_n=top_n or self.settings.rerank_top_n,
+            max_per_doc=self.settings.rerank_max_chunks_per_doc,
+            min_score=self.settings.rerank_min_score,
         )

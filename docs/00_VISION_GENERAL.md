@@ -223,6 +223,10 @@ El caso pide mínimo 3. Se implementan 6 para tener margen, pero el README desta
 | `RERANKER_ENABLED` | `true` | Activar reranker |
 | `RERANKER_MODEL` | `cross-encoder/mmarco-mMiniLMv2-L12-H384-v1` | Modelo de reranking |
 | `RERANK_TOP_N` | `5` | Chunks finales al LLM |
+| `RERANK_MAX_CHUNKS_PER_DOC` | `2` | Máximo de chunks de una misma página en el top-n; 0 = sin límite (M6) |
+| `RERANK_MIN_SCORE` | `1.6` | Score mínimo del reranker (#1) para responder; por debajo, "sin información suficiente". Calibrado en M6 |
+| `RERANKER_MAX_LENGTH` | `512` | Tokens máximos del par pregunta + fragmento en el cross-encoder (M6) |
+| `RERANKER_BATCH_SIZE` | `16` | Pares por lote en el cross-encoder (M6) |
 | `LLM_PROVIDER` | `xai` | Proveedor (Strategy): `xai` o `fake` (tests) |
 | `XAI_API_KEY` | — (**obligatoria, secreta**) | Clave de la API de xAI; solo en `.env`, nunca en git |
 | `XAI_BASE_URL` | `https://api.x.ai/v1` | Endpoint compatible con OpenAI |

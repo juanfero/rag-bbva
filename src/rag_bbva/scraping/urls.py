@@ -1,5 +1,6 @@
 """Utilidades de URL para el scraping: normalización y filtros."""
 
+from collections.abc import Iterable
 from pathlib import PurePosixPath
 from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
 
@@ -57,3 +58,16 @@ def is_html_candidate(url: str) -> bool:
     """La extensión de la ruta puede corresponder a una página HTML."""
     sufijo = PurePosixPath(urlsplit(url).path).suffix.lower().lstrip(".")
     return sufijo in EXTENSIONES_HTML
+
+
+def excluded_prefix(url: str, prefixes: Iterable[str]) -> str | None:
+    """Primer prefijo de ruta que excluye la URL, o `None` si ninguno aplica.
+
+    Un prefijo con barra final (`/acerca-de/sala-prensa/`) cubre también la ruta sin
+    ella (`/acerca-de/sala-prensa`), porque `normalize_url` quita la barra final.
+    """
+    ruta = urlsplit(url).path or "/"
+    for prefijo in prefixes:
+        if ruta.startswith(prefijo) or (prefijo.endswith("/") and ruta == prefijo.rstrip("/")):
+            return prefijo
+    return None

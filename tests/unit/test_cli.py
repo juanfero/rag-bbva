@@ -1,6 +1,8 @@
 """Pruebas de la CLI (M0)."""
 
 import json
+import os
+import signal
 from pathlib import Path
 
 import httpx
@@ -9,7 +11,7 @@ import respx
 from typer.testing import CliRunner
 
 from rag_bbva import __version__
-from rag_bbva.cli import EXIT_ABORTADO, app
+from rag_bbva.cli import EXIT_ABORTADO, EXIT_INTERRUMPIDO, app
 
 runner = CliRunner()
 
@@ -28,6 +30,7 @@ def test_cli_sin_argumentos_muestra_ayuda(clean_env: pytest.MonkeyPatch) -> None
 
     assert "version" in result.output
     assert "scrape" in result.output
+    assert "clean" in result.output
     # Regla del proyecto: todo texto visible al usuario dice Bancolombia (ADR-008).
     assert "Bancolombia" in result.output
     assert "BBVA" not in result.output
@@ -99,3 +102,69 @@ def test_cli_scrape_sin_robots_falla(entorno_scrape: Path) -> None:
     assert result.exit_code == 1
     assert "robots.txt" in result.output
     assert not (entorno_scrape / "manifest.jsonl").exists()
+
+
+FIXTURE_HTML = Path(__file__).parent.parent / "fixtures" / "html" / "plantilla_b_gmf_iva.html"
+
+
+def test_cli_clean_escribe_documentos_y_reporte(
+    clean_env: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """`clean` lee el manifest de RAW_DATA_DIR y deja documents.jsonl y clean_report.json."""
+    raw, limpio = tmp_path / "raw", tmp_path / "clean"
+    (raw / "pages").mkdir(parents=True)
+    (raw / "pages" / "a.html").write_bytes(FIXTURE_HTML.read_bytes())
+    entrada = {
+        "url": f"{B}/acerca-de/gmf-iva", "final_url": f"{B}/acerca-de/gmf-iva", "status": 200,
+        "outcome": "guardada", "fetched_at": "2026-10-02T00:00:00+00:00", "depth": 0,
+        "source": "sitemap", "path": "pages/a.html",
+    }  # fmt: skip
+    (raw / "manifest.jsonl").write_text(json.dumps(entrada) + "\n", encoding="utf-8")
+    clean_env.setenv("RAW_DATA_DIR", str(raw))
+    clean_env.setenv("CLEAN_DATA_DIR", str(limpio))
+
+    result = runner.invoke(app, ["clean"])
+
+    assert result.exit_code == 0, result.output
+    assert "conservadas: 1" in result.stdout
+    documentos = (limpio / "documents.jsonl").read_text("utf-8").splitlines()
+    assert json.loads(documentos[0])["template"] == "B_main_content"
+    assert json.loads((limpio / "clean_report.json").read_text("utf-8"))["kept"] == 1
+
+
+def test_cli_clean_sin_manifest_falla(clean_env: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    clean_env.setenv("RAW_DATA_DIR", str(tmp_path / "vacio"))
+    clean_env.setenv("CLEAN_DATA_DIR", str(tmp_path / "clean"))
+
+    result = runner.invoke(app, ["clean"])
+
+    assert result.exit_code == 1
+    assert not (tmp_path / "clean").exists()
+
+
+def test_cli_scrape_sigterm_cierra_reporte_con_lo_avanzado(entorno_scrape: Path) -> None:
+    """Un SIGTERM a mitad del crawl deja manifest y crawl_report.json con `interrumpido`."""
+    pedidas = 0
+    manejador_previo = signal.getsignal(signal.SIGTERM)
+
+    def pagina(_peticion: httpx.Request) -> httpx.Response:
+        nonlocal pedidas
+        pedidas += 1
+        if pedidas == 3:
+            os.kill(os.getpid(), signal.SIGTERM)
+        return httpx.Response(200, headers={"content-type": "text/html"}, text="<p>hola</p>")
+
+    with respx.mock(base_url=B) as router:
+        _sitio(router)
+        router.get(url__regex=r"/personas/\d").mock(side_effect=pagina)
+
+        result = runner.invoke(app, ["scrape"])
+
+    assert result.exit_code == EXIT_INTERRUMPIDO, result.output
+    reporte = json.loads((entorno_scrape / "crawl_report.json").read_text("utf-8"))
+    assert reporte["aborted"] is True
+    assert reporte["abort_reason"] == "interrumpido"
+    assert 2 <= reporte["processed"] < 5
+    manifest = (entorno_scrape / "manifest.jsonl").read_text("utf-8").splitlines()
+    assert len(manifest) == reporte["manifest_entries"] == reporte["processed"]
+    assert signal.getsignal(signal.SIGTERM) is manejador_previo  # se restaura al salir

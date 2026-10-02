@@ -1,7 +1,7 @@
 """Crawler concreto: semillas de los sitemaps + BFS acotado por profundidad."""
 
 import logging
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable, Iterator, Sequence
 
 from bs4 import BeautifulSoup
 
@@ -34,6 +34,7 @@ class SitemapBfsCrawler(BaseCrawler):
         max_pages: int,
         max_depth: int,
         block_threshold: int,
+        exclude_path_prefixes: Sequence[str] = (),
         max_sitemaps: int = 30,
     ) -> None:
         """Configura el crawler sobre el sitio `base_url`."""
@@ -43,6 +44,7 @@ class SitemapBfsCrawler(BaseCrawler):
             max_pages=max_pages,
             max_depth=max_depth,
             block_threshold=block_threshold,
+            exclude_path_prefixes=exclude_path_prefixes,
         )
         self.base_url = base_url
         self.max_sitemaps = max_sitemaps

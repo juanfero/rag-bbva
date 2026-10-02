@@ -136,6 +136,7 @@ def _crawler(
     max_depth: int = 1,
     block_threshold: int = 5,
     max_retries: int = 2,
+    exclude: tuple[str, ...] = (),
 ) -> SitemapBfsCrawler:
     reloj = reloj or Reloj()
     fetcher = PoliteFetcher(
@@ -155,6 +156,7 @@ def _crawler(
         max_pages=max_pages,
         max_depth=max_depth,
         block_threshold=block_threshold,
+        exclude_path_prefixes=exclude,
     )
 
 
@@ -517,6 +519,113 @@ def test_reporte_resume_la_ejecucion(sitio: respx.MockRouter, tmp_path: Path) ->
     assert reporte.status_codes["404"] == 1
     assert reporte.skipped["ya descargada vía redirección"] == 1
     assert reporte.requests_made == len(sitio.calls)
+
+
+# ---------------------------------------------------------------- manifest incremental
+
+
+def _ctrl_c(_peticion: httpx.Request) -> httpx.Response:
+    """Simula Ctrl+C durante una petición (respx no acepta excepciones base como clase)."""
+    raise KeyboardInterrupt
+
+
+def test_manifest_se_escribe_durante_el_crawl(sitio: respx.MockRouter, tmp_path: Path) -> None:
+    """Al pedir una página, las ya procesadas ya están en el manifest en disco."""
+    vistas: list[int] = []
+
+    def negocios(_peticion: httpx.Request) -> httpx.Response:
+        vistas.append(len(_manifest(tmp_path)))
+        return _html_response(_html("Negocios"))
+
+    sitio.get("/negocios").mock(side_effect=negocios)
+
+    _crawler(tmp_path).crawl()
+
+    assert vistas and vistas[0] >= 1
+
+
+def test_interrupcion_conserva_lo_avanzado(sitio: respx.MockRouter, tmp_path: Path) -> None:
+    """Ctrl+C (o SIGTERM convertido) a mitad del crawl: el reporte dice `interrumpido` y
+    el manifest conserva todo lo procesado, compactado."""
+    sitio.get("/personas/cuentas").mock(side_effect=_ctrl_c)
+
+    reporte = _crawler(tmp_path).crawl()
+
+    assert reporte.aborted
+    assert reporte.abort_reason == "interrumpido"
+    manifest = _manifest(tmp_path)
+    assert f"{B}/personas" in manifest
+    assert f"{B}/personas/cuentas" not in manifest
+    assert reporte.manifest_entries == len(manifest) == reporte.processed
+    lineas = (tmp_path / "manifest.jsonl").read_text("utf-8").splitlines()
+    assert len(lineas) == len(manifest)  # compactado: una línea por URL
+
+
+def test_error_inesperado_conserva_lo_avanzado_y_se_relanza(
+    sitio: respx.MockRouter, tmp_path: Path
+) -> None:
+    sitio.get("/personas/cuentas").mock(side_effect=RuntimeError("fallo inesperado"))
+
+    with pytest.raises(RuntimeError):
+        _crawler(tmp_path).crawl()
+
+    assert f"{B}/personas" in _manifest(tmp_path)
+
+
+def test_html_huerfano_no_entra_al_manifest(sitio: respx.MockRouter, tmp_path: Path) -> None:
+    """Todo HTML guardado en este crawl tiene su línea en el manifest."""
+    sitio.get("/personas/cuentas").mock(side_effect=_ctrl_c)
+
+    _crawler(tmp_path).crawl()
+
+    rutas = {e.path for e in _manifest(tmp_path).values() if e.path}
+    guardados = {f"pages/{p.name}" for p in (tmp_path / "pages").glob("*.html")}
+    assert guardados == rutas
+
+
+# ---------------------------------------------------------------- exclusión por prefijo
+
+
+def test_prefijo_excluido_no_se_pide_y_queda_en_el_manifest(
+    sitio: respx.MockRouter, tmp_path: Path
+) -> None:
+    """Las URLs bajo un prefijo excluido no se piden y quedan como `excluida` (ADR-010)."""
+    reporte = _crawler(tmp_path, exclude=("/empresas/",)).crawl()
+
+    assert not any(r.startswith("/empresas") for r in _rutas_pedidas(sitio))
+    manifest = _manifest(tmp_path)
+    for ruta in ("/empresas", "/empresas/fidu", "/empresas/logo"):
+        entrada = manifest[f"{B}{ruta}"]
+        assert entrada.outcome == "excluida"
+        assert entrada.status is None
+        assert entrada.attempts == 0
+        assert entrada.path is None
+        assert entrada.error == "excluida por prefijo de ruta /empresas/"
+    assert reporte.skipped["excluida por prefijo de ruta"] == 3
+    assert reporte.outcomes["excluida"] == 3
+    assert f"{B}/negocios" in manifest  # el resto del sitio sigue dentro
+
+
+def test_excluidas_no_consumen_cupo_de_max_pages(sitio: respx.MockRouter, tmp_path: Path) -> None:
+    """Con max_pages=3 se procesan 3 páginas pedidas; las excluidas se suman aparte."""
+    reporte = _crawler(tmp_path, max_pages=3, exclude=("/empresas/",)).crawl()
+
+    manifest = _manifest(tmp_path)
+    pedidas = [e for e in manifest.values() if e.outcome != "excluida"]
+    assert reporte.processed == 3
+    assert len(pedidas) == 3
+    assert reporte.manifest_entries == len(manifest)
+
+
+def test_prefijo_excluido_aplica_a_enlaces(sitio: respx.MockRouter, tmp_path: Path) -> None:
+    """Un enlace descubierto en una página también se excluye sin pedirlo."""
+    _crawler(tmp_path, exclude=("/personas/nueva",)).crawl()
+
+    assert "/personas/nueva" not in _rutas_pedidas(sitio)
+    entrada = _manifest(tmp_path)[f"{B}/personas/nueva"]
+    assert entrada.outcome == "excluida"
+    assert entrada.source == "enlace"
+    assert entrada.depth == 1
 
 
 # ---------------------------------------------------------------- Template Method

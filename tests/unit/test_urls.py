@@ -3,7 +3,7 @@
 import pytest
 
 from rag_bbva.scraping.sitemap import interleave_by_section
-from rag_bbva.scraping.urls import is_html_candidate, normalize_url
+from rag_bbva.scraping.urls import excluded_prefix, is_html_candidate, normalize_url
 
 B = "https://www.bancolombia.com"
 
@@ -88,3 +88,23 @@ def test_interleave_by_section() -> None:
         f"{B}/personas/3",
     ]
     assert interleave_by_section([]) == []
+
+
+@pytest.mark.parametrize(
+    ("url", "esperado"),
+    [
+        ("https://b.test/acerca-de/sala-prensa/noticias/x", "/acerca-de/sala-prensa/"),
+        ("https://b.test/acerca-de/sala-prensa", "/acerca-de/sala-prensa/"),
+        ("https://b.test/acerca-de/sala-prensa-old", None),
+        ("https://b.test/acerca-de/glosario", None),
+        ("https://b.test/", None),
+    ],
+)
+def test_excluded_prefix(url: str, esperado: str | None) -> None:
+    """El prefijo con barra final cubre la ruta sin barra, pero no rutas que solo
+    comparten el comienzo del nombre."""
+    assert excluded_prefix(url, ["/otro/", "/acerca-de/sala-prensa/"]) == esperado
+
+
+def test_excluded_prefix_sin_prefijos() -> None:
+    assert excluded_prefix("https://b.test/x", []) is None

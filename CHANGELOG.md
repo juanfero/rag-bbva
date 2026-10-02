@@ -4,6 +4,28 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Sin publicar]
 
+## [m03] - 2026-10-02 — Limpieza (datos limpios)
+### Añadido
+- Pipeline de limpieza con el patrón Chain of Responsibility (`processing/steps.py`, `processing/pipeline.py`):
+  - parseo y metadatos: título, `html_lang`, `published_at` solo de metadatos, migas y plantilla;
+  - eliminación de boilerplate: navegación, pie, menús de portlet con `${…}`, `.lrpError`, visor de WCM sin configurar, iconos, cookies y bloque rotativo de relacionados;
+  - extracción con trafilatura y *fallback* por selector según la cobertura de vocabulario;
+  - normalización, detección de idioma, longitud mínima y deduplicación por hash de texto.
+- Salida `data/clean/documents.jsonl` + `clean_report.json` determinista, con descartes por motivo, distribución de longitudes, conteos por sección, plantilla, extracción e idioma, respaldo de idioma por plantilla y chequeo de fugas de boilerplate (`processing/quality.py`).
+- Comando `clean`. Configuración: `CLEAN_DATA_DIR`, `CLEAN_MIN_CHARS`, `CLEAN_MIN_EXTRACTION_COVERAGE`. Dependencia: `trafilatura`.
+- Exclusión configurable por prefijo de ruta antes de pedir la URL (`CRAWL_EXCLUDE_PATH_PREFIXES`, por defecto la sala de prensa; outcome `excluida`), derivada de ADR-010.
+- Fixtures HTML reales recortados de las 3 plantillas y `scripts/trim_html_fixture.py`.
+- README: estado de M3, comando `clean`, patrón Chain of Responsibility, L-08 resuelta, L-09 y L-10.
+### Cambiado
+- El manifest se escribe de forma incremental (una línea por URL, con flush) y se compacta al final.
+- Ctrl+C y SIGTERM cierran el crawl con `abort_reason: "interrumpido"` (código de salida 130).
+- `RawStorage` expone `read_manifest()` de solo lectura para la limpieza.
+### Corregido
+- Un crawl interrumpido ya no deja HTML sin su línea en el manifest: el corte en la página 500 había dejado 308.
+- ADR-010: "en 4 URLs" en lugar de "otras 4".
+### Decisiones
+- ADR-011: el alcance incluye cualquier ruta del dominio alcanzada por enlace o redirección (S-03 ampliado).
+
 ## [m02] - 2026-10-02 — Scraper (datos crudos)
 ### Añadido
 - `BaseCrawler` (Template Method) y `SitemapBfsCrawler`: semillas de los dos índices de sitemap, BFS acotado, deduplicación por URL normalizada y por URL final, corte ante ráfagas de 403/429.

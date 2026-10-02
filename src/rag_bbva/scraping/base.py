@@ -13,7 +13,7 @@ import logging
 import time
 from abc import ABC, abstractmethod
 from collections import Counter, deque
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Literal
@@ -22,11 +22,13 @@ from pydantic import BaseModel
 
 from rag_bbva.scraping.fetcher import FetchResult, PoliteFetcher
 from rag_bbva.scraping.storage import ManifestEntry, Outcome, RawStorage
-from rag_bbva.scraping.urls import normalize_url
+from rag_bbva.scraping.urls import excluded_prefix, normalize_url
 
 logger = logging.getLogger(__name__)
 
 ESTADOS_DE_BLOQUEO = frozenset({403, 429})
+# Motivo de corte cuando el proceso recibe Ctrl+C o SIGTERM.
+MOTIVO_INTERRUMPIDO = "interrumpido"
 _LOG_CADA = 25
 # Cuerpos de error de hasta este tamaño se resumen en el manifest para diagnóstico
 # (p. ej. distinguir un 403 "AccessDenied" de S3 de una página de bloqueo del WAF).
@@ -86,6 +88,19 @@ def _ahora() -> str:
     return datetime.now(tz=UTC).isoformat(timespec="seconds")
 
 
+def _entrada_excluida(target: CrawlTarget, prefijo: str) -> ManifestEntry:
+    """Entrada del manifest para una URL excluida por configuración (sin petición)."""
+    return ManifestEntry(
+        url=target.url,
+        outcome="excluida",
+        fetched_at=_ahora(),
+        depth=target.depth,
+        source=target.source,
+        lastmod=target.lastmod,
+        error=f"excluida por prefijo de ruta {prefijo}",
+    )
+
+
 def _describir_error(result: FetchResult) -> str | None:
     """Mensaje de error para el manifest; en respuestas HTTP de error con cuerpo
     pequeño incluye un fragmento normalizado del cuerpo."""
@@ -110,9 +125,16 @@ class BaseCrawler(ABC):
         max_pages: int,
         max_depth: int,
         block_threshold: int,
+        exclude_path_prefixes: Sequence[str] = (),
     ) -> None:
-        """Configura límites y dependencias (fetcher y almacenamiento inyectados)."""
+        """Configura límites y dependencias (fetcher y almacenamiento inyectados).
+
+        Args:
+            exclude_path_prefixes: prefijos de ruta que no se piden; cada URL excluida
+                queda en el manifest como `excluida` y no consume cupo de `max_pages`.
+        """
         self.fetcher = fetcher
+        self.exclude_path_prefixes = tuple(exclude_path_prefixes)
         self.storage = storage
         self.max_pages = max_pages
         self.max_depth = max_depth
@@ -122,54 +144,83 @@ class BaseCrawler(ABC):
 
     # ------------------------------------------------------------------ plantilla
     def crawl(self) -> CrawlReport:
-        """Ejecuta el crawl completo y escribe el manifest (también si se aborta)."""
+        """Ejecuta el crawl completo; el manifest se escribe de forma incremental.
+
+        Cada URL procesada se agrega al manifest en cuanto se procesa (con flush), así
+        que lo avanzado queda registrado aunque el proceso muera. Al terminar, también
+        si se aborta por bloqueo o se interrumpe (Ctrl+C / SIGTERM convertido en
+        `KeyboardInterrupt`), el manifest se compacta a una línea por URL. Ante
+        cualquier otro error se compacta y se relanza la excepción.
+        """
         inicio, t0 = _ahora(), time.perf_counter()
-        self.prepare()
-        semillas = list(self.discover_urls())
-        frontera: deque[CrawlTarget] = deque(semillas)
-        encoladas = {t.url for t in semillas}
+        semillas: list[CrawlTarget] = []
         entradas: list[ManifestEntry] = []
+        procesadas = 0
         enlaces = 0
         abortado: str | None = None
 
-        while frontera and len(entradas) < self.max_pages:
-            objetivo = frontera.popleft()
-            if objetivo.url in self._finales:
-                self.skipped["ya descargada vía redirección"] += 1
-                continue
-            if not self.fetcher.is_allowed(objetivo.url):
-                self.skipped["prohibida por robots.txt o fuera del dominio"] += 1
-                continue
-
-            resultado = self.fetch(objetivo)
-            outcome = self.validate(objetivo, resultado)
-            entrada = self.persist(objetivo, resultado, outcome)
+        def registrar(entrada: ManifestEntry) -> None:
             entradas.append(entrada)
-            if len(entradas) % _LOG_CADA == 0:
-                logger.info("Progreso del crawl", extra={"procesadas": len(entradas)})
+            self.storage.append_manifest(entrada)
 
-            if self._guard.record(resultado.status):
-                abortado = (
-                    f"{self._guard.consecutive} respuestas 403/429 consecutivas "
-                    "(posible bloqueo del WAF)"
-                )
-                logger.error("Crawl abortado", extra={"motivo": abortado, "url": objetivo.url})
-                break
+        try:
+            self.prepare()
+            semillas = list(self.discover_urls())
+            frontera: deque[CrawlTarget] = deque(semillas)
+            encoladas = {t.url for t in semillas}
 
-            if entrada.outcome in {"guardada", "sin_cambios"} and objetivo.depth < self.max_depth:
-                for enlace in self.extract_links(objetivo, resultado):
-                    if enlace not in encoladas:
-                        encoladas.add(enlace)
-                        frontera.append(CrawlTarget(enlace, objetivo.depth + 1, "enlace"))
-                        enlaces += 1
+            while frontera and procesadas < self.max_pages:
+                objetivo = frontera.popleft()
+                if prefijo := excluded_prefix(objetivo.url, self.exclude_path_prefixes):
+                    self.skipped["excluida por prefijo de ruta"] += 1
+                    registrar(_entrada_excluida(objetivo, prefijo))
+                    continue
+                if objetivo.url in self._finales:
+                    self.skipped["ya descargada vía redirección"] += 1
+                    continue
+                if not self.fetcher.is_allowed(objetivo.url):
+                    self.skipped["prohibida por robots.txt o fuera del dominio"] += 1
+                    continue
 
-        total = self.storage.write_manifest(entradas)
+                resultado = self.fetch(objetivo)
+                outcome = self.validate(objetivo, resultado)
+                entrada = self.persist(objetivo, resultado, outcome)
+                registrar(entrada)
+                procesadas += 1
+                if procesadas % _LOG_CADA == 0:
+                    logger.info("Progreso del crawl", extra={"procesadas": procesadas})
+
+                if self._guard.record(resultado.status):
+                    abortado = (
+                        f"{self._guard.consecutive} respuestas 403/429 consecutivas "
+                        "(posible bloqueo del WAF)"
+                    )
+                    logger.error("Crawl abortado", extra={"motivo": abortado, "url": objetivo.url})
+                    break
+
+                if (
+                    entrada.outcome in {"guardada", "sin_cambios"}
+                    and objetivo.depth < self.max_depth
+                ):
+                    for enlace in self.extract_links(objetivo, resultado):
+                        if enlace not in encoladas:
+                            encoladas.add(enlace)
+                            frontera.append(CrawlTarget(enlace, objetivo.depth + 1, "enlace"))
+                            enlaces += 1
+        except KeyboardInterrupt:
+            abortado = MOTIVO_INTERRUMPIDO
+            logger.warning("Crawl interrumpido", extra={"procesadas": procesadas})
+        except Exception:
+            self.storage.compact_manifest()
+            raise
+
+        total = self.storage.compact_manifest()
         return CrawlReport(
             started_at=inicio,
             finished_at=_ahora(),
             duration_seconds=round(time.perf_counter() - t0, 1),
             seeds=len(semillas),
-            processed=len(entradas),
+            processed=procesadas,
             outcomes=dict(Counter(e.outcome for e in entradas)),
             status_codes=dict(Counter(str(e.status) for e in entradas)),
             skipped=dict(self.skipped),

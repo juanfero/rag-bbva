@@ -60,7 +60,7 @@ Formato: una entrada por decisión. Estado: Propuesta · Aceptada · Reemplazada
 - **Estado:** Aceptada (2026-10-02, revisión de M2; acota S-03)
 - **Contexto:** S-03 incluía la sala de prensa dentro de `acerca-de` y pedía guardar su fecha de publicación (`published_at`). En M2 se encontró lo siguiente:
   - Los sitemaps listan **74 URLs únicas** bajo `/acerca-de/sala-prensa/`. Hay **73** en `sitemap-sala-de-prensa.xml`, 4 de ellas repetidas en `sitemap-acerca-de.xml`. La restante solo aparece en `sitemap-personas.xml`. Recuento del 2026-10-02, que coincide con las 74 de `data/exploration/urls.txt` de M1.
-  - Esas URLs responden **301 hacia `prensa.bancolombia.com`**, un host distinto. En el manifest de M2 (`data/raw/manifest.jsonl` y la copia de la corrida 1), la única URL de sala de prensa procesada termina en la **portada** `https://prensa.bancolombia.com/`, no en la noticia: **1 de 1**. Durante M2 se comprobó a mano el 301 hacia ese host en otras 4, sin registrar su destino exacto.
+  - Esas URLs responden **301 hacia `prensa.bancolombia.com`**, un host distinto. En el manifest de M2 (`data/raw/manifest.jsonl` y la copia de la corrida 1), la única URL de sala de prensa procesada termina en la **portada** `https://prensa.bancolombia.com/`, no en la noticia: **1 de 1**. Durante M2 se comprobó a mano el 301 hacia ese host en 4 URLs, sin registrar su destino exacto.
   - Si el sitio redirige a la portada, seguir la redirección no da la noticia. Incluirla exigiría explorar y crawlear un segundo sitio, con su propio `robots.txt`, sitemaps y plantillas.
 - **Decisión:** las URLs `/acerca-de/sala-prensa/…` quedan **fuera del alcance**. No se agrega `prensa.bancolombia.com` como host permitido. El crawler no las filtra de antemano: hace una petición, recibe el 301 a otro host, no lo sigue y las registra como `redireccion_omitida`, sin guardar HTML. El resto de `acerca-de` sigue dentro. `published_at` pasa a ser un campo opcional de M3: se extrae solo si la página trae la fecha en metadatos (p. ej. `article:published_time`) y no es obligatorio.
 - **Consecuencias:**
@@ -69,3 +69,13 @@ Formato: una entrada por decisión. Estado: Propuesta · Aceptada · Reemplazada
   - − El asistente no responde sobre noticias ni comunicados de prensa (limitación L-06 del README).
   - − Un crawl completo gasta unas 74 peticiones en redirecciones omitidas.
   - Mejora futura: crawlear `prensa.bancolombia.com` como host adicional permitido, con su propio `robots.txt` y sitemap.
+- **Actualización (2026-10-02, M3):** desde M3 el crawler sí las filtra antes de pedirlas, con `CRAWL_EXCLUDE_PATH_PREFIXES` (por defecto `["/acerca-de/sala-prensa/"]`). Quedan en el manifest como `excluida`, sin petición HTTP y sin consumir cupo de `max_pages`. Eso elimina las ~74 peticiones de la consecuencia anterior.
+
+## ADR-011 — Alcance: secciones principales más rutas del dominio alcanzadas
+- **Estado:** Aceptada (2026-10-02, revisión de M3; amplía S-03)
+- **Contexto:** S-03 nombraba 6 secciones, pero el crawl completo de M3 llegó por enlace o redirección a páginas del mismo dominio en otras rutas. La limpieza conservó 7 documentos de ese tipo: `pagos` 4, `puntos-de-atencion` 1, `tramites-digitales` 1 y `tu360` 1. Son contenido público e informativo del mismo sitio.
+- **Decisión:** el alcance son las 6 secciones principales **y cualquier ruta del dominio alcanzada por enlace o redirección**. La `section` de cada documento se toma de su URL real (`final_url`). Siguen excluidos los otros hosts, la sala de prensa (ADR-010), los PDFs, los formularios y las rutas prohibidas por robots.
+- **Consecuencias:**
+  - \+ No se descarta contenido válido del sitio por su ruta.
+  - \+ `section` refleja dónde vive la página.
+  - − Aparecen secciones con pocos documentos. Los filtros por sección (M5) deben aceptar valores fuera de las 6.

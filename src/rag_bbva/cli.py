@@ -19,7 +19,7 @@ from rag_bbva.logging_conf import configure_logging
 from rag_bbva.scraping.base import CrawlReport
 from rag_bbva.scraping.crawler import SitemapBfsCrawler
 from rag_bbva.scraping.fetcher import PoliteFetcher
-from rag_bbva.scraping.storage import RawStorage
+from rag_bbva.scraping.storage import RawStorage, text_fingerprint
 
 # Código de salida cuando el crawl se aborta por posible bloqueo del sitio.
 EXIT_ABORTADO = 2
@@ -71,7 +71,7 @@ def scrape(
     settings = get_settings()
     base_url = str(settings.target_base_url)
     ua = settings.crawl_user_agent
-    storage = RawStorage(settings.raw_data_dir)
+    storage = RawStorage(settings.raw_data_dir, fingerprint=text_fingerprint)
 
     with httpx.Client(headers={"User-Agent": ua}, timeout=settings.crawl_timeout_seconds) as client:
         fetcher = PoliteFetcher(

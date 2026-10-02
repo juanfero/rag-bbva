@@ -12,7 +12,7 @@ from rag_bbva.exceptions import ScrapingError
 from rag_bbva.scraping.base import BaseCrawler, BlockGuard, CrawlTarget
 from rag_bbva.scraping.crawler import SitemapBfsCrawler
 from rag_bbva.scraping.fetcher import PoliteFetcher
-from rag_bbva.scraping.storage import ManifestEntry, RawStorage
+from rag_bbva.scraping.storage import ManifestEntry, RawStorage, text_fingerprint
 
 B = "https://www.banco.test"
 UA = "RAG-BBVA-TechTest/1.0"
@@ -150,7 +150,7 @@ def _crawler(
     )
     return SitemapBfsCrawler(
         fetcher,
-        RawStorage(raw),
+        RawStorage(raw, fingerprint=text_fingerprint),
         base_url=f"{B}/",
         max_pages=max_pages,
         max_depth=max_depth,
@@ -468,6 +468,32 @@ def test_reejecucion_incremental(sitio: respx.MockRouter, tmp_path: Path) -> Non
     assert archivo.stat().st_mtime_ns == mtime
     assert manifest[f"{B}/personas/cuentas"].outcome == "guardada"
     assert reporte.outcomes["sin_cambios"] >= 1
+
+
+def test_incremental_ignora_marcado_volatil(tmp_path: Path) -> None:
+    """Como en Bancolombia: cada respuesta trae ids aleatorios; si el texto no cambia,
+    la segunda corrida marca sin_cambios y no reescribe el HTML."""
+    contador = iter(range(100))
+
+    def pagina(request: httpx.Request) -> httpx.Response:
+        volatil = f'<script data-rpid="{next(contador)}"></script><link id="L{next(contador)}">'
+        return _html_response(f"<html><head>{volatil}</head><body><p>Texto fijo</p></body></html>")
+
+    with respx.mock(base_url=B) as router:
+        router.get("/robots.txt").respond(200, text=f"User-agent: *\nSitemap: {B}/s.xml\n")
+        router.get("/s.xml").respond(200, text=_urlset("/personas/a"))
+        router.get("/sitemap.xml").respond(404)
+        router.get("/personas/a").mock(side_effect=pagina)
+
+        _crawler(tmp_path).crawl()
+        primera = _manifest(tmp_path)[f"{B}/personas/a"]
+        reporte = _crawler(tmp_path).crawl()
+
+    segunda = _manifest(tmp_path)[f"{B}/personas/a"]
+    assert primera.outcome == "guardada"
+    assert segunda.outcome == "sin_cambios"
+    assert segunda.content_hash == primera.content_hash
+    assert reporte.outcomes == {"sin_cambios": 1}
 
 
 def test_crawl_parcial_conserva_el_manifest_previo(sitio: respx.MockRouter, tmp_path: Path) -> None:

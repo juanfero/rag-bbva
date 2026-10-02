@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from rag_bbva.scraping.storage import ManifestEntry, RawStorage, sha256
+from rag_bbva.scraping.storage import ManifestEntry, RawStorage, sha256, text_fingerprint
 
 URL = "https://www.banco.test/personas"
 
@@ -59,6 +59,24 @@ def test_save_page_reescribe_si_cambia(tmp_path: Path) -> None:
     assert (tmp_path / relativa).read_bytes() == b"<html>v2</html>"
     assert hash_ == sha256(b"<html>v2</html>")
     assert not list(storage.pages_dir.glob(".*.tmp"))
+
+
+def test_huella_de_texto_ignora_cambios_volatiles_del_marcado(tmp_path: Path) -> None:
+    """Con text_fingerprint, ids aleatorios o scripts distintos no cuentan como cambio."""
+    storage = RawStorage(tmp_path, fingerprint=text_fingerprint)
+    v1 = b'<html><script data-rpid="111"></script><link id="P.abc"><p>Tasa 1%</p></html>'
+    v2 = b'<html><script data-rpid="999"></script><link id="I-xyz"><p>Tasa 1%</p></html>'
+    v3 = b'<html><script data-rpid="999"></script><link id="I-xyz"><p>Tasa 2%</p></html>'
+    relativa, huella1, _ = storage.save_page(URL, v1)
+
+    _, huella2, escrito2 = storage.save_page(URL, v2)
+    _, huella3, escrito3 = storage.save_page(URL, v3)
+
+    assert huella1 == huella2 == text_fingerprint(v1)
+    assert escrito2 is False
+    assert escrito3 is True
+    assert huella3 != huella1
+    assert (tmp_path / relativa).read_bytes() == v3
 
 
 def test_manifest_round_trip_jsonl(tmp_path: Path) -> None:

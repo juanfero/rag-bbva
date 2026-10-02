@@ -4,22 +4,27 @@ Estructura:
     <raw_dir>/pages/<sha1(url)>.html   HTML tal como lo sirvió el sitio
     <raw_dir>/manifest.jsonl           una línea por URL procesada
 
-Las escrituras son atómicas (archivo temporal + `replace`). Un HTML cuyo hash no
-cambió no se reescribe, lo que hace la re-ejecución incremental. El manifest se
-fusiona con el anterior, para que un crawl parcial no borre lo descargado antes.
+Las escrituras son atómicas (archivo temporal + `replace`). Un HTML cuya huella no
+cambió no se reescribe, lo que hace la re-ejecución incremental. La huella es
+inyectable: por defecto es el SHA-256 de los bytes; el crawler usa la del texto
+visible (`text_fingerprint`), porque el sitio objetivo inyecta atributos volátiles
+en cada respuesta (ids aleatorios, identificadores del agente de monitoreo) y el
+hash de bytes nunca coincidiría. El manifest se fusiona con el anterior, para que
+un crawl parcial no borre lo descargado antes.
 """
 
 import hashlib
 import json
 import logging
 import os
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel, ValidationError
 
 from rag_bbva.exceptions import ScrapingError
+from rag_bbva.scraping.page_analysis import visible_text
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +65,13 @@ def sha256(content: bytes) -> str:
     return hashlib.sha256(content).hexdigest()
 
 
+def text_fingerprint(content: bytes) -> str:
+    """Huella del contenido: SHA-256 del texto visible normalizado (sin scripts,
+    estilos ni atributos), estable ante cambios volátiles del marcado."""
+    texto = visible_text(content.decode("utf-8", errors="replace"))
+    return sha256(texto.encode("utf-8"))
+
+
 def _escribir_atomico(destino: Path, datos: bytes) -> None:
     """Escribe en un temporal del mismo directorio y lo renombra (operación atómica)."""
     temporal = destino.with_name(f".{destino.name}.tmp")
@@ -70,9 +82,15 @@ def _escribir_atomico(destino: Path, datos: bytes) -> None:
 class RawStorage:
     """Repositorio en disco de las páginas crudas y su manifest."""
 
-    def __init__(self, root: Path) -> None:
-        """Usa (y crea si hace falta) `root/pages`."""
+    def __init__(self, root: Path, fingerprint: Callable[[bytes], str] = sha256) -> None:
+        """Usa (y crea si hace falta) `root/pages`.
+
+        Args:
+            fingerprint: función de huella para detectar cambios (default: SHA-256
+                de los bytes).
+        """
         self.root = root
+        self._fingerprint = fingerprint
         self.pages_dir = root / "pages"
         self.manifest_path = root / "manifest.jsonl"
         try:
@@ -87,15 +105,15 @@ class RawStorage:
         return f"pages/{hashlib.sha1(url.encode('utf-8')).hexdigest()}.html"
 
     def save_page(self, url: str, content: bytes) -> tuple[str, str, bool]:
-        """Guarda el HTML de la URL si cambió.
+        """Guarda el HTML de la URL si su huella cambió.
 
         Returns:
-            (ruta relativa, hash SHA-256, `True` si se escribió en disco).
+            (ruta relativa, huella del contenido, `True` si se escribió en disco).
         """
         relativa = self.relative_path(url)
         destino = self.root / relativa
-        nuevo_hash = sha256(content)
-        if destino.exists() and sha256(destino.read_bytes()) == nuevo_hash:
+        nuevo_hash = self._fingerprint(content)
+        if destino.exists() and self._fingerprint(destino.read_bytes()) == nuevo_hash:
             return relativa, nuevo_hash, False
         try:
             _escribir_atomico(destino, content)

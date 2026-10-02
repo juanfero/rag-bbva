@@ -42,6 +42,10 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra --strict-markers"
+filterwarnings = [
+    # El modo :memory: de qdrant-client (tests) avisa que los índices de payload no aplican.
+    "ignore:Payload indexes have no effect in the local Qdrant:UserWarning",
+]
 markers = [
     "integration: requiere servicios reales (Qdrant, API de xAI, red)",
     "slow: carga modelos pesados",

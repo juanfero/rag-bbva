@@ -168,6 +168,7 @@ Registro completo: [`docs/02_DECISIONES.md`](docs/02_DECISIONES.md) (ADR) y supu
 - **Fuente Bancolombia** en lugar de BBVA porque bbva.com.co bloquea crawlers (ADR-008, S-02).
 - **Sin navegador headless:** el contenido principal está en el HTML estático; medido sobre 12 páginas renderizadas (ADR-009).
 - **Alcance del scraping:** 6 secciones públicas (`personas`, `negocios`, `empresas`, `centro-de-ayuda`, `educacion-financiera`, `acerca-de`), sin PDFs, formularios ni otros dominios (S-03).
+- **Sala de prensa fuera del alcance:** sus URLs redirigen a la portada de otro host, `prensa.bancolombia.com` ([ADR-010](docs/02_DECISIONES.md#adr-010--sala-de-prensa-fuera-del-alcance-del-scraping)).
 - **Límites:** `CRAWL_MAX_PAGES=1200` (cubre el sitemap completo) y `CRAWL_MAX_DEPTH=1` (S-04).
 - **Parser de `robots.txt` propio** (RFC 9309), porque el de la librería estándar no soporta los comodines `*`/`$` que usa Bancolombia.
 - **Semillas intercaladas por sección:** un crawl parcial (`--max-pages 50`) cubre las 6 secciones en vez de solo la primera del sitemap (M2).
@@ -188,7 +189,7 @@ Registro completo: [`docs/02_DECISIONES.md`](docs/02_DECISIONES.md) (ADR) y supu
 | L-03 | **Contenido dinámico no capturado:** sin renderizar JS no se obtienen el banner de cookies, carruseles ni listas de enlaces dinámicas; su contenido llega por las páginas enlazadas | ADR-009 |
 | L-04 | **Sin PDFs:** quedan fuera del alcance y además `robots.txt` los prohíbe (`/*pdf*`) | S-03 |
 | L-05 | **Foto del sitio:** el índice refleja el sitio en la fecha del scraping; la demo usará un snapshot versionado de datos limpios | S-07, M12 |
-| L-06 | **Sala de prensa fuera del dominio:** las URLs `/acerca-de/sala-prensa/…` del sitemap (74) redirigen a `prensa.bancolombia.com` (verificado en 4 de ellas), que con el alcance actual (S-03) no se descarga. **Pendiente de decisión** | M2 |
+| L-06 | **Sin sala de prensa (noticias y comunicados):** los sitemaps listan 74 URLs únicas bajo `/acerca-de/sala-prensa/`: 73 en `sitemap-sala-de-prensa.xml` y 1 solo en `sitemap-personas.xml`. Responden 301 hacia otro host, `prensa.bancolombia.com`. En el manifest de M2, la única procesada (1 de 1) redirige a la **portada** `https://prensa.bancolombia.com/`, no a la noticia, así que seguir la redirección no daría su contenido. Incluirlas exigiría explorar y crawlear un segundo sitio. Se excluyen: quedan como `redireccion_omitida`, sin HTML, y el asistente no responde sobre noticias. El resto de `acerca-de` sí se incluye | [ADR-010](docs/02_DECISIONES.md#adr-010--sala-de-prensa-fuera-del-alcance-del-scraping), M2 |
 | L-07 | **URLs muertas en el sitemap:** algunas páginas listadas responden 403 `AccessDenied` (origen S3; p. ej. `/negocios/especiales/wobi…`). Se registran como `error_http` con un fragmento del cuerpo | M2 |
 | L-08 | **Bloques que rotan:** varias páginas de educación financiera y del centro de ayuda muestran "artículos relacionados" aleatorios en cada petición, por lo que se reescriben aunque su contenido principal no cambie. Se quitarán en la limpieza (M3) | M2 |
 
@@ -202,6 +203,7 @@ Ideas registradas en las decisiones; ninguna está implementada:
 - Modelos de mayor calidad: `bge-m3` para embeddings y `bge-reranker-v2-m3` para reranking (ADR-005).
 - Actualización periódica del índice en vez de una foto fija (S-07).
 - Ingesta de PDFs públicos, si el sitio lo permitiera (S-03).
+- Crawlear `prensa.bancolombia.com` como host adicional permitido, con su propio `robots.txt` y sitemap, para recuperar la sala de prensa y su fecha de publicación (ADR-010).
 - Base de historial apta para alta concurrencia (Postgres/Redis) en lugar de SQLite (ADR-004).
 - Reevaluar el renderizado con JS si el sitio migra a una SPA, con el mismo `scripts/explore_site.py --render` (ADR-009).
 

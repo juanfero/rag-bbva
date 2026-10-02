@@ -1,8 +1,9 @@
 """Interfaz de línea de comandos del proyecto.
 
 Uso: `python -m rag_bbva.cli <comando>` o `rag-bbva <comando>`.
-Comandos disponibles: `version`, `scrape` (M2), `clean` (M3), `chunk` (M4) e `ingest`
-(M5). Los de las etapas siguientes (chat, metrics) se agregan en sus módulos respectivos.
+Comandos disponibles: `version`, `scrape` (M2), `clean` (M3), `chunk` (M4), `ingest`
+(M5) y `search` (M6). Los de las etapas siguientes (chat, metrics) se agregan en sus
+módulos respectivos.
 """
 
 import json
@@ -18,12 +19,19 @@ import typer
 
 from rag_bbva import __version__
 from rag_bbva.config import get_settings
-from rag_bbva.exceptions import ConfigurationError, IndexingError, ProcessingError, ScrapingError
+from rag_bbva.exceptions import (
+    ConfigurationError,
+    IndexingError,
+    ProcessingError,
+    RetrievalError,
+    ScrapingError,
+)
 from rag_bbva.indexing.factory import ComponentFactory
 from rag_bbva.indexing.ingest import Ingestor, IngestReport
 from rag_bbva.indexing.pipeline import ChunkReport, chunk_documents, read_documents, write_chunks
 from rag_bbva.logging_conf import configure_logging
 from rag_bbva.processing.pipeline import CleaningPipeline, CleanReport, write_clean_output
+from rag_bbva.retrieval.models import RetrievalResult
 from rag_bbva.scraping.base import MOTIVO_INTERRUMPIDO, CrawlReport
 from rag_bbva.scraping.crawler import SitemapBfsCrawler
 from rag_bbva.scraping.fetcher import PoliteFetcher
@@ -256,6 +264,66 @@ def ingest(
         typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(code=1) from exc
     typer.echo(_resumen_ingesta(reporte))
+
+
+def _redondeo(valor: float | None) -> float | None:
+    return None if valor is None else round(valor, 3)
+
+
+def _formato_busqueda(resultado: RetrievalResult) -> str:
+    """Resultados de `search` legibles para la demo y la depuración."""
+    lineas = [
+        f"Pregunta: {resultado.query}"
+        + (f" · sección: {resultado.section}" if resultado.section else ""),
+        f"Reranker: {resultado.reranker} · candidatos (top-k): {resultado.top_k} · "
+        f"retrieval {resultado.retrieval_ms} ms · rerank {resultado.rerank_ms} ms",
+    ]
+    for i, c in enumerate(resultado.results, 1):
+        rerank = f"{c.rerank_score:7.3f}" if c.rerank_score is not None else "      -"
+        lineas.append(
+            f"{i}. rerank {rerank} · coseno {c.cosine_score:.3f} · venía del #{c.retrieval_rank}"
+        )
+        lineas.append(f"   {c.url}")
+        lineas.append(f"   {c.heading_path}")
+    if resultado.min_score is None:
+        lineas.append("Umbral: no se aplica sin reranker.")
+    else:
+        veredicto = (
+            "NO lo supera: sin información suficiente"
+            if resultado.no_answer
+            else "lo supera: hay contexto para responder"
+        )
+        lineas.append(
+            f"Umbral RERANK_MIN_SCORE={resultado.min_score}: "
+            f"el #1 ({_redondeo(resultado.top_score)}) {veredicto}."
+        )
+    return "\n".join(lineas)
+
+
+@app.command()
+def search(
+    pregunta: Annotated[str, typer.Argument(help="Pregunta en lenguaje natural.")],
+    no_rerank: Annotated[
+        bool, typer.Option("--no-rerank", help="Solo similitud coseno, sin reranker.")
+    ] = False,
+    section: Annotated[
+        str | None, typer.Option("--section", help="Filtra por sección (p. ej. personas).")
+    ] = None,
+    top_n: Annotated[
+        int | None,
+        typer.Option("--top-n", min=1, help="Resultados finales (default: RERANK_TOP_N)."),
+    ] = None,
+) -> None:
+    """Busca en Qdrant con reranking y muestra url, ruta de títulos, scores y el umbral."""
+    fabrica = ComponentFactory(get_settings())
+    try:
+        retriever = fabrica.create_retriever(rerank=False if no_rerank else None, top_n=top_n)
+        retriever.warm_up()
+        resultado = retriever.retrieve(pregunta, section=section)
+    except (IndexingError, RetrievalError, ConfigurationError) as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(_formato_busqueda(resultado))
 
 
 if __name__ == "__main__":

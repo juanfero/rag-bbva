@@ -333,7 +333,8 @@ EXIT_MODELO_NO_DISPONIBLE = 3
 
 @app.command("llm-check")
 def llm_check() -> None:
-    """Consulta GET /v1/models de xAI y confirma que LLM_MODEL existe (sin gastar tokens)."""
+    """Lista los modelos del proveedor (GET /models) y confirma que LLM_MODEL existe, sin
+    gastar tokens."""
     settings = get_settings()
     try:
         modelos = ComponentFactory(settings).create_llm().list_models()

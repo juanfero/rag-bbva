@@ -1,6 +1,7 @@
 """Proveedores de LLM (patrón Strategy).
 
-- `XaiGrokProvider`: Grok de xAI con el SDK `openai` (API compatible con OpenAI).
+- `OpenAICompatibleProvider`: base para APIs compatibles con OpenAI (SDK `openai`), con
+  dos variantes: `GeminiProvider` (por defecto, ADR-012) y `XaiGrokProvider` (ADR-003).
 - `FakeLLMProvider`: determinista y sin red, para los tests (nunca gasta créditos).
 
 Reintentos: los internos del SDK se desactivan (`max_retries=0`) y se usa **un solo**
@@ -86,41 +87,17 @@ class LLMProvider(ABC):
         """Ids de los modelos disponibles para la clave configurada."""
 
 
-def _mensaje_amigable(exc: Exception) -> str:
-    """Mensaje para el usuario, sin trazas ni detalles internos."""
-    if isinstance(exc, openai.RateLimitError):
-        return (
-            "El servicio de respuestas está recibiendo demasiadas solicitudes. "
-            "Intenta de nuevo en unos minutos."
-        )
-    if isinstance(exc, openai.APITimeoutError):
-        return "El servicio de respuestas tardó demasiado en contestar. Intenta de nuevo."
-    texto = str(exc).lower()
-    if isinstance(exc, openai.PermissionDeniedError) and (
-        "credits" in texto or "spending limit" in texto
-    ):
-        # xAI responde 403 cuando el equipo no tiene créditos o llegó al límite mensual.
-        return (
-            "La cuenta de xAI no tiene créditos disponibles o alcanzó su límite de gasto "
-            "mensual. Compre créditos o suba el límite en https://console.x.ai."
-        )
-    if isinstance(exc, openai.AuthenticationError | openai.PermissionDeniedError) or (
-        # xAI responde 400 (no 401) ante una clave inválida: "Incorrect API key provided".
-        isinstance(exc, openai.BadRequestError) and "api key" in texto
-    ):
-        return (
-            "La clave XAI_API_KEY no es válida o no tiene permisos para este modelo. "
-            "Revise que sea la clave secreta de https://console.x.ai (empieza con 'xai-')."
-        )
-    if isinstance(exc, openai.NotFoundError):
-        return "El modelo configurado (LLM_MODEL) no existe. Ejecute `llm-check`."
-    return "El servicio de respuestas no está disponible en este momento. Intenta más tarde."
+class OpenAICompatibleProvider(LLMProvider):
+    """Proveedor sobre una API compatible con OpenAI, con el SDK `openai`.
 
+    Reintentos propios, streaming y registro de tokens. Las subclases fijan el nombre del
+    proveedor, la variable de su clave y dónde se gestiona, para los mensajes de error.
+    """
 
-class XaiGrokProvider(LLMProvider):
-    """Grok de xAI vía el SDK `openai`, con reintentos propios y registro de tokens."""
-
-    name = "xai"
+    name = "openai_compatible"
+    key_env = "API_KEY"
+    console_url = ""
+    key_hint = ""
 
     def __init__(
         self,
@@ -133,15 +110,19 @@ class XaiGrokProvider(LLMProvider):
         timeout: float = 60,
         max_retries: int = 2,
         backoff_seconds: float = 1.0,
+        reasoning_effort: str | None = None,
         http_client: Any = None,
         sleep: Callable[[float], None] = time.sleep,
     ) -> None:
-        """`http_client` permite inyectar un cliente HTTP simulado en los tests."""
+        """`reasoning_effort` se envía solo si no es `None` (p. ej. "none" en Gemini 2.5
+        para apagar el razonamiento interno). `http_client` permite inyectar un cliente
+        HTTP simulado en los tests."""
         self.model = model
         self.temperature = temperature
         self.max_tokens = max_tokens
         self.max_retries = max_retries
         self.backoff_seconds = backoff_seconds
+        self.reasoning_effort = reasoning_effort
         self._sleep = sleep
         self.client = openai.OpenAI(
             api_key=api_key,
@@ -150,6 +131,37 @@ class XaiGrokProvider(LLMProvider):
             max_retries=0,  # un solo mecanismo de reintentos: el propio (tenacity)
             http_client=http_client,
         )
+
+    def _mensaje_amigable(self, exc: Exception) -> str:
+        """Mensaje para el usuario, sin trazas ni detalles internos."""
+        texto = str(exc).lower()
+        if isinstance(exc, openai.RateLimitError):
+            return (
+                "El servicio de respuestas alcanzó su límite de solicitudes o su cupo "
+                "(por minuto o por día). Intenta de nuevo en unos minutos."
+            )
+        if isinstance(exc, openai.APITimeoutError):
+            return "El servicio de respuestas tardó demasiado en contestar. Intenta de nuevo."
+        if isinstance(exc, openai.PermissionDeniedError) and (
+            "credits" in texto or "spending limit" in texto
+        ):
+            # xAI responde 403 cuando el equipo no tiene créditos o llegó al límite mensual.
+            return (
+                f"La cuenta de {self.name} no tiene créditos disponibles o alcanzó su límite "
+                f"de gasto mensual. Revise la facturación en {self.console_url}."
+            )
+        if isinstance(exc, openai.AuthenticationError | openai.PermissionDeniedError) or (
+            # xAI y Gemini responden 400 (no 401) ante una clave inválida.
+            isinstance(exc, openai.BadRequestError) and "api key" in texto
+        ):
+            pista = f" ({self.key_hint})" if self.key_hint else ""
+            return (
+                f"La clave {self.key_env} no es válida o no tiene permisos para este modelo. "
+                f"Revise la clave en {self.console_url}{pista}."
+            )
+        if isinstance(exc, openai.NotFoundError):
+            return "El modelo configurado (LLM_MODEL) no existe. Ejecute `llm-check`."
+        return "El servicio de respuestas no está disponible en este momento. Intenta más tarde."
 
     def _llamar(self, operacion: str, funcion: Callable[[], T]) -> T:
         reintentador = Retrying(
@@ -166,7 +178,18 @@ class XaiGrokProvider(LLMProvider):
         try:
             return reintentador(funcion)
         except openai.OpenAIError as exc:
-            raise LLMError(_mensaje_amigable(exc), detail=f"{operacion}: {exc!r}") from exc
+            raise LLMError(self._mensaje_amigable(exc), detail=f"{operacion}: {exc!r}") from exc
+
+    def _parametros(self, messages: Sequence[Message], max_tokens: int | None) -> dict[str, Any]:
+        parametros: dict[str, Any] = {
+            "model": self.model,
+            "messages": list(messages),
+            "temperature": self.temperature,
+            "max_tokens": max_tokens or self.max_tokens,
+        }
+        if self.reasoning_effort:
+            parametros["reasoning_effort"] = self.reasoning_effort
+        return parametros
 
     def complete(
         self, messages: Sequence[Message], *, max_tokens: int | None = None
@@ -174,12 +197,7 @@ class XaiGrokProvider(LLMProvider):
         inicio = time.perf_counter()
         respuesta = self._llamar(
             "completar",
-            lambda: self.client.chat.completions.create(
-                model=self.model,
-                messages=list(messages),  # type: ignore[arg-type]
-                temperature=self.temperature,
-                max_tokens=max_tokens or self.max_tokens,
-            ),
+            lambda: self.client.chat.completions.create(**self._parametros(messages, max_tokens)),
         )
         uso = respuesta.usage
         eleccion = respuesta.choices[0]
@@ -198,10 +216,7 @@ class XaiGrokProvider(LLMProvider):
         flujo = self._llamar(
             "streaming",
             lambda: self.client.chat.completions.create(
-                model=self.model,
-                messages=list(messages),  # type: ignore[arg-type]
-                temperature=self.temperature,
-                max_tokens=max_tokens or self.max_tokens,
+                **self._parametros(messages, max_tokens),
                 stream=True,
                 stream_options={"include_usage": True},
             ),
@@ -221,7 +236,7 @@ class XaiGrokProvider(LLMProvider):
                         if eleccion.delta.content:
                             yield eleccion.delta.content
             except openai.OpenAIError as exc:
-                raise LLMError(_mensaje_amigable(exc), detail=f"streaming: {exc!r}") from exc
+                raise LLMError(self._mensaje_amigable(exc), detail=f"streaming: {exc!r}") from exc
 
         def cierre(texto: str) -> LLMResponse:
             return LLMResponse(
@@ -237,7 +252,25 @@ class XaiGrokProvider(LLMProvider):
 
     def list_models(self) -> list[str]:
         modelos = self._llamar("listar modelos", lambda: list(self.client.models.list()))
-        return sorted(m.id for m in modelos)
+        # Gemini antepone "models/" a los ids; se quita para compararlos con LLM_MODEL.
+        return sorted(m.id.removeprefix("models/") for m in modelos)
+
+
+class GeminiProvider(OpenAICompatibleProvider):
+    """Gemini de Google vía su endpoint compatible con OpenAI (ADR-012)."""
+
+    name = "gemini"
+    key_env = "GEMINI_API_KEY"
+    console_url = "https://aistudio.google.com/api-keys"
+
+
+class XaiGrokProvider(OpenAICompatibleProvider):
+    """Grok de xAI (ADR-003), alternativa a Gemini con `LLM_PROVIDER=xai`."""
+
+    name = "xai"
+    key_env = "XAI_API_KEY"
+    console_url = "https://console.x.ai"
+    key_hint = "empieza con 'xai-'"
 
 
 class FakeLLMProvider(LLMProvider):

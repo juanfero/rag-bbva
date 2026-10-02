@@ -11,7 +11,13 @@ from rag_bbva.indexing.embedding import Embedder, FakeEmbedder, SentenceTransfor
 from rag_bbva.indexing.embedding_cache import EmbeddingCache
 from rag_bbva.indexing.vector_store import QdrantVectorStore, VectorStore
 from rag_bbva.llm.generator import AnswerGenerator
-from rag_bbva.llm.provider import FakeLLMProvider, LLMProvider, XaiGrokProvider
+from rag_bbva.llm.provider import (
+    FakeLLMProvider,
+    GeminiProvider,
+    LLMProvider,
+    OpenAICompatibleProvider,
+    XaiGrokProvider,
+)
 from rag_bbva.llm.rewriter import QueryRewriter
 from rag_bbva.retrieval.reranker import CrossEncoderReranker, NoOpReranker, Reranker
 from rag_bbva.retrieval.retriever import Retriever
@@ -96,25 +102,34 @@ class ComponentFactory:
         )
 
     def create_llm(self) -> LLMProvider:
-        """Proveedor de `LLM_PROVIDER`. Con `xai` exige `XAI_API_KEY` (ADR-006): falla
-        aquí, al crear el proveedor, y no a mitad de una conversación."""
-        if self.settings.llm_provider == "fake":
+        """Proveedor de `LLM_PROVIDER` (gemini | xai | fake). Exige la clave del proveedor
+        al crearlo (ADR-006): falla aquí y no a mitad de una conversación."""
+        ajustes = self.settings
+        if ajustes.llm_provider == "fake":
             return FakeLLMProvider(model="fake-model")
-        clave = self.settings.xai_api_key
+        clase: type[OpenAICompatibleProvider]
+        if ajustes.llm_provider == "gemini":
+            clase, clave, base_url = GeminiProvider, ajustes.gemini_api_key, ajustes.gemini_base_url
+            esfuerzo = ajustes.llm_reasoning_effort or None
+        else:
+            clase, clave, base_url = XaiGrokProvider, ajustes.xai_api_key, ajustes.xai_base_url
+            esfuerzo = None
         if clave is None or not clave.get_secret_value().strip():
             raise ConfigurationError(
-                "Falta XAI_API_KEY para usar Grok (LLM_PROVIDER=xai). Agréguela en el "
-                "archivo .env (ver .env.example) o use LLM_PROVIDER=fake para pruebas."
+                f"Falta {clase.key_env} para usar LLM_PROVIDER={ajustes.llm_provider}. "
+                "Agréguela en el archivo .env (ver .env.example) o use LLM_PROVIDER=fake "
+                "para pruebas."
             )
-        return XaiGrokProvider(
+        return clase(
             api_key=clave.get_secret_value(),
-            base_url=self.settings.xai_base_url,
-            model=self.settings.llm_model,
-            temperature=self.settings.llm_temperature,
-            max_tokens=self.settings.llm_max_tokens,
-            timeout=self.settings.llm_timeout_seconds,
-            max_retries=self.settings.llm_max_retries,
-            backoff_seconds=self.settings.llm_backoff_seconds,
+            base_url=base_url,
+            model=ajustes.llm_model,
+            temperature=ajustes.llm_temperature,
+            max_tokens=ajustes.llm_max_tokens,
+            timeout=ajustes.llm_timeout_seconds,
+            max_retries=ajustes.llm_max_retries,
+            backoff_seconds=ajustes.llm_backoff_seconds,
+            reasoning_effort=esfuerzo,
         )
 
     def create_query_rewriter(self, llm: LLMProvider, mode: str | None = None) -> QueryRewriter:

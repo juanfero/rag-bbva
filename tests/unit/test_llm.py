@@ -24,7 +24,7 @@ from rag_bbva.llm.prompts import (
     build_answer_messages,
     build_rewrite_messages,
 )
-from rag_bbva.llm.provider import FakeLLMProvider, XaiGrokProvider
+from rag_bbva.llm.provider import FakeLLMProvider, GeminiProvider, XaiGrokProvider
 from rag_bbva.llm.rewriter import QueryRewriter
 from rag_bbva.retrieval.models import Candidate, RetrievalResult
 
@@ -115,7 +115,7 @@ def test_429_persistente_es_llm_error_amigable() -> None:
     with pytest.raises(LLMError) as error:
         _proveedor(servidor).complete(MENSAJES)
 
-    assert "demasiadas solicitudes" in error.value.message
+    assert "límite de solicitudes o su cupo" in error.value.message
     assert "Traceback" not in error.value.message
     assert len(servidor.peticiones) == 3  # 1 + LLM_MAX_RETRIES
 
@@ -245,8 +245,72 @@ def test_fabrica_crea_proveedor_falso_o_real_sin_llamar(clean_env: pytest.Monkey
     proveedor = ComponentFactory(Settings(_env_file=None)).create_llm()
 
     assert isinstance(proveedor, XaiGrokProvider)
-    assert proveedor.model == "grok-4.7" and proveedor.max_retries == 4
+    assert proveedor.model == "gemini-2.5-flash" and proveedor.max_retries == 4
+    assert proveedor.reasoning_effort is None  # solo se envía a Gemini
     assert proveedor.client.max_retries == 0  # los reintentos del SDK están apagados
+
+
+def test_fabrica_crea_gemini_por_defecto(clean_env: pytest.MonkeyPatch) -> None:
+    with pytest.raises(ConfigurationError, match="Falta GEMINI_API_KEY"):
+        ComponentFactory(Settings(_env_file=None)).create_llm()
+
+    clean_env.setenv("GEMINI_API_KEY", "clave-de-prueba")
+    proveedor = ComponentFactory(Settings(_env_file=None)).create_llm()
+
+    assert isinstance(proveedor, GeminiProvider)
+    assert proveedor.name == "gemini" and proveedor.model == "gemini-2.5-flash"
+    assert proveedor.reasoning_effort == "none"
+    assert str(proveedor.client.base_url).startswith(
+        "https://generativelanguage.googleapis.com/v1beta/openai"
+    )
+
+
+def _gemini(servidor: Servidor) -> GeminiProvider:
+    return GeminiProvider(
+        api_key="clave-de-prueba", base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+        model="gemini-2.5-flash", reasoning_effort="none", max_retries=0,
+        http_client=httpx2.Client(transport=httpx2.MockTransport(servidor)),
+    )  # fmt: skip
+
+
+def test_gemini_envia_reasoning_effort_y_xai_no() -> None:
+    servidor = Servidor([httpx2.Response(200, json=_completado())])
+    _gemini(servidor).complete(MENSAJES)
+    otro = Servidor([httpx2.Response(200, json=_completado())])
+    _proveedor(otro).complete(MENSAJES)
+
+    assert json.loads(servidor.peticiones[0].content)["reasoning_effort"] == "none"
+    assert "reasoning_effort" not in json.loads(otro.peticiones[0].content)
+
+
+def test_gemini_quita_el_prefijo_models_y_explica_la_clave_invalida() -> None:
+    lista = {
+        "object": "list",
+        "data": [
+            {"id": "models/gemini-2.5-flash", "object": "model", "created": 0, "owned_by": "google"}
+        ],
+    }
+    assert _gemini(Servidor([httpx2.Response(200, json=lista)])).list_models() == [
+        "gemini-2.5-flash"
+    ]
+
+    rechazo = Servidor(
+        [
+            httpx2.Response(
+                400,
+                json=[
+                    {
+                        "error": {
+                            "code": 400,
+                            "message": "API key not valid. Please pass a valid API key.",
+                        }
+                    }
+                ],
+            )
+        ]
+    )
+    with pytest.raises(LLMError, match="GEMINI_API_KEY no es válida"):
+        _gemini(rechazo).complete(MENSAJES)
 
 
 # ---------------------------------------------------------------- prompts

@@ -32,6 +32,7 @@ def test_cli_sin_argumentos_muestra_ayuda(clean_env: pytest.MonkeyPatch) -> None
     assert "scrape" in result.output
     assert "clean" in result.output
     assert "chunk" in result.output
+    assert "ingest" in result.output
     # Regla del proyecto: todo texto visible al usuario dice Bancolombia (ADR-008).
     assert "Bancolombia" in result.output
     assert "BBVA" not in result.output
@@ -198,3 +199,41 @@ def test_cli_chunk_errores(clean_env: pytest.MonkeyPatch, tmp_path: Path) -> Non
 
     assert runner.invoke(app, ["chunk"]).exit_code == 1
     assert runner.invoke(app, ["chunk", "--strategy", "semantico"]).exit_code == 1
+
+
+def _entorno_ingest(clean_env: pytest.MonkeyPatch, tmp_path: Path, qdrant_url: str) -> None:
+    glosario = (Path(__file__).parent.parent / "fixtures" / "clean" / "glosario.json").read_text(
+        "utf-8"
+    )
+    limpio = tmp_path / "clean"
+    limpio.mkdir()
+    (limpio / "documents.jsonl").write_text(json.dumps(json.loads(glosario)) + "\n", "utf-8")
+    clean_env.setenv("CLEAN_DATA_DIR", str(limpio))
+    clean_env.setenv("EMBEDDING_PROVIDER", "fake")
+    clean_env.setenv("EMBEDDINGS_CACHE_DIR", str(tmp_path / "emb"))
+    clean_env.setenv("QDRANT_URL", qdrant_url)
+    clean_env.setenv("QDRANT_TIMEOUT_SECONDS", "2")
+
+
+def test_cli_ingest_en_memoria(clean_env: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """`ingest` con QDRANT_URL=":memory:" y el embedder falso: indexa y reporta."""
+    _entorno_ingest(clean_env, tmp_path, ":memory:")
+
+    result = runner.invoke(app, ["ingest", "--recreate"])
+
+    assert result.exit_code == 0, result.output
+    assert "reconstruida (--recreate)" in result.stdout
+    assert "Embebidos: " in result.stdout and "desde caché: 0" in result.stdout
+    assert (tmp_path / "emb" / "fake.npz").exists()
+
+
+def test_cli_ingest_sin_qdrant_falla_con_mensaje_claro(
+    clean_env: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Puerto local cerrado (sin red externa): error claro y exit 1."""
+    _entorno_ingest(clean_env, tmp_path, "http://127.0.0.1:9")
+
+    result = runner.invoke(app, ["ingest"])
+
+    assert result.exit_code == 1
+    assert "No se pudo conectar con Qdrant en http://127.0.0.1:9" in result.output

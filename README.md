@@ -15,7 +15,7 @@ Prueba técnica de ML/AI Engineer: un sistema RAG (*Retrieval-Augmented Generati
 | M0 | Fundaciones: estructura, configuración, excepciones, logging, CLI, Docker base | ✅ | `m00` |
 | M1 | Exploración del sitio: robots.txt, sitemaps, dependencia de JS, alcance | ✅ | `m01` |
 | M2 | Scraper (datos crudos): sitemaps + BFS, robots, reintentos, manifest incremental | ✅ | `m02` |
-| M3 | Limpieza (datos limpios): pipeline de pasos, metadatos, idioma, deduplicación, chequeo de fugas | 🚧 en revisión (rama `feat/m03-limpieza`) | — |
+| M3 | Limpieza (datos limpios): pipeline de pasos, metadatos, idioma, deduplicación, chequeo de fugas | ✅ | `m03` |
 | M4 | Chunking + embeddings | ⏳ | — |
 | M5 | Indexación vectorial (Qdrant) | ⏳ | — |
 | M6 | Recuperación + reranker | ⏳ | — |
@@ -188,7 +188,7 @@ Registro completo: [`docs/02_DECISIONES.md`](docs/02_DECISIONES.md) (ADR) y supu
 
 - **Fuente Bancolombia** en lugar de BBVA porque bbva.com.co bloquea crawlers (ADR-008, S-02).
 - **Sin navegador headless:** el contenido principal está en el HTML estático; medido sobre 12 páginas renderizadas (ADR-009).
-- **Alcance del scraping:** 6 secciones públicas (`personas`, `negocios`, `empresas`, `centro-de-ayuda`, `educacion-financiera`, `acerca-de`), sin PDFs, formularios ni otros dominios (S-03).
+- **Alcance del scraping:** las 6 secciones públicas principales (`personas`, `negocios`, `empresas`, `centro-de-ayuda`, `educacion-financiera`, `acerca-de`) y cualquier ruta del dominio alcanzada por enlace o redirección, sin PDFs, formularios ni otros dominios. La sección de cada documento sale de su URL real (S-03, [ADR-011](docs/02_DECISIONES.md#adr-011--alcance-secciones-principales-más-rutas-del-dominio-alcanzadas)).
 - **Sala de prensa fuera del alcance:** sus URLs redirigen a la portada de otro host, `prensa.bancolombia.com` ([ADR-010](docs/02_DECISIONES.md#adr-010--sala-de-prensa-fuera-del-alcance-del-scraping)).
 - **Límites:** `CRAWL_MAX_PAGES=1200` (cubre el sitemap completo) y `CRAWL_MAX_DEPTH=1` (S-04).
 - **Parser de `robots.txt` propio** (RFC 9309), porque el de la librería estándar no soporta los comodines `*`/`$` que usa Bancolombia.
@@ -217,7 +217,7 @@ Registro completo: [`docs/02_DECISIONES.md`](docs/02_DECISIONES.md) (ADR) y supu
 | L-07 | **URLs muertas en el sitemap:** algunas páginas listadas responden 403 `AccessDenied` (origen S3; p. ej. `/negocios/especiales/wobi…`). Se registran como `error_http` con un fragmento del cuerpo | M2 |
 | L-08 | **Bloques que rotan (resuelta en la limpieza, M3):** varias páginas de educación financiera y del centro de ayuda muestran "contenido relacionado" aleatorio en cada petición. Por eso se reescribe su HTML crudo aunque el contenido principal no cambie. La limpieza quita ese bloque: en el crawl completo, 34 páginas lo traían y en ninguna quedó en el texto limpio | M2, M3 |
 | L-09 | **Simuladores y páginas cargadas por JS, sin contenido:** su contenido llega por JavaScript, así que el HTML estático no tiene texto propio. La limpieza las descarta como `texto_corto` (menos de `CLEAN_MIN_CHARS`=200 caracteres) y **el asistente no podrá responder sobre ellas**. En el crawl completo fueron 56 de 685 páginas: 10 simuladores y calculadoras, 17 páginas de resultados de búsqueda de preguntas frecuentes y 29 páginas con contenido por JS o solo con errores de WCM. Otros 4 simuladores muestran solo la pantalla de ingreso (`/personas/login`) y se descartan como duplicados. El listado está en `data/clean/clean_report.json` (`discarded_documents`) | ADR-009, M3 |
-| L-10 | **Cobertura del enlace a enlace (BFS) acotada:** con `CRAWL_MAX_PAGES=1200` se procesan todas las semillas del sitemap, pero solo 173 de los 639 enlaces internos de profundidad 1 encontrados. Además, 250 URLs retiradas redirigen a la portada de su sección (p. ej. `…/sostenibilidad/novacampo` → `/personas`) y consumen cupo, aunque no generan documentos (un solo documento por portada) | M3 |
+| L-10 | **Cobertura del enlace a enlace (BFS) acotada (aceptada, sin volver a crawlear):** con `CRAWL_MAX_PAGES=1200` se procesan todas las semillas del sitemap, pero solo 173 de los 639 enlaces internos de profundidad 1 encontrados. Además, 250 URLs retiradas redirigen a la portada de su sección (p. ej. `…/sostenibilidad/novacampo` → `/personas`) y consumen cupo, aunque no generan documentos (un solo documento por portada) | M3 |
 
 ---
 
@@ -230,6 +230,7 @@ Ideas registradas en las decisiones; ninguna está implementada:
 - Actualización periódica del índice en vez de una foto fija (S-07).
 - Ingesta de PDFs públicos, si el sitio lo permitiera (S-03).
 - Crawlear `prensa.bancolombia.com` como host adicional permitido, con su propio `robots.txt` y sitemap, para recuperar la sala de prensa y su fecha de publicación (ADR-010).
+- Que el cupo de `--max-pages` cuente solo los HTML únicos guardados, no los duplicados ni las redirecciones, para que el BFS llegue más lejos con el mismo límite (L-10).
 - Base de historial apta para alta concurrencia (Postgres/Redis) en lugar de SQLite (ADR-004).
 - Reevaluar el renderizado con JS si el sitio migra a una SPA, con el mismo `scripts/explore_site.py --render` (ADR-009).
 

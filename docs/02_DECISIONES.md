@@ -70,3 +70,12 @@ Formato: una entrada por decisión. Estado: Propuesta · Aceptada · Reemplazada
   - − Un crawl completo gasta unas 74 peticiones en redirecciones omitidas.
   - Mejora futura: crawlear `prensa.bancolombia.com` como host adicional permitido, con su propio `robots.txt` y sitemap.
 - **Actualización (2026-10-02, M3):** desde M3 el crawler sí las filtra antes de pedirlas, con `CRAWL_EXCLUDE_PATH_PREFIXES` (por defecto `["/acerca-de/sala-prensa/"]`). Quedan en el manifest como `excluida`, sin petición HTTP y sin consumir cupo de `max_pages`. Eso elimina las ~74 peticiones de la consecuencia anterior.
+
+## ADR-011 — Alcance: secciones principales más rutas del dominio alcanzadas
+- **Estado:** Aceptada (2026-10-02, revisión de M3; amplía S-03)
+- **Contexto:** S-03 nombraba 6 secciones, pero el crawl completo de M3 llegó por enlace o redirección a páginas del mismo dominio en otras rutas. La limpieza conservó 7 documentos de ese tipo: `pagos` 4, `puntos-de-atencion` 1, `tramites-digitales` 1 y `tu360` 1. Son contenido público e informativo del mismo sitio.
+- **Decisión:** el alcance son las 6 secciones principales **y cualquier ruta del dominio alcanzada por enlace o redirección**. La `section` de cada documento se toma de su URL real (`final_url`). Siguen excluidos los otros hosts, la sala de prensa (ADR-010), los PDFs, los formularios y las rutas prohibidas por robots.
+- **Consecuencias:**
+  - \+ No se descarta contenido válido del sitio por su ruta.
+  - \+ `section` refleja dónde vive la página.
+  - − Aparecen secciones con pocos documentos. Los filtros por sección (M5) deben aceptar valores fuera de las 6.

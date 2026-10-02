@@ -4,8 +4,8 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Sin publicar]
 
-### M3 — Limpieza (datos limpios) (en revisión, rama `feat/m03-limpieza`)
-#### Añadido
+## [m03] - 2026-10-02 — Limpieza (datos limpios)
+### Añadido
 - Pipeline de limpieza con el patrón Chain of Responsibility (`processing/steps.py`, `processing/pipeline.py`):
   - parseo y metadatos: título, `html_lang`, `published_at` solo de metadatos, migas y plantilla;
   - eliminación de boilerplate: navegación, pie, menús de portlet con `${…}`, `.lrpError`, visor de WCM sin configurar, iconos, cookies y bloque rotativo de relacionados;
@@ -16,13 +16,15 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 - Exclusión configurable por prefijo de ruta antes de pedir la URL (`CRAWL_EXCLUDE_PATH_PREFIXES`, por defecto la sala de prensa; outcome `excluida`), derivada de ADR-010.
 - Fixtures HTML reales recortados de las 3 plantillas y `scripts/trim_html_fixture.py`.
 - README: estado de M3, comando `clean`, patrón Chain of Responsibility, L-08 resuelta, L-09 y L-10.
-#### Cambiado
+### Cambiado
 - El manifest se escribe de forma incremental (una línea por URL, con flush) y se compacta al final.
 - Ctrl+C y SIGTERM cierran el crawl con `abort_reason: "interrumpido"` (código de salida 130).
 - `RawStorage` expone `read_manifest()` de solo lectura para la limpieza.
-#### Corregido
+### Corregido
 - Un crawl interrumpido ya no deja HTML sin su línea en el manifest: el corte en la página 500 había dejado 308.
 - ADR-010: "en 4 URLs" en lugar de "otras 4".
+### Decisiones
+- ADR-011: el alcance incluye cualquier ruta del dominio alcanzada por enlace o redirección (S-03 ampliado).
 
 ## [m02] - 2026-10-02 — Scraper (datos crudos)
 ### Añadido

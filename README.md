@@ -18,7 +18,7 @@ Prueba técnica de ML/AI Engineer: un sistema RAG (*Retrieval-Augmented Generati
 | M3 | Limpieza (datos limpios): pipeline de pasos, metadatos, idioma, deduplicación, chequeo de fugas | ✅ | `m03` |
 | M4 | Chunking + embeddings: estrategias de chunking, e5-small en CPU, fábrica de componentes | ✅ | `m04` |
 | M5 | Indexación vectorial (Qdrant): `ingest` idempotente con sincronización y caché de embeddings | ✅ | `m05` |
-| M6 | Recuperación + reranker | ⏳ | — |
+| M6 | Recuperación + reranker: cross-encoder, diversidad por página, umbral calibrado de "sin información" | 🚧 en revisión (rama `feat/m06-retrieval`) | — |
 | M7 | Generación con LLM (Grok) | ⏳ | — |
 | M8 | Memoria conversacional | ⏳ | — |
 | M9 | Servicio RAG + API | ⏳ | — |
@@ -34,7 +34,7 @@ Detalle de cada módulo: [plan de módulos](docs/01_PLAN_DE_MODULOS.md) y bitác
 
 ## Arquitectura
 
-Diseño objetivo ([visión general §3](docs/00_VISION_GENERAL.md)). Hoy existe la ingesta completa: **Crawler → `data/raw/`** (M2), **Limpieza → `data/clean/`** (M3), **Chunking → `data/chunks/`** con embeddings en CPU (M4) e **indexación en Qdrant** (M5), además de la configuración, la CLI y la exploración del sitio (M0–M1).
+Diseño objetivo ([visión general §3](docs/00_VISION_GENERAL.md)). Hoy existen la ingesta completa y la recuperación con reranker (M6): **Crawler → `data/raw/`** (M2), **Limpieza → `data/clean/`** (M3), **Chunking → `data/chunks/`** con embeddings en CPU (M4) e **indexación en Qdrant** (M5), además de la configuración, la CLI y la exploración del sitio (M0–M1).
 
 **Ingesta (offline)**
 ```
@@ -169,6 +169,30 @@ python -m rag_bbva.cli ingest --recreate    # borra la colección y la reconstru
 - **Corrida real:** 3506 puntos en 2,5 min (casi todo embeddings en CPU). La re-ingesta sin cambios toma 0,2 s y no embebe nada; con Qdrant vacío y la caché llena, `--recreate` reconstruye los 3506 puntos en 1,6 s ([evidencia M05](docs/modulos/M05.md#6-evidencia-manual)).
 - **Configuración:** por defecto `QDRANT_URL=http://localhost:6333` (el Qdrant del compose); dentro de la red de Docker (M12) será `http://qdrant:6333`. Si Qdrant no responde, `ingest` termina con un error claro (código 1).
 
+**Búsqueda con reranker (M6, bonus).** Con Qdrant levantado e indexado:
+```bash
+python -m rag_bbva.cli search "¿cómo descargo un comprobante de transferencia?"
+python -m rag_bbva.cli search "¿qué es un CDT?" --section negocios --top-n 3
+python -m rag_bbva.cli search "receta de arepas de queso" --no-rerank   # solo similitud coseno
+```
+Cómo funciona la búsqueda:
+1. Embebe la pregunta (`query: `) y trae los 20 chunks más parecidos por coseno (`RETRIEVAL_TOP_K`).
+2. Un **cross-encoder** multilingüe (`RERANKER_MODEL`) lee la pregunta y cada fragmento juntos y les da un score de relevancia.
+3. Queda el top-5 (`RERANK_TOP_N`), con como mucho 2 chunks por página (`RERANK_MAX_CHUNKS_PER_DOC`).
+
+`search` muestra para cada resultado la URL, el `heading_path`, el score del reranker, el coseno y de qué puesto venía. También indica si el #1 supera el umbral y la latencia de cada etapa.
+
+**Por qué el reranker (bonus).** El coseno compara vectores calculados por separado. El cross-encoder ve pregunta y texto a la vez, y eso mejora el orden:
+- En "requisitos para crédito de vivienda", el chunk de requisitos sube del puesto 20 al 1.
+- En "¿cómo descargo un comprobante…?", los pasos concretos pasan por delante de la introducción.
+
+**Umbral de "sin información suficiente"** (`RERANK_MIN_SCORE=1.6`). Si el #1 no lo alcanza, el asistente debe decir que no tiene información en vez de inventar.
+- Se calibró con `eval/calibration.jsonl`: 15 preguntas que el sitio responde y 15 que no (fuera de dominio, otros bancos, prensa, simuladores). Acierta 27 de 30.
+- Va sobre el score del reranker y **no sobre el coseno**: los cosenos de e5 están comprimidos (≈ 0,79–0,92 para todo). El mejor umbral posible sobre el coseno acierta 24 de 30 y queda pegado a los datos (margen 0,001).
+- Sin reranker (`--no-rerank` o `RERANKER_ENABLED=false`) no se aplica umbral.
+- **Latencia en CPU:** retrieval ~19 ms; rerank ~0,9 s (p50).
+- Detalle y casos en la [bitácora M06](docs/modulos/M06.md#6-evidencia-manual).
+
 **Docker.** Hoy existen la imagen base (`docker build .`; `docker compose run --rm api` ejecuta el comando `version`) y el servicio `qdrant` para desarrollo (`docker compose up -d qdrant`).
 🚧 **El despliegue completo con `docker compose up -d --build` (Qdrant, API, UI) se completa en M12.** Ese arranque no scrapeará el sitio: usará un snapshot versionado de datos limpios.
 
@@ -188,7 +212,8 @@ El caso exige al menos 3. Previstos en la [visión general §6](docs/00_VISION_G
 |---|---|---|---|
 | **Singleton (vía caché)** | [`src/rag_bbva/config.py`](src/rag_bbva/config.py): `get_settings()` con `lru_cache` | La configuración se lee y valida una sola vez; todo el código la obtiene del mismo punto | ✅ M0 |
 | **Strategy** (inyección de dependencias) | [`src/rag_bbva/scraping/exploration.py`](src/rag_bbva/scraping/exploration.py): `Renderer` (`Protocol`); [`src/rag_bbva/scraping/storage.py`](src/rag_bbva/scraping/storage.py): función de huella inyectable en `RawStorage` | El explorador funciona con Playwright, con un doble o sin renderizador. El almacenamiento detecta cambios con la huella que se le inyecte (bytes por defecto, texto visible en el crawler) sin cambiar su código | ✅ parcial (M1–M2) |
-| **Strategy** (algoritmos intercambiables) | [`src/rag_bbva/indexing/chunking.py`](src/rag_bbva/indexing/chunking.py): `ChunkingStrategy` → `HeadingAwareChunker` / `FixedSizeChunker`; [`src/rag_bbva/indexing/embedding.py`](src/rag_bbva/indexing/embedding.py): `Embedder` → `SentenceTransformerEmbedder` / `FakeEmbedder` | Cambiar cómo se trocea o cómo se embebe sin tocar el pipeline: la línea base de chunking se compara con la principal y los tests usan un embedder falso, sin modelo | ✅ M4. `LLMProvider` y `Reranker` llegan en M6 y M7 |
+| **Strategy** (algoritmos intercambiables) | [`src/rag_bbva/indexing/chunking.py`](src/rag_bbva/indexing/chunking.py): `ChunkingStrategy` → `HeadingAwareChunker` / `FixedSizeChunker`; [`src/rag_bbva/indexing/embedding.py`](src/rag_bbva/indexing/embedding.py): `Embedder` → `SentenceTransformerEmbedder` / `FakeEmbedder` | Cambiar cómo se trocea o cómo se embebe sin tocar el pipeline: la línea base de chunking se compara con la principal y los tests usan un embedder falso, sin modelo | ✅ M4 |
+| **Strategy** (reranking) | [`src/rag_bbva/retrieval/reranker.py`](src/rag_bbva/retrieval/reranker.py): `Reranker` → `CrossEncoderReranker` / `NoOpReranker`; la fábrica elige según `RERANKER_ENABLED` | Activar o desactivar el reranker sin tocar el `Retriever`; los tests usan un reranker determinista | ✅ M6. `LLMProvider` llega en M7 |
 | **Template Method** | [`src/rag_bbva/scraping/base.py`](src/rag_bbva/scraping/base.py): `BaseCrawler.crawl()`; subclase concreta [`SitemapBfsCrawler`](src/rag_bbva/scraping/crawler.py) | `crawl()` fija el algoritmo (`prepare` → `discover_urls` → `fetch` → `validate` → `persist` → `extract_links`) y aplica en un solo lugar los límites, la deduplicación y el corte por bloqueo. Las subclases solo redefinen los pasos | ✅ M2 |
 | **Chain of Responsibility / Pipeline** | [`src/rag_bbva/processing/steps.py`](src/rag_bbva/processing/steps.py): `CleaningStep` (`set_next`/`handle`) y sus pasos; [`src/rag_bbva/processing/pipeline.py`](src/rag_bbva/processing/pipeline.py): `CleaningPipeline` | Cada paso de la limpieza (parseo, metadatos, boilerplate, extracción, normalización, idioma, longitud, duplicados) es una clase que transforma el documento y lo pasa al siguiente, o corta la cadena con el motivo del descarte. Se prueban por separado y se pueden reordenar o sustituir | ✅ M3 |
 | **Factory** | [`src/rag_bbva/indexing/factory.py`](src/rag_bbva/indexing/factory.py): `ComponentFactory` (`create_chunker`, `create_embedder`); `llm/factory.py` | Crear chunker y embedder (luego LLM, vector store y reranker) desde la configuración (`CHUNKING_STRATEGY`, `EMBEDDING_PROVIDER`) sin acoplar el resto del código a clases concretas | ✅ parcial (M4). LLM, vector store y reranker: M5–M7 |
@@ -213,7 +238,7 @@ El caso exige al menos 3. Previstos en la [visión general §6](docs/00_VISION_G
 | Embeddings | `intfloat/multilingual-e5-small` vía `sentence-transformers` | Gratis, multilingüe, corre en CPU; 384 dimensiones ([ADR-005](docs/02_DECISIONES.md)) | ✅ en uso (M4) |
 | Cómputo de modelos | `torch` CPU-only | Instalado desde el índice CPU de PyTorch: sin CUDA, para una imagen Docker liviana (M12) | ✅ en uso (M4) |
 | Base vectorial | Qdrant self-hosted `v1.19.1` + `qdrant-client` 1.19 | Gratis, Docker oficial, filtros por metadatos ([ADR-002](docs/02_DECISIONES.md)) | ✅ en uso (M5; compose de desarrollo) |
-| Reranker | `cross-encoder/mmarco-mMiniLMv2-L12-H384-v1` | Multilingüe y liviano ([ADR-005](docs/02_DECISIONES.md)) | ⏳ M6 |
+| Reranker | `cross-encoder/mmarco-mMiniLMv2-L12-H384-v1` | Multilingüe y liviano, corre en CPU (470 MB) ([ADR-005](docs/02_DECISIONES.md)) | ✅ en uso (M6) |
 | LLM | Grok (xAI) vía SDK `openai` | Calidad en español sin GPU local; es de pago y queda aislado tras una interfaz ([ADR-003](docs/02_DECISIONES.md)) | ⏳ M7 |
 | Orquestación RAG | Código propio, sin LangChain | Patrones visibles y testeables ([ADR-001](docs/02_DECISIONES.md)) | ⏳ M9 |
 | Historial | SQLite + SQLAlchemy | Cero infraestructura extra, persistente ([ADR-004](docs/02_DECISIONES.md)) | ⏳ M8 |
@@ -237,6 +262,7 @@ Registro completo: [`docs/02_DECISIONES.md`](docs/02_DECISIONES.md) (ADR) y supu
 - **Deduplicación por URL final:** muchas URLs de `empresas` redirigen a `/negocios`; se guarda una sola copia (M2).
 - **Boilerplate por reglas antes de extraer:** trafilatura sola sobre la página completa tomaba el bloque rotativo como título. Además, la plantilla de WebSphere mete el menú del sitio dentro del contenedor principal (M3).
 - **trafilatura solo si conserva ≥ 90 % del vocabulario:** en el HTML real omitió títulos y secciones enteras en 19 de 30 páginas, sin agregar nunca texto propio (M3).
+- **Umbral sobre el reranker, no sobre el coseno:** el coseno de e5 no separa preguntas respondibles de las que no lo son; el score del cross-encoder sí, en una escala de ~17 puntos (M6).
 - **`html_lang` y `lang` separados:** la plantilla de WebSphere declara `lang="en"` en páginas en español. `lang` se detecta en el texto por palabras funcionales, sin dependencias nuevas (M3).
 - **`XAI_API_KEY` opcional** al cargar la configuración; se exige al crear el proveedor del LLM (ADR-006).
 - **Dependencias incrementales:** cada módulo agrega solo lo que usa (ADR-007).
@@ -289,10 +315,11 @@ rag-bbva/
 │   ├── scraping/          # robots, sitemap, urls, fetcher, discovery, storage, base (Template Method), crawler, page_analysis, exploration
 │   ├── processing/        # models, markdown, steps (Chain of Responsibility), pipeline, quality
 │   ├── indexing/          # models, chunking (Strategy), embedding, embedding_cache, factory (Factory), pipeline, vector_store (Adapter), ingest
-│   └── retrieval/ llm/ memory/ services/ api/ ui/ analytics/   # vacíos (próximos módulos)
-├── scripts/explore_site.py · scripts/trim_html_fixture.py
+│   ├── retrieval/         # models, reranker (Strategy), retriever, calibration
+│   └── llm/ memory/ services/ api/ ui/ analytics/   # vacíos (próximos módulos)
+├── scripts/explore_site.py · scripts/trim_html_fixture.py · scripts/calibrate_reranker.py
 ├── tests/unit/ · tests/fixtures/ (robots, sitemaps, html: páginas reales recortadas de las 3 plantillas; clean: glosario limpio) · tests/integration/
-├── eval/                  # golden set (M13)
+├── eval/                  # calibration.jsonl (M6: umbral del reranker); golden set (M13)
 └── docs/
 ```
 
@@ -301,5 +328,5 @@ Documentación:
 - [Plan de módulos](docs/01_PLAN_DE_MODULOS.md): tareas, pruebas de aceptación y Definition of Done.
 - [Decisiones (ADR)](docs/02_DECISIONES.md).
 - [Exploración del sitio](docs/exploracion_sitio.md) y su [evidencia JSON](docs/evidencia/).
-- Bitácoras por módulo: [M00](docs/modulos/M00.md) · [M01](docs/modulos/M01.md) · [M02](docs/modulos/M02.md) · [M03](docs/modulos/M03.md) · [M04](docs/modulos/M04.md) · [M05](docs/modulos/M05.md).
+- Bitácoras por módulo: [M00](docs/modulos/M00.md) · [M01](docs/modulos/M01.md) · [M02](docs/modulos/M02.md) · [M03](docs/modulos/M03.md) · [M04](docs/modulos/M04.md) · [M05](docs/modulos/M05.md) · [M06](docs/modulos/M06.md).
 - [CHANGELOG](CHANGELOG.md).

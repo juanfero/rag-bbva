@@ -24,6 +24,19 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+
+def is_model_cached(model_name: str, cache_dir: Path) -> bool:
+    """El modelo ya está descargado en la caché local de Hugging Face (`cache_dir`).
+
+    sentence-transformers guarda cada modelo en `models--<org>--<nombre>/snapshots/<rev>/`.
+    """
+    snapshots = cache_dir / f"models--{model_name.replace('/', '--')}" / "snapshots"
+    return any(
+        (snapshot / "config.json").exists() or (snapshot / "modules.json").exists()
+        for snapshot in (snapshots.iterdir() if snapshots.is_dir() else [])
+    )
+
+
 PREFIJO_CONSULTA = "query: "
 PREFIJO_PASAJE = "passage: "
 
@@ -73,9 +86,14 @@ class SentenceTransformerEmbedder(Embedder):
             from sentence_transformers import SentenceTransformer
 
             inicio = time.perf_counter()
+            # Con el modelo ya en caché no se consulta el Hub: arranca sin red.
+            local = is_model_cached(self.model_name, self.cache_dir)
             try:
                 self._modelo = SentenceTransformer(
-                    self.model_name, cache_folder=str(self.cache_dir), device="cpu"
+                    self.model_name,
+                    cache_folder=str(self.cache_dir),
+                    device="cpu",
+                    local_files_only=local,
                 )
             except OSError as exc:
                 raise IndexingError(

@@ -11,6 +11,7 @@ from rag_bbva.indexing.embedding import (
     PREFIJO_PASAJE,
     FakeEmbedder,
     SentenceTransformerEmbedder,
+    is_model_cached,
 )
 from rag_bbva.indexing.factory import ComponentFactory
 
@@ -81,9 +82,26 @@ def test_prefijos_e5() -> None:
 # ---------------------------------------------------------------- modelo real (slow)
 
 
+def test_is_model_cached(tmp_path: Path) -> None:
+    assert not is_model_cached("org/modelo", tmp_path)
+    snapshot = tmp_path / "models--org--modelo" / "snapshots" / "abc123"
+    snapshot.mkdir(parents=True)
+    assert not is_model_cached("org/modelo", tmp_path)  # descarga incompleta
+    (snapshot / "modules.json").write_text("[]")
+    assert is_model_cached("org/modelo", tmp_path)
+
+
 @pytest.fixture(scope="module")
 def modelo_real() -> SentenceTransformerEmbedder:
+    """Modelo real desde la caché local; si no está, los tests `slow` se saltan para no
+    depender de la red (se descarga con `python -m rag_bbva.cli chunk` o el primer uso)."""
     ajustes = get_settings()
+    if not is_model_cached(ajustes.embedding_model, ajustes.model_cache_dir):
+        pytest.skip(
+            f"El modelo {ajustes.embedding_model} no está en la caché local "
+            f"(MODEL_CACHE_DIR={ajustes.model_cache_dir}); se omite para no descargarlo "
+            "desde la red. Ejecute `python -m rag_bbva.cli chunk` una vez para bajarlo."
+        )
     return SentenceTransformerEmbedder(ajustes.embedding_model, ajustes.model_cache_dir)
 
 

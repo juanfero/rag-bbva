@@ -204,6 +204,8 @@ class ExplorationReport(BaseModel):
     verdict_counts: dict[str, int]
     content_types: dict[str, int]
     status_codes: dict[str, int]
+    redirects: dict[str, str]
+    duplicate_titles: dict[str, list[str]]
     urls: list[str] = Field(default=[], exclude=True)
 
 
@@ -238,6 +240,15 @@ def choose_sample(urls: Iterable[str], size: int) -> list[str]:
         lista, k = por_seccion[seccion], cupo[seccion]
         muestra.extend(lista[(i * len(lista)) // k] for i in range(k))
     return muestra
+
+
+def _titulos_duplicados(muestra: Iterable[PageSample]) -> dict[str, list[str]]:
+    """Títulos compartidos por varias URLs (posibles soft-404 o plantillas genéricas)."""
+    por_titulo: dict[str, list[str]] = {}
+    for pagina in muestra:
+        if pagina.title:
+            por_titulo.setdefault(pagina.title, []).append(pagina.fetch.url)
+    return {t: urls for t, urls in por_titulo.items() if len(urls) > 1}
 
 
 class SiteExplorer:
@@ -285,6 +296,12 @@ class SiteExplorer:
             verdict_counts=dict(Counter(p.verdict or "sin análisis" for p in muestra)),
             content_types=dict(tipos),
             status_codes=dict(estados),
+            redirects={
+                p.fetch.url: p.fetch.final_url
+                for p in muestra
+                if p.fetch.final_url and p.fetch.final_url != p.fetch.url
+            },
+            duplicate_titles=_titulos_duplicados(muestra),
             urls=urls,
         )
 
@@ -319,7 +336,9 @@ class SiteExplorer:
         )
 
     def _leer_sitemaps(self, declarados: Iterable[str]) -> tuple[list[SitemapSummary], list[str]]:
-        pendientes = list(declarados) or [urljoin(self._base, "/sitemap.xml")]
+        # Además de los declarados en robots.txt se consulta siempre /sitemap.xml:
+        # en el sitio objetivo ambos índices difieren (ver docs/exploracion_sitio.md).
+        pendientes = list(dict.fromkeys([*declarados, urljoin(self._base, "/sitemap.xml")]))
         vistos: set[str] = set()
         resumenes: list[SitemapSummary] = []
         urls: dict[str, None] = {}

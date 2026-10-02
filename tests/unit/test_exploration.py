@@ -44,6 +44,15 @@ PERSONAS = b"""<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 </urlset>"""
 
 
+EXTRA = b"""<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<sitemap><loc>https://www.banco.test/sitemap-personas.xml</loc></sitemap>
+<sitemap><loc>https://www.banco.test/sitemap-empresas.xml</loc></sitemap>
+</sitemapindex>"""
+EMPRESAS = b"""<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<url><loc>https://www.banco.test/empresas/leasing</loc></url>
+</urlset>"""
+
+
 class Reloj:
     """Reloj falso: `sleep` avanza el tiempo y registra las pausas."""
 
@@ -65,6 +74,7 @@ def _sitio(peticiones: list[httpx.Request]) -> Callable[[httpx.Request], httpx.R
         "/sitemap-index.xml": (200, "application/xml", INDICE),
         "/sitemap-personas.xml": (200, "application/xml", PERSONAS),
         "/sitemap-roto.xml": (200, "text/html", b"<html>WAF</html>"),
+        "/sitemap-empresas.xml": (200, "application/xml", EMPRESAS),
     }
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -74,13 +84,21 @@ def _sitio(peticiones: list[httpx.Request]) -> Callable[[httpx.Request], httpx.R
             return httpx.Response(status, headers={"content-type": tipo}, content=cuerpo)
         if request.url.path == "/empresas":
             raise httpx.ConnectTimeout("timeout", request=request)
+        if request.url.path == "/sitemap.xml":
+            return httpx.Response(200, headers={"content-type": "application/xml"}, content=EXTRA)
+        if request.url.path == "/personas/cuentas":
+            return httpx.Response(
+                301, headers={"location": "https://www.banco.test/personas?utm_source=redirect"}
+            )
         return httpx.Response(200, headers={"content-type": "text/html"}, content=HTML_ESTATICO)
 
     return handler
 
 
 def _fetcher(handler: Callable[[httpx.Request], httpx.Response], reloj: Reloj) -> PoliteFetcher:
-    client = httpx.Client(transport=httpx.MockTransport(handler), headers={"User-Agent": UA})
+    client = httpx.Client(
+        transport=httpx.MockTransport(handler), headers={"User-Agent": UA}, follow_redirects=True
+    )
     return PoliteFetcher(
         client,
         user_agent=UA,
@@ -138,6 +156,22 @@ def test_explore_recorre_sitemaps_y_registra_errores(
     assert por_url["https://otro.test/sitemap.xml"].error == "fuera del dominio objetivo"
 
 
+def test_explore_lee_sitemap_xml_ademas_del_declarado(
+    entorno: tuple[SiteExplorer, list[httpx.Request], Reloj],
+) -> None:
+    """/sitemap.xml se consulta aunque robots declare otro índice; sin duplicar sitemaps."""
+    explorer, peticiones, _ = entorno
+
+    reporte = explorer.explore(sample_size=1)
+
+    urls = [s.url for s in reporte.sitemaps]
+    assert "https://www.banco.test/sitemap.xml" in urls
+    assert "https://www.banco.test/sitemap-empresas.xml" in urls
+    assert len(urls) == len(set(urls))
+    pedidas = [str(p.url) for p in peticiones]
+    assert pedidas.count("https://www.banco.test/sitemap-personas.xml") == 1
+
+
 def test_explore_estadisticas_de_urls(
     entorno: tuple[SiteExplorer, list[httpx.Request], Reloj],
 ) -> None:
@@ -146,11 +180,11 @@ def test_explore_estadisticas_de_urls(
 
     stats = explorer.explore(sample_size=5).url_stats
 
-    assert stats.total_unique == 7
-    assert stats.on_domain == 6
+    assert stats.total_unique == 8
+    assert stats.on_domain == 7
     assert stats.off_domain_hosts == {"mi.banco.test": 1}
-    assert stats.by_section == {"personas": 4, "docs": 1, "empresas": 1}
-    assert stats.by_extension == {"html (sin extensión)": 5, "pdf": 1}
+    assert stats.by_section == {"personas": 4, "empresas": 2, "docs": 1}
+    assert stats.by_extension == {"html (sin extensión)": 6, "pdf": 1}
     assert stats.disallowed_by_robots == 2
     assert stats.with_query == 1
 
@@ -178,9 +212,11 @@ def test_explore_aplica_crawl_delay_entre_peticiones(
 
     reporte = explorer.explore(sample_size=10)
 
+    # Una redirección son dos peticiones HTTP dentro de una misma descarga lógica.
+    saltos_de_redireccion = 1
     assert reporte.delay_seconds == 2
-    assert reporte.requests_made == len(peticiones)
-    assert len(reloj.pausas) == len(peticiones) - 1
+    assert reporte.requests_made == len(peticiones) - saltos_de_redireccion
+    assert len(reloj.pausas) == reporte.requests_made - 1
     assert all(p == 2 for p in reloj.pausas)
 
 
@@ -198,11 +234,28 @@ def test_explore_muestra_analiza_html_y_tolera_errores_de_red(
         "https://www.banco.test/personas/cuentas",
         "https://www.banco.test/personas?x=1",
         "https://www.banco.test/empresas",
+        "https://www.banco.test/empresas/leasing",
     }
     assert por_url["https://www.banco.test/personas"].verdict == "no_requiere_js"
     assert por_url["https://www.banco.test/empresas"].fetch.error.startswith("ConnectTimeout")
-    assert reporte.verdict_counts == {"no_requiere_js": 3, "sin análisis": 1}
-    assert reporte.content_types["text/html"] == 3
+    assert reporte.verdict_counts == {"no_requiere_js": 4, "sin análisis": 1}
+    assert reporte.content_types["text/html"] == 4
+
+
+def test_explore_reporta_redirecciones_y_titulos_duplicados(
+    entorno: tuple[SiteExplorer, list[httpx.Request], Reloj],
+) -> None:
+    """Se listan redirecciones (con utm_*) y títulos repetidos (posibles soft-404)."""
+    explorer, _, _ = entorno
+
+    reporte = explorer.explore(sample_size=10)
+
+    assert reporte.redirects == {
+        "https://www.banco.test/personas/cuentas": (
+            "https://www.banco.test/personas?utm_source=redirect"
+        )
+    }
+    assert len(reporte.duplicate_titles["Cuenta de Ahorros | Banco"]) == 4
 
 
 def test_explore_compara_con_renderizado() -> None:

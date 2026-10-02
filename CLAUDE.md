@@ -1,5 +1,7 @@
 # CLAUDE.md — Reglas del proyecto RAG BBVA
 
+> **Si retomas el proyecto en una sesión nueva, lee primero `docs/CONTEXTO_SESION.md`.**
+
 ## Contexto
 Prueba técnica de ML/AI Engineer: sistema RAG en Python. Cliente ficticio: BBVA Colombia; fuente de datos: https://www.bancolombia.com/ (ADR-008, bbva.com.co bloquea crawlers).
 Leer siempre antes de trabajar: `docs/00_VISION_GENERAL.md` y `docs/01_PLAN_DE_MODULOS.md`.

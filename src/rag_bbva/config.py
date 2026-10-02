@@ -32,6 +32,10 @@ class Settings(BaseSettings):
     crawl_delay_seconds: float = Field(default=1.0, ge=0)
     crawl_user_agent: str = Field(default="RAG-BBVA-TechTest/1.0", min_length=1)
     crawl_timeout_seconds: float = Field(default=20, gt=0)
+    crawl_max_retries: int = Field(default=3, ge=0)
+    crawl_backoff_seconds: float = Field(default=2.0, ge=0)
+    crawl_block_threshold: int = Field(default=5, gt=0)
+    raw_data_dir: Path = Path("data/raw")
 
     # Chunking y embeddings
     chunk_size: int = Field(default=800, gt=0)

@@ -102,3 +102,19 @@ def count_by_section(urls: Iterable[str]) -> dict[str, int]:
     """Cuenta URLs por sección, ordenado de mayor a menor (empates por nombre)."""
     conteo = Counter(section_of(u) for u in urls)
     return dict(sorted(conteo.items(), key=lambda kv: (-kv[1], kv[0])))
+
+
+def interleave_by_section(urls: Iterable[str]) -> list[str]:
+    """Reordena las URLs alternando secciones (round-robin), sin repetir.
+
+    Conserva el orden relativo dentro de cada sección y recorre las secciones por
+    orden de primera aparición. Así un crawl parcial cubre todas las secciones.
+    """
+    por_seccion: dict[str, list[str]] = {}
+    for url in dict.fromkeys(urls):
+        por_seccion.setdefault(section_of(url), []).append(url)
+    colas = list(por_seccion.values())
+    resultado: list[str] = []
+    for i in range(max((len(c) for c in colas), default=0)):
+        resultado.extend(c[i] for c in colas if i < len(c))
+    return resultado

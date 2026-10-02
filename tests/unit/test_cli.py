@@ -1,10 +1,15 @@
 """Pruebas de la CLI (M0)."""
 
+import json
+from pathlib import Path
+
+import httpx
 import pytest
+import respx
 from typer.testing import CliRunner
 
 from rag_bbva import __version__
-from rag_bbva.cli import app
+from rag_bbva.cli import EXIT_ABORTADO, app
 
 runner = CliRunner()
 
@@ -22,3 +27,75 @@ def test_cli_sin_argumentos_muestra_ayuda(clean_env: pytest.MonkeyPatch) -> None
     result = runner.invoke(app, [])
 
     assert "version" in result.output
+    assert "scrape" in result.output
+    # Regla del proyecto: todo texto visible al usuario dice Bancolombia (ADR-008).
+    assert "Bancolombia" in result.output
+    assert "BBVA" not in result.output
+
+
+B = "https://www.banco.test"
+SITEMAP = (
+    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+    + "".join(f"<url><loc>{B}/personas/{i}</loc></url>" for i in range(5))
+    + "</urlset>"
+)
+
+
+@pytest.fixture
+def entorno_scrape(clean_env: pytest.MonkeyPatch, tmp_path: Path) -> Path:
+    """Configura el CLI contra un sitio simulado, sin pausas reales."""
+    clean_env.setenv("TARGET_BASE_URL", f"{B}/")
+    clean_env.setenv("RAW_DATA_DIR", str(tmp_path / "raw"))
+    clean_env.setenv("CRAWL_DELAY_SECONDS", "0")
+    clean_env.setenv("CRAWL_BACKOFF_SECONDS", "0")
+    clean_env.setenv("CRAWL_BLOCK_THRESHOLD", "2")
+    return tmp_path / "raw"
+
+
+def _sitio(router: respx.MockRouter, estado_paginas: int = 200) -> None:
+    router.get("/robots.txt").respond(200, text=f"User-agent: *\nSitemap: {B}/s.xml\n")
+    router.get("/s.xml").respond(200, text=SITEMAP)
+    router.get("/sitemap.xml").respond(404)
+    router.get(url__regex=r"/personas/\d").respond(
+        estado_paginas, headers={"content-type": "text/html"}, text="<html><p>hola</p></html>"
+    )
+
+
+def test_cli_scrape_respeta_max_pages(entorno_scrape: Path) -> None:
+    """`scrape --max-pages 3` descarga 3 páginas y deja manifest, HTML y reporte."""
+    with respx.mock(base_url=B) as router:
+        _sitio(router)
+
+        result = runner.invoke(app, ["scrape", "--max-pages", "3"])
+
+    assert result.exit_code == 0, result.output
+    assert "procesadas: 3" in result.stdout
+    manifest = (entorno_scrape / "manifest.jsonl").read_text("utf-8").splitlines()
+    assert len(manifest) == 3
+    assert len(list((entorno_scrape / "pages").glob("*.html"))) == 3
+    reporte = json.loads((entorno_scrape / "crawl_report.json").read_text("utf-8"))
+    assert reporte["outcomes"] == {"guardada": 3}
+    assert all(c.request.headers["User-Agent"] == "RAG-BBVA-TechTest/1.0" for c in router.calls)
+
+
+def test_cli_scrape_abortado_sale_con_codigo_2(entorno_scrape: Path) -> None:
+    """Una ráfaga de 403 aborta el crawl con código de salida distinto de 0."""
+    with respx.mock(base_url=B) as router:
+        _sitio(router, estado_paginas=403)
+
+        result = runner.invoke(app, ["scrape"])
+
+    assert result.exit_code == EXIT_ABORTADO
+    assert "ABORTADO" in result.stdout
+
+
+def test_cli_scrape_sin_robots_falla(entorno_scrape: Path) -> None:
+    """Si robots.txt no está disponible el comando termina con error y no scrapea."""
+    with respx.mock(base_url=B) as router:
+        router.get("/robots.txt").mock(side_effect=httpx.ConnectError("caído"))
+
+        result = runner.invoke(app, ["scrape"])
+
+    assert result.exit_code == 1
+    assert "robots.txt" in result.output
+    assert not (entorno_scrape / "manifest.jsonl").exists()

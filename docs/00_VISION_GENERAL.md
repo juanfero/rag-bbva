@@ -197,6 +197,10 @@ El caso pide mínimo 3. Se implementan 6 para tener margen, pero el README desta
 | `CRAWL_DELAY_SECONDS` | `1.0` | Pausa entre peticiones (cortesía) |
 | `CRAWL_USER_AGENT` | `RAG-BBVA-TechTest/1.0` | User-Agent identificable |
 | `CRAWL_TIMEOUT_SECONDS` | `20` | Timeout por petición HTTP (agregada en M1) |
+| `CRAWL_MAX_RETRIES` | `3` | Reintentos ante errores transitorios (5xx, timeouts) con backoff exponencial (M2) |
+| `CRAWL_BACKOFF_SECONDS` | `2.0` | Espera base del backoff: 2, 4, 8 s… (M2) |
+| `CRAWL_BLOCK_THRESHOLD` | `5` | Respuestas 403/429 consecutivas que abortan el crawl (M2) |
+| `RAW_DATA_DIR` | `data/raw` | Carpeta de HTML crudo y `manifest.jsonl` (M2) |
 | `CHUNK_SIZE` | `800` | Tamaño de chunk (caracteres) |
 | `CHUNK_OVERLAP` | `120` | Solapamiento |
 | `EMBEDDING_MODEL` | `intfloat/multilingual-e5-small` | Modelo de embeddings |
@@ -240,7 +244,7 @@ Salida: comando CLI `metrics`, endpoint `GET /analytics/summary`, página "Métr
 |---|---|---|
 | S-01 | La fecha de entrega del PDF no aplica; se trabaja sin fecha límite fija y M13 (evaluación) entra en alcance | Confirmado |
 | S-02 | Se usa el sitio de **Bancolombia** (`www.bancolombia.com`) como fuente de datos: `www.bbva.com.co` responde 403 (WAF) a `robots.txt`, home y sitemap para cualquier cliente no navegador. BBVA Colombia sigue siendo el cliente ficticio y el código conserva los nombres (`rag-bbva`, `rag_bbva`), pero **todo texto visible al usuario (prompts, UI, respuestas, README) dice Bancolombia** | Confirmado (2026-10-01, ADR-008) |
-| S-03 | Alcance del scraping: páginas públicas HTML del dominio `www.bancolombia.com` (secciones `personas`, `negocios`, `empresas`, `centro-de-ayuda`, `educacion-financiera`, `acerca-de`); se excluyen PDFs (además prohibidos por robots), formularios/solicitudes, áreas transaccionales/login, redirecciones a otros dominios (p. ej. `fiduciaria.bancolombia.com`) y URLs no HTML. En `acerca-de`/sala de prensa, si la página tiene fecha de publicación se guarda como metadato (M2/M3). Los PDFs pueden quedar como mejora futura | Confirmado (2026-10-01, checkpoint de M1; `docs/exploracion_sitio.md` §7) |
+| S-03 | Alcance del scraping: páginas públicas HTML del dominio `www.bancolombia.com` (secciones `personas`, `negocios`, `empresas`, `centro-de-ayuda`, `educacion-financiera`, `acerca-de`); se excluyen PDFs (además prohibidos por robots), formularios/solicitudes, áreas transaccionales/login, redirecciones a otros dominios (p. ej. `fiduciaria.bancolombia.com`) y URLs no HTML. La **sala de prensa** (`/acerca-de/sala-prensa/…`) queda **fuera**: sus URLs redirigen a otro host, `prensa.bancolombia.com` (ADR-010); el resto de `acerca-de` sigue dentro. `published_at` es un metadato opcional de M3, solo si la página trae la fecha en metadatos. Los PDFs y la sala de prensa pueden quedar como mejora futura | Confirmado (2026-10-01, checkpoint de M1; `docs/exploracion_sitio.md` §7). Acotado el 2026-10-02 (ADR-010) |
 | S-04 | El crawl se limita (`CRAWL_MAX_PAGES`) para respetar al sitio y el tiempo de la prueba. Defaults: `CRAWL_MAX_PAGES=1200` (cubre las 1.113 URLs permitidas de los sitemaps) y `CRAWL_MAX_DEPTH=1`; en desarrollo `--max-pages 50`. El arranque con `docker compose` **no** scrapea: usa un snapshot versionado de datos limpios y el scraping completo es un comando opcional (M12) | Confirmado (2026-10-01, checkpoint de M1) |
 | S-05 | "Usuarios internos" no implica autenticación; el `conversation_id` lo genera la UI o lo envía el cliente | Propuesto |
 | S-06 | El asistente responde solo con el contexto recuperado; si no hay información suficiente, lo dice explícitamente (no inventa) | Propuesto |

@@ -2,7 +2,7 @@
 
 > Fecha: 2026-10-01 · Herramienta: `scripts/explore_site.py` · User-Agent: `RAG-BBVA-TechTest/1.0` · Pausa: 1 s
 > Evidencia: [`docs/evidencia/exploracion_bancolombia_2026-10-01.json`](evidencia/exploracion_bancolombia_2026-10-01.json)
-> Estado: **decisiones validadas por Juan Felipe el 2026-10-01** (checkpoint de M1; S-03, S-04 y ADR-009 confirmados).
+> Estado: **decisiones validadas por Juan Felipe el 2026-10-01** (checkpoint de M1; S-03, S-04 y ADR-009 confirmados). El 2026-10-02 la sala de prensa se excluyó del alcance (ADR-010).
 
 ## 0. Cambio de sitio: por qué no bbva.com.co (ADR-008)
 
@@ -43,10 +43,16 @@ Implementación: `rag_bbva/scraping/robots.py`. Es propia porque `urllib.robotpa
 | `/sitemap-centro-de-ayuda.xml` | urlset | 170 |
 | `/sitemap-acerca-de.xml` | urlset | 119 |
 | `/sitemap-negocios.xml` | urlset | 93 |
-| `/sitemap-sala-de-prensa.xml` | urlset | 73 (URLs bajo `/acerca-de/…`) |
+| `/sitemap-sala-de-prensa.xml` | urlset | 73 (todas bajo `/acerca-de/sala-prensa/…`) |
 | `/sitemap-educacion-financiera.xml` | urlset | 28 |
 
 **Hallazgo:** el índice que declara `robots.txt` omite 3 sitemaps. El crawler debe leer **ambos** índices y deduplicar.
+
+**Sala de prensa: 74 URLs únicas, no 73.** Esta nota se agregó en la revisión de M2, con un recuento del 2026-10-02 que coincide con `data/exploration/urls.txt` de M1. El total sale de dos sitemaps:
+- `sitemap-sala-de-prensa.xml` lista 73 URLs bajo `/acerca-de/sala-prensa/`. 4 de ellas, las páginas de categoría de `noticias/`, están repetidas en `sitemap-acerca-de.xml`.
+- `sitemap-personas.xml` lista una más, que no está en el de prensa: `…/noticias/responsabilidad-social-ambiental/personas-beneficiadas-por-voluntariado-bancolombia`.
+
+Esas URLs redirigen a `prensa.bancolombia.com` y quedan fuera del alcance (ADR-010).
 
 ## 3. URLs por sección
 
@@ -56,7 +62,7 @@ Implementación: `rag_bbva/scraping/robots.py`. Es propia porque `urllib.robotpa
 |---|---|
 | `personas` | 438 |
 | `empresas` | 201 |
-| `acerca-de` (incluye sala de prensa) | 189 |
+| `acerca-de` (incluye las 74 de sala de prensa, excluidas en M2 por ADR-010) | 189 |
 | `centro-de-ayuda` | 169 |
 | `negocios` | 93 |
 | `educacion-financiera` | 28 |
@@ -98,7 +104,7 @@ Se identificaron **3 plantillas**. Cada página de la muestra tiene exactamente 
 | Plantilla | Dónde | Selector | Ejemplo |
 |---|---|---|---|
 | A. Diseño nuevo (`bc-*`, Tailwind) | `negocios`, `empresas`, algunos `personas/creditos` | **`main`** | `main.flex.flex-1` (684–3.239 caracteres) |
-| B. Corporativo | `acerca-de`, sala de prensa | **`#main-content`** | `div#main-content` (1.815–5.863 caracteres) |
+| B. Corporativo | `acerca-de` (la sala de prensa no se muestreó; ver ADR-010) | **`#main-content`** | `div#main-content` (1.815–5.863 caracteres) |
 | C. WebSphere Portal (`wptheme*`) | `personas`, `centro-de-ayuda`, `educacion-financiera` | **`[role=main]`** | contiene columnas `div.component-container.wpthemeCol`; en FAQs el cuerpo está en `div.component-container.bc-col-lg-8.wpthemeCol` |
 
 **Cadena de extracción propuesta para M3:**
@@ -122,7 +128,7 @@ Se identificaron **3 plantillas**. Cada página de la muestra tiene exactamente 
 
 ## 7. Decisiones (validadas el 2026-10-01)
 
-1. **Secciones a incluir:** `personas`, `negocios`, `empresas`, `centro-de-ayuda`, `educacion-financiera` y `acerca-de` (incluye sala de prensa). Las 6 tienen contenido informativo útil para usuarios internos.
+1. **Secciones a incluir:** `personas`, `negocios`, `empresas`, `centro-de-ayuda`, `educacion-financiera` y `acerca-de`. La sala de prensa quedó fuera en la revisión de M2: redirige a `prensa.bancolombia.com` (ADR-010). Las 6 tienen contenido informativo útil para usuarios internos.
 2. **Excluir:**
    - Rutas prohibidas por robots.
    - Redirecciones fuera de `www.bancolombia.com` (por ejemplo `fiduciaria.bancolombia.com`).
@@ -132,4 +138,4 @@ Se identificaron **3 plantillas**. Cada página de la muestra tiene exactamente 
 4. **Límite de páginas:** `CRAWL_MAX_PAGES=1200` (default), que cubre el sitemap completo (1.113 URLs permitidas) con margen para lo que descubra el BFS. En desarrollo se usa `--max-pages 50`. El arranque con `docker compose` no scrapea: usa un snapshot versionado de datos limpios (M12).
 5. **Herramienta:** httpx + BeautifulSoup/lxml, sin Playwright (ADR-009).
 6. **Selectores:** trafilatura con *fallback* `main` → `#main-content` → `[role=main]` (§5).
-7. **Fecha de publicación:** en `acerca-de`/sala de prensa, si la página la tiene se guarda como metadato `published_at` (se implementa en M2/M3).
+7. **Fecha de publicación:** `published_at` es un metadato opcional de M3. Se extrae solo si la página trae la fecha en metadatos (p. ej. `article:published_time`). La sala de prensa quedó fuera del alcance (ADR-010).

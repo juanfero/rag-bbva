@@ -119,7 +119,7 @@
 **Diseño**
 - `CleaningPipeline` (**Chain of Responsibility / Pipeline**) con pasos: extraer contenido principal (trafilatura + fallback BeautifulSoup) → eliminar boilerplate (menú, footer, banners de cookies) → normalizar Unicode y espacios → conservar estructura (títulos `#`, listas, tablas simples) → filtrar documentos vacíos/cortos → deduplicar por hash de texto.
 - Documento limpio (`data/clean/documents.jsonl`): `doc_id, url, title, section, breadcrumbs, text, lang, scraped_at, content_hash, n_chars, published_at`.
-- `published_at` (opcional): en `acerca-de`/sala de prensa, fecha de publicación extraída de metadatos (`article:published_time`, JSON-LD `datePublished`) o de la fecha visible; `null` si la página no la tiene (decisión del checkpoint de M1).
+- `published_at` (**opcional, no obligatorio**): se extrae solo si la página trae la fecha de publicación en metadatos (p. ej. `article:published_time` o JSON-LD `datePublished`); si no, `null`. La sala de prensa está fuera del alcance (ADR-010), así que no hay un conjunto de páginas que deba tenerla.
 - Reporte de calidad: documentos procesados, descartados (y motivo), longitud media.
 - CLI: `clean`.
 

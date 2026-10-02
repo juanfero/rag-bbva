@@ -7,13 +7,9 @@ import httpx
 import pytest
 
 from rag_bbva.exceptions import ScrapingError
-from rag_bbva.scraping.exploration import (
-    MAX_REDIRECCIONES,
-    PoliteFetcher,
-    SiteExplorer,
-    choose_sample,
-    extension_of,
-)
+from rag_bbva.scraping.exploration import SiteExplorer, choose_sample
+from rag_bbva.scraping.fetcher import MAX_REDIRECCIONES, PoliteFetcher
+from rag_bbva.scraping.urls import extension_of
 
 FIXTURES = Path(__file__).parent.parent / "fixtures"
 BASE = "https://www.banco.test/"

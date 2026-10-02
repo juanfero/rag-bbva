@@ -55,3 +55,17 @@ Formato: una entrada por decisión. Estado: Propuesta · Aceptada · Reemplazada
 - **Contexto:** la visión general dejaba Playwright como plan B si el sitio dependía de JS. En M1 se comparó el HTML estático con el renderizado por Chromium headless en 12 páginas de las 6 secciones de Bancolombia: la cobertura del vocabulario renderizado fue de 0,78 a 1,00. Lo que solo aparece tras renderizar es el banner de cookies, carruseles promocionales y listas de enlaces ("preguntas relacionadas", tarjetas de artículos) hacia páginas que ya están en los sitemaps. El cuerpo de cada página está completo en el HTML estático.
 - **Decisión:** el crawler usa `httpx` + BeautifulSoup/lxml (y `trafilatura` en M3), sin navegador headless. Playwright no es dependencia del proyecto: se instaló de forma temporal solo para la medición de M1 (`scripts/explore_site.py --render`).
 - **Consecuencias:** + imagen Docker liviana y crawl rápido y barato para el sitio; + el banner de cookies no contamina el texto; − no se capturan los widgets dinámicos (su contenido llega por las páginas enlazadas); − si el sitio migra a una SPA habrá que reevaluar con el mismo script.
+
+## ADR-010 — Sala de prensa fuera del alcance del scraping
+- **Estado:** Aceptada (2026-10-02, revisión de M2; acota S-03)
+- **Contexto:** S-03 incluía la sala de prensa dentro de `acerca-de` y pedía guardar su fecha de publicación (`published_at`). En M2 se encontró lo siguiente:
+  - Los sitemaps listan **74 URLs únicas** bajo `/acerca-de/sala-prensa/`. Hay **73** en `sitemap-sala-de-prensa.xml`, 4 de ellas repetidas en `sitemap-acerca-de.xml`. La restante solo aparece en `sitemap-personas.xml`. Recuento del 2026-10-02, que coincide con las 74 de `data/exploration/urls.txt` de M1.
+  - Esas URLs responden **301 hacia `prensa.bancolombia.com`**, un host distinto. En el manifest de M2 (`data/raw/manifest.jsonl` y la copia de la corrida 1), la única URL de sala de prensa procesada termina en la **portada** `https://prensa.bancolombia.com/`, no en la noticia: **1 de 1**. Durante M2 se comprobó a mano el 301 hacia ese host en otras 4, sin registrar su destino exacto.
+  - Si el sitio redirige a la portada, seguir la redirección no da la noticia. Incluirla exigiría explorar y crawlear un segundo sitio, con su propio `robots.txt`, sitemaps y plantillas.
+- **Decisión:** las URLs `/acerca-de/sala-prensa/…` quedan **fuera del alcance**. No se agrega `prensa.bancolombia.com` como host permitido. El crawler no las filtra de antemano: hace una petición, recibe el 301 a otro host, no lo sigue y las registra como `redireccion_omitida`, sin guardar HTML. El resto de `acerca-de` sigue dentro. `published_at` pasa a ser un campo opcional de M3: se extrae solo si la página trae la fecha en metadatos (p. ej. `article:published_time`) y no es obligatorio.
+- **Consecuencias:**
+  - \+ Se mantiene un solo dominio con una sola política de robots.
+  - \+ No se presenta como dato una noticia que no se obtuvo.
+  - − El asistente no responde sobre noticias ni comunicados de prensa (limitación L-06 del README).
+  - − Un crawl completo gasta unas 74 peticiones en redirecciones omitidas.
+  - Mejora futura: crawlear `prensa.bancolombia.com` como host adicional permitido, con su propio `robots.txt` y sitemap.

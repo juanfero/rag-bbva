@@ -239,9 +239,9 @@ Salida: comando CLI `metrics`, endpoint `GET /analytics/summary`, página "Métr
 | ID | Supuesto | Estado |
 |---|---|---|
 | S-01 | La fecha de entrega del PDF no aplica; se trabaja sin fecha límite fija y M13 (evaluación) entra en alcance | Confirmado |
-| S-02 | Se usa el sitio de **Bancolombia** (`www.bancolombia.com`) como fuente de datos: `www.bbva.com.co` responde 403 (WAF) a `robots.txt`, home y sitemap para cualquier cliente no navegador. BBVA Colombia sigue siendo el cliente ficticio y se mantienen los nombres del proyecto (`rag-bbva`, `rag_bbva`) | Confirmado (2026-10-01, ADR-008) |
-| S-03 | Alcance del scraping: páginas públicas HTML del dominio `www.bancolombia.com` (secciones `personas`, `negocios`, `empresas`, `centro-de-ayuda`, `educacion-financiera`, `acerca-de`); se excluyen PDFs (además prohibidos por robots), formularios/solicitudes, áreas transaccionales/login, redirecciones a otros dominios (p. ej. `fiduciaria.bancolombia.com`) y URLs no HTML. Los PDFs pueden quedar como mejora futura | Propuesto en M1 (`docs/exploracion_sitio.md` §7), **pendiente de validar con Juan Felipe** |
-| S-04 | El crawl se limita (`CRAWL_MAX_PAGES`) para respetar al sitio y el tiempo de la prueba. M1 propone `CRAWL_MAX_PAGES=1200` (cubre las 1.113 URLs permitidas de los sitemaps) y `CRAWL_MAX_DEPTH=1` | Propuesto en M1, **pendiente de validar** |
+| S-02 | Se usa el sitio de **Bancolombia** (`www.bancolombia.com`) como fuente de datos: `www.bbva.com.co` responde 403 (WAF) a `robots.txt`, home y sitemap para cualquier cliente no navegador. BBVA Colombia sigue siendo el cliente ficticio y el código conserva los nombres (`rag-bbva`, `rag_bbva`), pero **todo texto visible al usuario (prompts, UI, respuestas, README) dice Bancolombia** | Confirmado (2026-10-01, ADR-008) |
+| S-03 | Alcance del scraping: páginas públicas HTML del dominio `www.bancolombia.com` (secciones `personas`, `negocios`, `empresas`, `centro-de-ayuda`, `educacion-financiera`, `acerca-de`); se excluyen PDFs (además prohibidos por robots), formularios/solicitudes, áreas transaccionales/login, redirecciones a otros dominios (p. ej. `fiduciaria.bancolombia.com`) y URLs no HTML. En `acerca-de`/sala de prensa, si la página tiene fecha de publicación se guarda como metadato (M2/M3). Los PDFs pueden quedar como mejora futura | Confirmado (2026-10-01, checkpoint de M1; `docs/exploracion_sitio.md` §7) |
+| S-04 | El crawl se limita (`CRAWL_MAX_PAGES`) para respetar al sitio y el tiempo de la prueba. Defaults: `CRAWL_MAX_PAGES=1200` (cubre las 1.113 URLs permitidas de los sitemaps) y `CRAWL_MAX_DEPTH=1`; en desarrollo `--max-pages 50`. El arranque con `docker compose` **no** scrapea: usa un snapshot versionado de datos limpios y el scraping completo es un comando opcional (M12) | Confirmado (2026-10-01, checkpoint de M1) |
 | S-05 | "Usuarios internos" no implica autenticación; el `conversation_id` lo genera la UI o lo envía el cliente | Propuesto |
 | S-06 | El asistente responde solo con el contexto recuperado; si no hay información suficiente, lo dice explícitamente (no inventa) | Propuesto |
 | S-07 | El índice es una foto del sitio en una fecha; la actualización periódica queda como mejora futura | Propuesto |
@@ -270,3 +270,18 @@ Salida: comando CLI `metrics`, endpoint `GET /analytics/summary`, página "Métr
 - **Git:** rama `feat/mXX-nombre` por módulo → merge a `main` → tag `mXX`. Commits en español con Conventional Commits: `feat(scraping): agrega crawler con soporte de robots.txt`.
 - **Documentación viva:** cada módulo actualiza `docs/modulos/MXX.md`, `CHANGELOG.md` y, si aplica, `02_DECISIONES.md`.
 - **Calidad:** `ruff check` sin errores y `pytest` en verde antes de cada merge.
+
+---
+
+## 12. Limitaciones conocidas (insumo de la sección del README)
+
+Se acumulan aquí a medida que aparecen; M14 las traslada al README.
+
+| ID | Limitación | Origen |
+|---|---|---|
+| L-01 | **Fuente de datos distinta al cliente:** el contenido es de `www.bancolombia.com`, no de `www.bbva.com.co`, que bloquea con 403 (WAF) a todo cliente no navegador. El código conserva el nombre `rag_bbva`; los textos visibles dicen Bancolombia | ADR-008 |
+| L-02 | **Política de bots de IA de Bancolombia:** su `robots.txt` bloquea por completo a los bots de *entrenamiento* de IA (GPTBot, ClaudeBot, Google-Extended, Applebot-Extended, cohere-ai). Nuestro uso es recuperación (RAG), no entrenamiento, con un User-Agent identificable (`RAG-BBVA-TechTest/1.0`) que respeta las reglas del grupo `*` y una pausa de 1 s entre peticiones | M1, `docs/exploracion_sitio.md` §1 |
+| L-03 | **Contenido dinámico no capturado:** sin renderizar JS no se obtienen el banner de cookies, carruseles ni listas de enlaces dinámicas; su contenido llega por las páginas enlazadas | ADR-009 |
+| L-04 | **Sin PDFs:** quedan fuera del alcance y además `robots.txt` los prohíbe (`/*pdf*`) | S-03 |
+| L-05 | **Foto del sitio:** el índice refleja el sitio en la fecha del scraping; la demo usa un snapshot versionado de datos limpios | S-07, M12 |
+

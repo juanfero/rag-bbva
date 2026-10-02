@@ -51,7 +51,7 @@ Formato: una entrada por decisión. Estado: Propuesta · Aceptada · Reemplazada
 - **Consecuencias:** + scraping real y respetuoso; + contenido rico y segmentado por sección; − el nombre `rag-bbva` ya no coincide con la fuente (se explica en el README); − Bancolombia bloquea en `robots.txt` los bots de *entrenamiento* de IA (GPTBot, ClaudeBot…). Nuestro uso es recuperación (RAG) con un User-Agent propio, no entrenamiento; se declara en el README.
 
 ## ADR-009 — Scraping con httpx sin renderizar JavaScript
-- **Estado:** Propuesta (2026-10-01, M1; pendiente de validar junto con el alcance)
+- **Estado:** Aceptada (2026-10-01, checkpoint de M1)
 - **Contexto:** la visión general dejaba Playwright como plan B si el sitio dependía de JS. En M1 se comparó el HTML estático con el renderizado por Chromium headless en 12 páginas de las 6 secciones de Bancolombia: la cobertura del vocabulario renderizado fue de 0,78 a 1,00. Lo que solo aparece tras renderizar es el banner de cookies, carruseles promocionales y listas de enlaces ("preguntas relacionadas", tarjetas de artículos) hacia páginas que ya están en los sitemaps. El cuerpo de cada página está completo en el HTML estático.
 - **Decisión:** el crawler usa `httpx` + BeautifulSoup/lxml (y `trafilatura` en M3), sin navegador headless. Playwright no es dependencia del proyecto: se instaló de forma temporal solo para la medición de M1 (`scripts/explore_site.py --render`).
 - **Consecuencias:** + imagen Docker liviana y crawl rápido y barato para el sitio; + el banner de cookies no contamina el texto; − no se capturan los widgets dinámicos (su contenido llega por las páginas enlazadas); − si el sitio migra a una SPA habrá que reevaluar con el mismo script.

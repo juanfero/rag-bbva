@@ -13,6 +13,9 @@ Leer siempre antes de trabajar: `docs/00_VISION_GENERAL.md` y `docs/01_PLAN_DE_M
 5. Ante cualquier ambigüedad del caso: **preguntar a Juan Felipe** antes de implementar; si se decide un supuesto, registrarlo en `00_VISION_GENERAL.md §9` y en `02_DECISIONES.md`.
 6. No cambiar el stack de `00_VISION_GENERAL.md §4` sin registrar la decisión (ADR).
 
+## Fuente de datos
+- La fuente de datos es **Bancolombia** (ADR-008). El código conserva el nombre `rag_bbva`, pero **todo texto visible al usuario (prompts, UI, respuestas, README) dice Bancolombia**.
+
 ## Entorno
 - Linux + Docker. Scripts en bash; rutas POSIX.
 - LLM: Grok (xAI) vía SDK `openai` con `XAI_BASE_URL`. **Nunca** escribir la `XAI_API_KEY` en código, docs, tests ni commits; solo en `.env` (ignorado por git).

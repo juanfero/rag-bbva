@@ -2,7 +2,7 @@
 
 > Fecha: 2026-10-01 · Herramienta: `scripts/explore_site.py` · User-Agent: `RAG-BBVA-TechTest/1.0` · Pausa: 1 s
 > Evidencia: [`docs/evidencia/exploracion_bancolombia_2026-10-01.json`](evidencia/exploracion_bancolombia_2026-10-01.json)
-> Estado: **decisiones propuestas, pendientes de validación con Juan Felipe antes de M2.**
+> Estado: **decisiones validadas por Juan Felipe el 2026-10-01** (checkpoint de M1; S-03, S-04 y ADR-009 confirmados).
 
 ## 0. Cambio de sitio: por qué no bbva.com.co (ADR-008)
 
@@ -28,6 +28,9 @@ Sin poder leer `robots.txt` no se puede verificar qué está permitido (S-08). E
 - **Sitemap declarado:** `https://www.bancolombia.com/sitemap-index.xml`.
 
 Implementación: `rag_bbva/scraping/robots.py`. Es propia porque `urllib.robotparser` no soporta los comodines `*`/`$` que este archivo usa en todas partes.
+
+### Declaración de uso
+`robots.txt` de Bancolombia **bloquea a los bots de entrenamiento de IA**. Este proyecto **no entrena modelos**: hace recuperación (RAG) sobre páginas públicas, con un User-Agent identificable (`RAG-BBVA-TechTest/1.0`) que no está en la lista bloqueada, respeta todas las reglas del grupo `*` y espera 1 s entre peticiones. Se declara como limitación L-02 (`00_VISION_GENERAL.md §12`) para el README.
 
 ## 2. Sitemaps
 
@@ -117,7 +120,7 @@ Se identificaron **3 plantillas**. Cada página de la muestra tiene exactamente 
 | **Política anti-IA de entrenamiento** | `Disallow: /` para GPTBot, ClaudeBot… | Uso RAG (no entrenamiento) con UA propio; se declara en el README |
 | **Volumen** | ~1.100 páginas × ~170 KB ≈ 190 MB de HTML crudo | `data/` fuera de git; el crawl completo tarda ≈ 25–30 min (1 s de pausa + ~0,46 s de latencia por página) |
 
-## 7. Decisiones propuestas (validar antes de M2)
+## 7. Decisiones (validadas el 2026-10-01)
 
 1. **Secciones a incluir:** `personas`, `negocios`, `empresas`, `centro-de-ayuda`, `educacion-financiera` y `acerca-de` (incluye sala de prensa). Las 6 tienen contenido informativo útil para usuarios internos.
 2. **Excluir:**
@@ -126,6 +129,7 @@ Se identificaron **3 plantillas**. Cada página de la muestra tiene exactamente 
    - URLs con extensión no HTML (`.sass`, `.pdf`) y rutas mal formadas.
    - Respuestas no `text/html`.
 3. **Descubrimiento:** semillas desde **ambos** índices de sitemap. BFS con `CRAWL_MAX_DEPTH=1` solo para descubrir páginas internas no listadas.
-4. **Límite de páginas:** `CRAWL_MAX_PAGES=1200`, que cubre el sitemap completo (1.113 URLs permitidas) con margen para lo que descubra el BFS. Para desarrollo y demo rápida se puede usar `--max-pages 300` desde la CLI.
+4. **Límite de páginas:** `CRAWL_MAX_PAGES=1200` (default), que cubre el sitemap completo (1.113 URLs permitidas) con margen para lo que descubra el BFS. En desarrollo se usa `--max-pages 50`. El arranque con `docker compose` no scrapea: usa un snapshot versionado de datos limpios (M12).
 5. **Herramienta:** httpx + BeautifulSoup/lxml, sin Playwright (ADR-009).
 6. **Selectores:** trafilatura con *fallback* `main` → `#main-content` → `[role=main]` (§5).
+7. **Fecha de publicación:** en `acerca-de`/sala de prensa, si la página la tiene se guarda como metadato `published_at` (se implementa en M2/M3).

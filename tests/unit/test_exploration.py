@@ -272,6 +272,7 @@ def test_explore_compara_con_renderizado() -> None:
     assert pagina.rendered_coverage is not None
     assert 0.8 < pagina.rendered_coverage < 1
     assert "simulador" in pagina.only_rendered_sample
+    assert pagina.only_rendered_segments == ["simulador interactivo cargado dinámicamente"]
 
 
 def test_explore_sin_robots_lanza_error() -> None:

@@ -8,6 +8,8 @@ from rag_bbva.scraping.page_analysis import (
     PageAnalysis,
     analyze_html,
     compare_texts,
+    rendered_only_segments,
+    text_segments,
     visible_text,
 )
 
@@ -91,3 +93,24 @@ def test_compare_texts_muestra_palabras_solo_renderizadas() -> None:
     comparacion = compare_texts("cuenta", "cuenta tasa interés")
 
     assert comparacion.only_rendered_sample == ("interés", "tasa")
+
+
+def test_text_segments_filtra_cortos_y_duplicados() -> None:
+    """Solo fragmentos largos, sin repetir y sin texto de scripts."""
+    html = (
+        "<p>Corto</p><p>Este es un fragmento suficientemente largo para contar.</p>"
+        "<div>Este es un fragmento suficientemente largo para contar.</div>"
+        "<script>var texto = 'un script larguísimo que no es contenido visible';</script>"
+    )
+
+    assert text_segments(html) == ["Este es un fragmento suficientemente largo para contar."]
+
+
+def test_rendered_only_segments() -> None:
+    """Devuelve lo que el renderizado agrega respecto al HTML estático."""
+    estatico = "<p>Texto principal del producto con todas sus condiciones.</p>"
+    renderizado = estatico + "<div>Usamos cookies para mejorar tu experiencia en el sitio.</div>"
+
+    assert rendered_only_segments(estatico, renderizado) == (
+        "Usamos cookies para mejorar tu experiencia en el sitio.",
+    )

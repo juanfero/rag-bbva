@@ -188,3 +188,21 @@ def compare_texts(static_text: str, rendered_text: str, sample: int = 15) -> Tex
         coverage=round(cobertura, 3),
         only_rendered_sample=tuple(sorted(solo_render)[:sample]),
     )
+
+
+def text_segments(html: str, min_chars: int = 40) -> list[str]:
+    """Fragmentos de texto visible (nodos de texto normalizados) de al menos `min_chars`."""
+    soup = BeautifulSoup(html, "lxml")
+    for etiqueta in soup(_NO_VISIBLES):
+        etiqueta.decompose()
+    fragmentos = (re.sub(r"\s+", " ", t).strip() for t in soup.stripped_strings)
+    return list(dict.fromkeys(f for f in fragmentos if len(f) >= min_chars))
+
+
+def rendered_only_segments(
+    static_html: str, rendered_html: str, limit: int = 8, min_chars: int = 40
+) -> tuple[str, ...]:
+    """Fragmentos de texto que solo existen tras renderizar con JavaScript."""
+    estatico = visible_text(static_html)
+    nuevos = [f for f in text_segments(rendered_html, min_chars) if f not in estatico]
+    return tuple(nuevos[:limit])

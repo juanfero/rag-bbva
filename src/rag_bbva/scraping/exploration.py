@@ -18,7 +18,12 @@ import httpx
 from pydantic import BaseModel, Field
 
 from rag_bbva.exceptions import ScrapingError
-from rag_bbva.scraping.page_analysis import analyze_html, compare_texts, visible_text
+from rag_bbva.scraping.page_analysis import (
+    analyze_html,
+    compare_texts,
+    rendered_only_segments,
+    visible_text,
+)
 from rag_bbva.scraping.robots import RobotsTxt, parse_robots
 from rag_bbva.scraping.sitemap import count_by_section, parse_sitemap, section_of
 
@@ -214,6 +219,7 @@ class PageSample(BaseModel):
     rendered_coverage: float | None = None
     rendered_words: int | None = None
     only_rendered_sample: list[str] = []
+    only_rendered_segments: list[str] = []
     render_error: str | None = None
 
 
@@ -447,4 +453,5 @@ class SiteExplorer:
             muestra.rendered_coverage = comparacion.coverage
             muestra.rendered_words = comparacion.rendered_words
             muestra.only_rendered_sample = list(comparacion.only_rendered_sample)
+            muestra.only_rendered_segments = list(rendered_only_segments(html, renderizado))
         return muestra

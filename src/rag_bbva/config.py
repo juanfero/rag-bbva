@@ -41,6 +41,11 @@ class Settings(BaseSettings):
     )
     raw_data_dir: Path = Path("data/raw")
 
+    # Limpieza (M3)
+    clean_data_dir: Path = Path("data/clean")
+    clean_min_chars: int = Field(default=200, ge=0)
+    clean_min_extraction_coverage: float = Field(default=0.9, ge=0, le=1)
+
     # Chunking y embeddings
     chunk_size: int = Field(default=800, gt=0)
     chunk_overlap: int = Field(default=120, ge=0)

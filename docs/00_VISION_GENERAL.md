@@ -202,6 +202,9 @@ El caso pide mínimo 3. Se implementan 6 para tener margen, pero el README desta
 | `CRAWL_BLOCK_THRESHOLD` | `5` | Respuestas 403/429 consecutivas que abortan el crawl (M2) |
 | `CRAWL_EXCLUDE_PATH_PREFIXES` | `["/acerca-de/sala-prensa/"]` | Prefijos de ruta que no se piden; quedan en el manifest como `excluida` (lista JSON; ADR-010, M3) |
 | `RAW_DATA_DIR` | `data/raw` | Carpeta de HTML crudo y `manifest.jsonl` (M2) |
+| `CLEAN_DATA_DIR` | `data/clean` | Carpeta de `documents.jsonl` y `clean_report.json` (M3) |
+| `CLEAN_MIN_CHARS` | `200` | Mínimo de caracteres del texto limpio; los más cortos se descartan (M3) |
+| `CLEAN_MIN_EXTRACTION_COVERAGE` | `0.9` | Fracción mínima del vocabulario del contenedor que debe conservar trafilatura; si no, *fallback* por selector (M3) |
 | `CHUNK_SIZE` | `800` | Tamaño de chunk (caracteres) |
 | `CHUNK_OVERLAP` | `120` | Solapamiento |
 | `EMBEDDING_MODEL` | `intfloat/multilingual-e5-small` | Modelo de embeddings |

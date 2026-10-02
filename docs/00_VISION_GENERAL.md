@@ -234,6 +234,11 @@ El caso pide mínimo 3. Se implementan 6 para tener margen, pero el README desta
 | `LLM_TEMPERATURE` | `0.1` | Temperatura |
 | `LLM_MAX_TOKENS` | `800` | Tope de tokens de salida (controla costo) |
 | `LLM_TIMEOUT_SECONDS` | `60` | Timeout por llamada |
+| `LLM_MAX_RETRIES` | `2` | Reintentos propios ante 429/5xx/timeouts; el SDK no reintenta (M7) |
+| `LLM_BACKOFF_SECONDS` | `1.0` | Espera base del backoff exponencial (M7) |
+| `LLM_PRICE_INPUT_PER_MTOK` / `LLM_PRICE_OUTPUT_PER_MTOK` | `2.0` / `6.0` | USD por millón de tokens para estimar costos; docs.x.ai, grok-4.7 < 200k (M7) |
+| `QUERY_REWRITE_MODE` | `history_only` | Reformulación de la pregunta: `off`, `history_only` o `always` (M7) |
+| `QUERY_REWRITE_MAX_TOKENS` | `120` | Tope de tokens de la pregunta reformulada (M7) |
 | `HISTORY_DB_PATH` | `data/history/history.db` | Ruta SQLite |
 | `HISTORY_WINDOW_N` | `6` | **N mensajes previos** usados como contexto |
 | `MANUAL_SEARCH_MINUTES` | `5` | Supuesto para estimar tiempo ahorrado (analítica) |

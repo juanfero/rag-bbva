@@ -53,6 +53,12 @@ def test_settings_defaults(clean_env: pytest.MonkeyPatch) -> None:
     assert settings.llm_temperature == 0.1
     assert settings.llm_max_tokens == 800
     assert settings.llm_timeout_seconds == 60
+    assert settings.llm_max_retries == 2
+    assert settings.llm_backoff_seconds == 1.0
+    assert settings.llm_price_input_per_mtok == 2.0
+    assert settings.llm_price_output_per_mtok == 6.0
+    assert settings.query_rewrite_mode == "history_only"
+    assert settings.query_rewrite_max_tokens == 120
     assert settings.history_db_path == Path("data/history/history.db")
     assert settings.history_window_n == 6
     assert settings.manual_search_minutes == 5
@@ -96,6 +102,7 @@ def test_settings_env_file_override(clean_env: pytest.MonkeyPatch, tmp_path: Pat
         ({"CRAWL_BLOCK_THRESHOLD": "0"}, "crawl_block_threshold"),
         ({"CHUNKING_STRATEGY": "semantico"}, "chunking_strategy"),
         ({"EMBEDDING_PROVIDER": "openai"}, "embedding_provider"),
+        ({"QUERY_REWRITE_MODE": "a_veces"}, "query_rewrite_mode"),
         ({"CRAWL_EXCLUDE_PATH_PREFIXES": '["acerca-de/"]'}, "CRAWL_EXCLUDE_PATH_PREFIXES"),
     ],
 )

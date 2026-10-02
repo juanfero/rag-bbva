@@ -15,6 +15,7 @@ LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
 LLMProviderName = Literal["xai", "fake"]
 ChunkingStrategyName = Literal["heading_aware", "fixed_size"]
 EmbeddingProviderName = Literal["sentence_transformers", "fake"]
+QueryRewriteMode = Literal["off", "history_only", "always"]
 
 
 class Settings(BaseSettings):
@@ -89,6 +90,17 @@ class Settings(BaseSettings):
     llm_temperature: float = Field(default=0.1, ge=0, le=2)
     llm_max_tokens: int = Field(default=800, gt=0)
     llm_timeout_seconds: float = Field(default=60, gt=0)
+    # Reintentos propios (tenacity) solo ante 429, 5xx, timeouts y fallos de conexión;
+    # los reintentos internos del SDK openai se desactivan (max_retries=0).
+    llm_max_retries: int = Field(default=2, ge=0)
+    llm_backoff_seconds: float = Field(default=1.0, ge=0)
+    # Precio por millón de tokens (USD) para estimar el costo por consulta. Fuente:
+    # https://docs.x.ai/docs/models, grok-4.7 con contexto < 200k (consultado 2026-10-02).
+    llm_price_input_per_mtok: float = Field(default=2.0, ge=0)
+    llm_price_output_per_mtok: float = Field(default=6.0, ge=0)
+    # Reformulación de la pregunta antes de recuperar: off | history_only | always.
+    query_rewrite_mode: QueryRewriteMode = "history_only"
+    query_rewrite_max_tokens: int = Field(default=120, gt=0)
 
     # Historial y analítica
     history_db_path: Path = Path("data/history/history.db")

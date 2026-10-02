@@ -1,5 +1,7 @@
 """Pruebas de reintentos y backoff del PoliteFetcher con respx (M2, sin red)."""
 
+from collections.abc import Callable
+
 import httpx
 import pytest
 import respx
@@ -130,3 +132,39 @@ def test_reintentos_respetan_la_pausa_entre_peticiones(reloj: Reloj) -> None:
 
     assert reloj.esperas == [2.0, 3.0]
     assert reloj.ahora == 5.0
+
+
+def _respuesta_lenta(
+    reloj: Reloj, respuesta: httpx.Response, segundos: float
+) -> Callable[[httpx.Request], httpx.Response]:
+    """Efecto de respx que simula una respuesta que tarda `segundos` en llegar."""
+
+    def efecto(_peticion: httpx.Request) -> httpx.Response:
+        reloj.ahora += segundos
+        return respuesta
+
+    return efecto
+
+
+@respx.mock
+def test_elapsed_ms_en_redireccion_omitida(reloj: Reloj) -> None:
+    """Una redirección fuera del dominio también registra el tiempo real de la petición."""
+    respuesta = httpx.Response(301, headers={"location": "https://otro.test/"})
+    respx.get(URL).mock(side_effect=_respuesta_lenta(reloj, respuesta, 0.25))
+
+    resultado = _fetcher(reloj).fetch(URL)
+
+    assert resultado.skipped is not None
+    assert resultado.status == 301
+    assert resultado.elapsed_ms == 250
+
+
+@respx.mock
+def test_elapsed_ms_en_fallo_de_red_incluye_backoff(reloj: Reloj) -> None:
+    """Un fallo de red persistente registra el tiempo de los intentos y del backoff."""
+    respx.get(URL).mock(side_effect=httpx.ConnectError("caído"))
+
+    resultado = _fetcher(reloj, max_retries=1).fetch(URL)
+
+    assert resultado.error is not None
+    assert resultado.elapsed_ms == 2000

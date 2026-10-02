@@ -150,6 +150,10 @@ class PoliteFetcher:
         except _RespuestaTransitoriaError as exc:
             return exc.respuesta
 
+    def _ms_desde(self, inicio: float) -> int:
+        """Milisegundos transcurridos desde `inicio` según el reloj inyectado."""
+        return int((self._clock() - inicio) * 1000)
+
     def fetch(self, url: str) -> FetchResult:
         """Descarga la URL si está permitida; nunca lanza por errores HTTP o de red.
 
@@ -171,6 +175,7 @@ class PoliteFetcher:
                     url=url,
                     final_url=actual,
                     error=f"{type(exc).__name__}: {exc}",
+                    elapsed_ms=self._ms_desde(inicio),
                     attempts=self._intentos,
                 )
 
@@ -184,12 +189,17 @@ class PoliteFetcher:
                     final_url=siguiente,
                     status=respuesta.status_code,
                     skipped=f"redirige a una URL {motivo}",
+                    elapsed_ms=self._ms_desde(inicio),
                     attempts=self._intentos,
                 )
             actual = siguiente
         else:
             return FetchResult(
-                url=url, final_url=actual, error="demasiadas redirecciones", attempts=self._intentos
+                url=url,
+                final_url=actual,
+                error="demasiadas redirecciones",
+                elapsed_ms=self._ms_desde(inicio),
+                attempts=self._intentos,
             )
 
         resultado = FetchResult(
@@ -198,7 +208,7 @@ class PoliteFetcher:
             status=respuesta.status_code,
             content_type=respuesta.headers.get("content-type"),
             size_bytes=len(respuesta.content),
-            elapsed_ms=int((self._clock() - inicio) * 1000),
+            elapsed_ms=self._ms_desde(inicio),
             attempts=self._intentos,
             content=respuesta.content,
         )

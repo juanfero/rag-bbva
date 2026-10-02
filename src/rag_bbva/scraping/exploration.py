@@ -24,6 +24,8 @@ from rag_bbva.scraping.sitemap import count_by_section, parse_sitemap, section_o
 
 logger = logging.getLogger(__name__)
 
+MAX_REDIRECCIONES = 5
+
 
 class FetchResult(BaseModel):
     """Resultado de una petición HTTP (o del motivo por el que no se hizo)."""
@@ -88,9 +90,7 @@ class PoliteFetcher:
 
     def is_allowed(self, url: str) -> bool:
         """URL dentro del dominio objetivo y permitida por `robots.txt`."""
-        if (urlsplit(url).hostname or "").lower() != self._host:
-            return False
-        return self.robots is None or self.robots.is_allowed(url, self._user_agent)
+        return self._motivo_bloqueo(url) is None
 
     def wait_turn(self) -> None:
         """Espera lo necesario para respetar la pausa desde la última petición."""
@@ -100,24 +100,52 @@ class PoliteFetcher:
                 self._sleep(restante)
         self._ultima = self._clock()
 
-    def fetch(self, url: str) -> FetchResult:
-        """Descarga la URL si está permitida; nunca lanza por errores HTTP o de red."""
+    def _motivo_bloqueo(self, url: str) -> str | None:
+        """Motivo por el que no se puede pedir la URL, o `None` si está permitida."""
         if (urlsplit(url).hostname or "").lower() != self._host:
-            return FetchResult(url=url, skipped="fuera del dominio objetivo")
+            return "fuera del dominio objetivo"
         if self.robots is not None and not self.robots.is_allowed(url, self._user_agent):
-            return FetchResult(url=url, skipped="prohibida por robots.txt")
+            return "prohibida por robots.txt"
+        return None
 
-        self.wait_turn()
-        self.requests_made += 1
+    def fetch(self, url: str) -> FetchResult:
+        """Descarga la URL si está permitida; nunca lanza por errores HTTP o de red.
+
+        Las redirecciones se siguen a mano (máximo `MAX_REDIRECCIONES`) para validar
+        cada salto contra el dominio y `robots.txt` y respetar la pausa en cada uno.
+        """
+        if motivo := self._motivo_bloqueo(url):
+            return FetchResult(url=url, skipped=motivo)
+
+        actual = url
         inicio = self._clock()
-        try:
-            respuesta = self._client.get(url)
-        except httpx.HTTPError as exc:
-            logger.warning("Fallo de red", extra={"url": url, "error": repr(exc)})
-            return FetchResult(url=url, error=f"{type(exc).__name__}: {exc}")
+        for _ in range(MAX_REDIRECCIONES + 1):
+            self.wait_turn()
+            self.requests_made += 1
+            try:
+                respuesta = self._client.get(actual, follow_redirects=False)
+            except httpx.HTTPError as exc:
+                logger.warning("Fallo de red", extra={"url": actual, "error": repr(exc)})
+                return FetchResult(url=url, final_url=actual, error=f"{type(exc).__name__}: {exc}")
+
+            destino = respuesta.headers.get("location")
+            if not (respuesta.is_redirect and destino):
+                break
+            siguiente = urljoin(actual, destino)
+            if motivo := self._motivo_bloqueo(siguiente):
+                return FetchResult(
+                    url=url,
+                    final_url=siguiente,
+                    status=respuesta.status_code,
+                    skipped=f"redirige a una URL {motivo}",
+                )
+            actual = siguiente
+        else:
+            return FetchResult(url=url, final_url=actual, error="demasiadas redirecciones")
+
         resultado = FetchResult(
             url=url,
-            final_url=str(respuesta.url),
+            final_url=actual,
             status=respuesta.status_code,
             content_type=respuesta.headers.get("content-type"),
             size_bytes=len(respuesta.content),

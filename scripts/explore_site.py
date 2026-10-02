@@ -4,11 +4,14 @@ Uso:
     python scripts/explore_site.py [--sample-size 10] [--render]
 
 `--render` compara el HTML estático con el renderizado por un navegador headless.
-Requiere Playwright, que no es dependencia del proyecto; se usa de forma efímera:
-    uv run --with playwright playwright install chromium
-    uv run --with playwright python scripts/explore_site.py --render
+Requiere Playwright, que no es dependencia del proyecto (ver ADR-009); se instala
+de forma temporal en el entorno virtual:
+    uv pip install playwright && playwright install chromium
+    python scripts/explore_site.py --render
+    uv pip uninstall playwright
 """
 
+import contextlib
 import json
 import logging
 from pathlib import Path
@@ -34,6 +37,7 @@ class PlaywrightRenderer:
     """
 
     _BLOQUEADOS = frozenset({"image", "font", "media"})
+    _ESPERA_RED_MS = 5000
 
     def __init__(self, user_agent: str, timeout_seconds: float) -> None:
         """Arranca el navegador; falla con un mensaje claro si falta Playwright."""
@@ -42,7 +46,8 @@ class PlaywrightRenderer:
         except ImportError as exc:
             raise ConfigurationError(
                 "--render requiere Playwright",
-                detail="ejecuta con: uv run --with playwright python scripts/explore_site.py",
+                detail="instálalo temporalmente: uv pip install playwright && "
+                "playwright install chromium",
             ) from exc
         self._pw = sync_playwright().start()
         self._browser = self._pw.chromium.launch(headless=True)
@@ -60,10 +65,14 @@ class PlaywrightRenderer:
     def render(self, url: str) -> str:
         """Devuelve el HTML tras cargar la página y esperar a que la red se calme."""
         from playwright.sync_api import Error as PlaywrightError
+        from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
         page = self._context.new_page()
         try:
-            page.goto(url, wait_until="networkidle", timeout=self._timeout_ms)
+            page.goto(url, wait_until="load", timeout=self._timeout_ms)
+            # La analítica mantiene conexiones abiertas: networkidle puede no llegar nunca.
+            with contextlib.suppress(PlaywrightTimeoutError):
+                page.wait_for_load_state("networkidle", timeout=self._ESPERA_RED_MS)
             return page.content()
         except PlaywrightError as exc:
             raise ScrapingError("No se pudo renderizar la página", detail=str(exc)) from exc
@@ -127,7 +136,6 @@ def main(
         with httpx.Client(
             headers={"User-Agent": ua},
             timeout=settings.crawl_timeout_seconds,
-            follow_redirects=True,
         ) as client:
             fetcher = PoliteFetcher(
                 client,

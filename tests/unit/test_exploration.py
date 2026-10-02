@@ -8,6 +8,7 @@ import pytest
 
 from rag_bbva.exceptions import ScrapingError
 from rag_bbva.scraping.exploration import (
+    MAX_REDIRECCIONES,
     PoliteFetcher,
     SiteExplorer,
     choose_sample,
@@ -96,9 +97,7 @@ def _sitio(peticiones: list[httpx.Request]) -> Callable[[httpx.Request], httpx.R
 
 
 def _fetcher(handler: Callable[[httpx.Request], httpx.Response], reloj: Reloj) -> PoliteFetcher:
-    client = httpx.Client(
-        transport=httpx.MockTransport(handler), headers={"User-Agent": UA}, follow_redirects=True
-    )
+    client = httpx.Client(transport=httpx.MockTransport(handler), headers={"User-Agent": UA})
     return PoliteFetcher(
         client,
         user_agent=UA,
@@ -212,11 +211,10 @@ def test_explore_aplica_crawl_delay_entre_peticiones(
 
     reporte = explorer.explore(sample_size=10)
 
-    # Una redirección son dos peticiones HTTP dentro de una misma descarga lógica.
-    saltos_de_redireccion = 1
+    # Cada salto de redirección es una petición propia y también respeta la pausa.
     assert reporte.delay_seconds == 2
-    assert reporte.requests_made == len(peticiones) - saltos_de_redireccion
-    assert len(reloj.pausas) == reporte.requests_made - 1
+    assert reporte.requests_made == len(peticiones)
+    assert len(reloj.pausas) == len(peticiones) - 1
     assert all(p == 2 for p in reloj.pausas)
 
 
@@ -335,3 +333,72 @@ def test_choose_sample_mas_grande_que_el_universo() -> None:
     urls = ["https://b.co/a/1", "https://b.co/b/1"]
 
     assert sorted(choose_sample(urls, 10)) == urls
+
+
+def _redirector(destinos: dict[str, str]) -> Callable[[httpx.Request], httpx.Response]:
+    """Sitio que redirige según `destinos` y responde HTML en el resto de rutas."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/robots.txt":
+            return httpx.Response(200, content=ROBOTS)
+        if request.url.path in destinos:
+            return httpx.Response(302, headers={"location": destinos[request.url.path]})
+        return httpx.Response(200, headers={"content-type": "text/html"}, content=b"<p>ok</p>")
+
+    return handler
+
+
+def _fetcher_con_robots(destinos: dict[str, str]) -> tuple[PoliteFetcher, list[str]]:
+    pedidas: list[str] = []
+    base = _redirector(destinos)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        pedidas.append(str(request.url))
+        return base(request)
+
+    fetcher = _fetcher(handler, Reloj())
+    explorer = SiteExplorer(fetcher, base_url=BASE, user_agent=UA)
+    explorer._leer_robots()
+    return fetcher, pedidas
+
+
+def test_fetch_no_sigue_redireccion_a_otro_dominio() -> None:
+    """Un 3xx hacia otro host no se sigue; se registra el destino y el motivo."""
+    fetcher, pedidas = _fetcher_con_robots({"/fidu": "https://fiduciaria.banco.test/x"})
+
+    resultado = fetcher.fetch("https://www.banco.test/fidu")
+
+    assert resultado.status == 302
+    assert resultado.final_url == "https://fiduciaria.banco.test/x"
+    assert resultado.skipped == "redirige a una URL fuera del dominio objetivo"
+    assert not any("fiduciaria" in u for u in pedidas)
+
+
+def test_fetch_no_sigue_redireccion_prohibida_por_robots() -> None:
+    """Un 3xx hacia una ruta prohibida por robots.txt no se sigue."""
+    fetcher, pedidas = _fetcher_con_robots({"/a": "/personas/buscador"})
+
+    resultado = fetcher.fetch("https://www.banco.test/a")
+
+    assert resultado.skipped == "redirige a una URL prohibida por robots.txt"
+    assert "https://www.banco.test/personas/buscador" not in pedidas
+
+
+def test_fetch_sigue_redireccion_relativa_en_dominio() -> None:
+    """Un 3xx relativo dentro del dominio se sigue y se reporta la URL final."""
+    fetcher, _ = _fetcher_con_robots({"/viejo": "/nuevo?utm_source=redirect"})
+
+    resultado = fetcher.fetch("https://www.banco.test/viejo")
+
+    assert resultado.ok
+    assert resultado.final_url == "https://www.banco.test/nuevo?utm_source=redirect"
+
+
+def test_fetch_corta_bucles_de_redireccion() -> None:
+    """Un bucle de redirecciones termina con error tras MAX_REDIRECCIONES saltos."""
+    fetcher, pedidas = _fetcher_con_robots({"/a": "/b", "/b": "/a"})
+
+    resultado = fetcher.fetch("https://www.banco.test/a")
+
+    assert resultado.error == "demasiadas redirecciones"
+    assert len(pedidas) == 1 + MAX_REDIRECCIONES + 1

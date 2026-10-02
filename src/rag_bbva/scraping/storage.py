@@ -73,6 +73,26 @@ def text_fingerprint(content: bytes) -> str:
     return sha256(texto.encode("utf-8"))
 
 
+def read_manifest(manifest_path: Path) -> dict[str, ManifestEntry]:
+    """Lee un `manifest.jsonl` indexado por URL; las líneas inválidas se ignoran.
+
+    Solo lee: no crea directorios (lo usa también la limpieza de M3).
+    """
+    if not manifest_path.exists():
+        return {}
+    entradas: dict[str, ManifestEntry] = {}
+    for numero, linea in enumerate(manifest_path.read_text("utf-8").splitlines(), 1):
+        if not linea.strip():
+            continue
+        try:
+            entrada = ManifestEntry.model_validate_json(linea)
+        except ValidationError:
+            logger.warning("Línea inválida en el manifest", extra={"linea": numero})
+            continue
+        entradas[entrada.url] = entrada
+    return entradas
+
+
 def _escribir_atomico(destino: Path, datos: bytes) -> None:
     """Escribe en un temporal del mismo directorio y lo renombra (operación atómica)."""
     temporal = destino.with_name(f".{destino.name}.tmp")
@@ -124,19 +144,7 @@ class RawStorage:
 
     def load_manifest(self) -> dict[str, ManifestEntry]:
         """Lee el manifest existente indexado por URL; líneas inválidas se ignoran."""
-        if not self.manifest_path.exists():
-            return {}
-        entradas: dict[str, ManifestEntry] = {}
-        for numero, linea in enumerate(self.manifest_path.read_text("utf-8").splitlines(), 1):
-            if not linea.strip():
-                continue
-            try:
-                entrada = ManifestEntry.model_validate_json(linea)
-            except ValidationError:
-                logger.warning("Línea inválida en el manifest", extra={"linea": numero})
-                continue
-            entradas[entrada.url] = entrada
-        return entradas
+        return read_manifest(self.manifest_path)
 
     def write_manifest(self, entries: Iterable[ManifestEntry]) -> int:
         """Fusiona las entradas con el manifest previo (gana la nueva) y lo reescribe.

@@ -15,6 +15,8 @@ dependencies = [
     "numpy>=1.26",
     "pydantic>=2.6",
     "pydantic-settings>=2.2",
+    # Misma serie que la imagen qdrant/qdrant:v1.19.1 de docker-compose.yml.
+    "qdrant-client>=1.19.1,<1.20",
     "sentence-transformers>=3.0",
     "tenacity>=8.2",
     # CPU-only: instalar antes desde https://download.pytorch.org/whl/cpu (ver README).
@@ -40,6 +42,10 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra --strict-markers"
+filterwarnings = [
+    # El modo :memory: de qdrant-client (tests) avisa que los índices de payload no aplican.
+    "ignore:Payload indexes have no effect in the local Qdrant:UserWarning",
+]
 markers = [
     "integration: requiere servicios reales (Qdrant, API de xAI, red)",
     "slow: carga modelos pesados",

@@ -4,6 +4,21 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Sin publicar]
 
+## [m05] - 2026-10-02 — Indexación vectorial (Qdrant)
+### Añadido
+- Servicio `qdrant` en `docker-compose.yml`: imagen `qdrant/qdrant:v1.19.1`, volumen `qdrant_data`, puerto solo en `127.0.0.1` y healthcheck sobre `/readyz`. Dependencia `qdrant-client` 1.19.x.
+- `VectorStore` → `QdrantVectorStore` (Adapter): colección coseno, upsert por lotes con payload, búsqueda top-k con filtro por `section` (índice de payload), count, borrado por ids y errores traducidos a `IndexingError`.
+- Comando `ingest [--recreate]`:
+  - ids `uuid5` del `chunk_id`;
+  - sincronización completa: nuevos, actualizados, sin cambios y eliminados por hash del texto embebido;
+  - caché de embeddings en `data/embeddings/`;
+  - reporte con tiempos por etapa.
+- Configuración: `QDRANT_TIMEOUT_SECONDS`, `QDRANT_BATCH_SIZE`, `EMBEDDINGS_CACHE_DIR`; `QDRANT_URL=":memory:"` para el modo local.
+- Tests con `QdrantClient(":memory:")` y prueba de integración contra el Qdrant real (se salta si no responde).
+- README: cómo levantar Qdrant, comando `ingest`, patrón Adapter, stack.
+### Cambiado
+- `QDRANT_URL` por defecto `http://localhost:6333` (el Qdrant del compose desde la máquina local).
+
 ## [m04] - 2026-10-02 — Chunking + embeddings
 ### Añadido
 - Estrategias de chunking (Strategy):

@@ -60,8 +60,13 @@ class Settings(BaseSettings):
     model_cache_dir: Path = Path("models")
 
     # Base vectorial
-    qdrant_url: str = "http://qdrant:6333"
+    # Por defecto, el Qdrant del compose publicado en la máquina local; dentro de la red
+    # de Docker (M12) se usa QDRANT_URL=http://qdrant:6333.
+    qdrant_url: str = "http://localhost:6333"
     qdrant_collection: str = Field(default="bancolombia_docs", min_length=1)
+    qdrant_timeout_seconds: float = Field(default=10, gt=0)
+    qdrant_batch_size: int = Field(default=128, gt=0)
+    embeddings_cache_dir: Path = Path("data/embeddings")
 
     # Recuperación y reranking
     retrieval_top_k: int = Field(default=20, gt=0)

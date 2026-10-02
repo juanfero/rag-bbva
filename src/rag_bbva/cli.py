@@ -1,8 +1,8 @@
 """Interfaz de línea de comandos del proyecto.
 
 Uso: `python -m rag_bbva.cli <comando>` o `rag-bbva <comando>`.
-Comandos disponibles: `version`, `scrape` (M2), `clean` (M3) y `chunk` (M4). Los de
-las etapas siguientes (ingest, chat, metrics) se agregan en sus módulos respectivos.
+Comandos disponibles: `version`, `scrape` (M2), `clean` (M3), `chunk` (M4) e `ingest`
+(M5). Los de las etapas siguientes (chat, metrics) se agregan en sus módulos respectivos.
 """
 
 import json
@@ -20,6 +20,7 @@ from rag_bbva import __version__
 from rag_bbva.config import get_settings
 from rag_bbva.exceptions import ConfigurationError, IndexingError, ProcessingError, ScrapingError
 from rag_bbva.indexing.factory import ComponentFactory
+from rag_bbva.indexing.ingest import Ingestor, IngestReport
 from rag_bbva.indexing.pipeline import ChunkReport, chunk_documents, read_documents, write_chunks
 from rag_bbva.logging_conf import configure_logging
 from rag_bbva.processing.pipeline import CleaningPipeline, CleanReport, write_clean_output
@@ -212,6 +213,49 @@ def chunk(
         raise typer.Exit(code=1) from exc
     typer.echo(_resumen_chunks(resultado.report))
     typer.echo(f"Chunks: {ruta_chunks} · reporte: {ruta_reporte}")
+
+
+def _resumen_ingesta(reporte: IngestReport) -> str:
+    """Resumen legible de una ingesta."""
+    t = reporte.times
+    return "\n".join(
+        [
+            f"Colección: {reporte.collection} · estrategia: {reporte.chunker}"
+            + (" · reconstruida (--recreate)" if reporte.recreated else ""),
+            f"Documentos: {reporte.documents} · chunks: {reporte.chunks}",
+            f"Nuevos: {reporte.new} · actualizados: {reporte.updated} · sin cambios: "
+            f"{reporte.unchanged} · eliminados: {reporte.deleted}",
+            f"Embebidos: {reporte.embedded} · desde caché: {reporte.from_cache}",
+            f"Puntos en la colección: {reporte.points}",
+            f"Tiempos (s): chunking {t.chunking} · plan {t.sync_plan} · embeddings "
+            f"{t.embedding} · upsert {t.upsert} · borrado {t.delete} · total {t.total}",
+        ]
+    )
+
+
+@app.command()
+def ingest(
+    recreate: Annotated[
+        bool, typer.Option("--recreate", help="Borra y reconstruye la colección desde cero.")
+    ] = False,
+) -> None:
+    """Indexa CLEAN_DATA_DIR en Qdrant: chunks → embeddings (con caché) → upsert."""
+    settings = get_settings()
+    fabrica = ComponentFactory(settings)
+    try:
+        documentos = read_documents(settings.clean_data_dir)
+        ingestor = Ingestor(
+            chunker=fabrica.create_chunker(),
+            embedder=fabrica.create_embedder(),
+            store=fabrica.create_vector_store(),
+            cache=fabrica.create_embedding_cache(),
+            collection=settings.qdrant_collection,
+        )
+        reporte = ingestor.run(documentos, recreate=recreate)
+    except (IndexingError, ConfigurationError) as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(_resumen_ingesta(reporte))
 
 
 if __name__ == "__main__":

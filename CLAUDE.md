@@ -8,10 +8,11 @@ Leer siempre antes de trabajar: `docs/00_VISION_GENERAL.md` y `docs/01_PLAN_DE_M
 1. Se trabaja **un módulo a la vez** (M0 → M14). No adelantar código de módulos futuros.
 2. Al iniciar un módulo: crear rama `feat/mXX-nombre` y copiar `docs/modulos/_PLANTILLA.md` a `docs/modulos/MXX.md`.
 3. Un módulo se cierra **solo** si cumple la Definition of Done de `01_PLAN_DE_MODULOS.md`:
-   `pytest` en verde (incluye módulos anteriores), `ruff check .` limpio, bitácora y CHANGELOG actualizados.
-4. Si una prueba falla: corregir el código, nunca debilitar ni borrar la prueba para que pase.
-5. Ante cualquier ambigüedad del caso: **preguntar a Juan Felipe** antes de implementar; si se decide un supuesto, registrarlo en `00_VISION_GENERAL.md §9` y en `02_DECISIONES.md`.
-6. No cambiar el stack de `00_VISION_GENERAL.md §4` sin registrar la decisión (ADR).
+   `pytest` en verde (incluye módulos anteriores), `ruff check .` limpio, bitácora, CHANGELOG y **README** actualizados.
+4. **README incremental:** cada módulo actualiza el README con lo que aporta (estado, uso, patrones, limitaciones). Solo hechos verificables: nada se anuncia como hecho si no está implementado.
+5. Si una prueba falla: corregir el código, nunca debilitar ni borrar la prueba para que pase.
+6. Ante cualquier ambigüedad del caso: **preguntar a Juan Felipe** antes de implementar; si se decide un supuesto, registrarlo en `00_VISION_GENERAL.md §9` y en `02_DECISIONES.md`.
+7. No cambiar el stack de `00_VISION_GENERAL.md §4` sin registrar la decisión (ADR).
 
 ## Fuente de datos
 - La fuente de datos es **Bancolombia** (ADR-008). El código conserva el nombre `rag_bbva`, pero **todo texto visible al usuario (prompts, UI, respuestas, README) dice Bancolombia**.

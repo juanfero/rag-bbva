@@ -3,6 +3,11 @@
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Sin publicar]
+### Añadido
+- README inicial e incremental: estado M0–M14, nota de fuente Bancolombia (ADR-008), arquitectura, instalación verificada, patrones, stack, decisiones, limitaciones y mejoras futuras.
+### Cambiado
+- Proceso: el README se actualiza en cada módulo (Definition of Done, punto 7; regla en `CLAUDE.md`). M14 pasa a ser pulido final y verificación desde cero.
+- La tabla de limitaciones se mueve de `00_VISION_GENERAL.md §12` al README; §12 la enlaza.
 
 ## [m01] - 2026-10-01 — Exploración del sitio
 ### Añadido

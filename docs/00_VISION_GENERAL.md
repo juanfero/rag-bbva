@@ -273,15 +273,6 @@ Salida: comando CLI `metrics`, endpoint `GET /analytics/summary`, página "Métr
 
 ---
 
-## 12. Limitaciones conocidas (insumo de la sección del README)
+## 12. Limitaciones conocidas
 
-Se acumulan aquí a medida que aparecen; M14 las traslada al README.
-
-| ID | Limitación | Origen |
-|---|---|---|
-| L-01 | **Fuente de datos distinta al cliente:** el contenido es de `www.bancolombia.com`, no de `www.bbva.com.co`, que bloquea con 403 (WAF) a todo cliente no navegador. El código conserva el nombre `rag_bbva`; los textos visibles dicen Bancolombia | ADR-008 |
-| L-02 | **Política de bots de IA de Bancolombia:** su `robots.txt` bloquea por completo a los bots de *entrenamiento* de IA (GPTBot, ClaudeBot, Google-Extended, Applebot-Extended, cohere-ai). Nuestro uso es recuperación (RAG), no entrenamiento, con un User-Agent identificable (`RAG-BBVA-TechTest/1.0`) que respeta las reglas del grupo `*` y una pausa de 1 s entre peticiones | M1, `docs/exploracion_sitio.md` §1 |
-| L-03 | **Contenido dinámico no capturado:** sin renderizar JS no se obtienen el banner de cookies, carruseles ni listas de enlaces dinámicas; su contenido llega por las páginas enlazadas | ADR-009 |
-| L-04 | **Sin PDFs:** quedan fuera del alcance y además `robots.txt` los prohíbe (`/*pdf*`) | S-03 |
-| L-05 | **Foto del sitio:** el índice refleja el sitio en la fecha del scraping; la demo usa un snapshot versionado de datos limpios | S-07, M12 |
-
+La tabla de limitaciones (L-01, L-02, …) **vive en el README**: [Limitaciones conocidas](../README.md#limitaciones-conocidas). Cada módulo agrega allí las suyas (Definition of Done, punto 7).

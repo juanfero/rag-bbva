@@ -21,7 +21,7 @@
 | M11 | Analítica del historial | Métricas + valores de impacto | R8 | 2.5 h |
 | M12 | Dockerización completa | `docker compose up` de un solo comando | R2 | 2.5 h |
 | M13 | Evaluación de calidad | Golden set + métricas de retrieval con/sin reranker | Valor agregado | 2 h |
-| M14 | README final y cierre | README completo, verificación desde cero | R4, R9 | 2 h |
+| M14 | Pulido final del README y cierre | Pulido del README y verificación desde cero en una carpeta limpia | R4, R9 | 2 h |
 
 **Total estimado:** ~33 h. Sin fecha límite fija: todos los módulos están en alcance.
 
@@ -35,6 +35,7 @@
 4. ✅ `CHANGELOG.md` actualizado.
 5. ✅ Decisiones nuevas registradas en `docs/02_DECISIONES.md`.
 6. ✅ Commits descriptivos (Conventional Commits), merge a `main`, tag `mXX`, push.
+7. ✅ README actualizado con lo que aporta el módulo (estado, uso, patrones, limitaciones). El README se construye de forma incremental, no al final.
 
 ---
 
@@ -274,10 +275,10 @@
 
 ---
 
-## M14 — README final y cierre
+## M14 — Pulido final del README y cierre
 
-- **Primera línea del README:** explica que la fuente de datos es Bancolombia y no BBVA (bbva.com.co bloquea crawlers) y enlaza la entrada ADR-008 de `docs/02_DECISIONES.md` (ancla de GitHub: `#adr-008--fuente-de-datos-bancolombia-en-lugar-de-bbva-colombia`).
-- Limitaciones: trasladar la tabla de `00_VISION_GENERAL.md §12`.
-- README con las 7 secciones exigidas + diagrama de arquitectura + tabla de patrones con rutas de archivo + limitaciones honestas + mejoras futuras.
-- Verificación: clonar en carpeta nueva y seguir el README literalmente.
+El README se construye de forma incremental desde M0–M1 (Definition of Done, punto 7). M14 no lo redacta desde cero: lo pule y lo verifica.
+- Revisar que las 7 secciones exigidas estén completas y que el estado, los patrones (con rutas reales), el stack, las limitaciones y las mejoras futuras reflejen el código final.
+- Mantener la nota inicial sobre la fuente Bancolombia con el enlace a ADR-008 (ancla de GitHub: `#adr-008--fuente-de-datos-bancolombia-en-lugar-de-bbva-colombia`).
+- **Verificación desde cero en una carpeta limpia:** clonar el repo en una carpeta nueva y seguir el README literalmente (instalación, Docker, uso); corregir cualquier paso que falle.
 - Revisión del historial de commits; tag `v1.0.0`.

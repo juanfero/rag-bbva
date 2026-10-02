@@ -77,10 +77,15 @@ git clone https://github.com/juanfero/rag-bbva.git
 cd rag-bbva
 uv venv --python 3.11
 source .venv/bin/activate
+# 1) torch CPU-only primero, desde el índice de PyTorch: evita bajar CUDA (~GB) desde PyPI
+uv pip install torch --index-url https://download.pytorch.org/whl/cpu
+# 2) el proyecto y sus dependencias (torch ya instalado se respeta)
 uv pip install -e ".[dev]"
 cp .env.example .env            # opcional por ahora: sin .env se usan los defaults
 
-pytest                          # suite completa (sin red)
+pytest -m "not slow"            # suite rápida (sin red ni modelos)
+pytest                          # incluye los tests `slow`: descarga una vez el modelo
+                                # de embeddings (~470 MB) a MODEL_CACHE_DIR (models/)
 ruff check . && ruff format --check .
 
 python -m rag_bbva.cli version  # o: rag-bbva version

@@ -17,7 +17,7 @@ Prueba técnica de ML/AI Engineer: un sistema RAG (*Retrieval-Augmented Generati
 | M2 | Scraper (datos crudos): sitemaps + BFS, robots, reintentos, manifest incremental | ✅ | `m02` |
 | M3 | Limpieza (datos limpios): pipeline de pasos, metadatos, idioma, deduplicación, chequeo de fugas | ✅ | `m03` |
 | M4 | Chunking + embeddings: estrategias de chunking, e5-small en CPU, fábrica de componentes | ✅ | `m04` |
-| M5 | Indexación vectorial (Qdrant) | ⏳ | — |
+| M5 | Indexación vectorial (Qdrant): `ingest` idempotente con sincronización y caché de embeddings | 🚧 en revisión (rama `feat/m05-qdrant`) | — |
 | M6 | Recuperación + reranker | ⏳ | — |
 | M7 | Generación con LLM (Grok) | ⏳ | — |
 | M8 | Memoria conversacional | ⏳ | — |
@@ -34,7 +34,7 @@ Detalle de cada módulo: [plan de módulos](docs/01_PLAN_DE_MODULOS.md) y bitác
 
 ## Arquitectura
 
-Diseño objetivo ([visión general §3](docs/00_VISION_GENERAL.md)). Hoy existen las tres primeras etapas de la ingesta: **Crawler → `data/raw/`** (M2), **Limpieza → `data/clean/`** (M3) y **Chunking → `data/chunks/`** con embeddings en CPU (M4, todavía sin base vectorial), además de la configuración, la CLI y la exploración del sitio (M0–M1).
+Diseño objetivo ([visión general §3](docs/00_VISION_GENERAL.md)). Hoy existe la ingesta completa: **Crawler → `data/raw/`** (M2), **Limpieza → `data/clean/`** (M3), **Chunking → `data/chunks/`** con embeddings en CPU (M4) e **indexación en Qdrant** (M5), además de la configuración, la CLI y la exploración del sitio (M0–M1).
 
 **Ingesta (offline)**
 ```
@@ -152,9 +152,24 @@ python -m rag_bbva.cli chunk --strategy fixed_size    # línea base
 - **Embeddings:** `intfloat/multilingual-e5-small` (384 dimensiones) en CPU, con prefijos `query: `/`passage: ` y vectores normalizados (L2).
   - El modelo se descarga una vez (~470 MB) a `MODEL_CACHE_DIR` (`models/`, ignorado por git).
   - Embeber los ~3500 chunks toma ~2,6 min en CPU. Con el modelo ya en caché se carga sin consultar Hugging Face ([evidencia M04](docs/modulos/M04.md#6-evidencia-manual)).
-  - La base vectorial llega en M5.
+  - La base vectorial se llena con `ingest` (M5).
 
-**Docker.** Hoy solo existe la imagen base: `docker build .` y `docker compose run --rm api` ejecutan el comando `version`.
+**Indexación en Qdrant (M5).** Levanta Qdrant (imagen fija `qdrant/qdrant:v1.19.1`, volumen `qdrant_data`, puerto solo en `127.0.0.1:6333`) e indexa los documentos limpios:
+```bash
+docker compose up -d qdrant                 # espera a que quede "healthy" (docker compose ps)
+python -m rag_bbva.cli ingest               # chunks → embeddings (con caché) → Qdrant
+python -m rag_bbva.cli ingest --recreate    # borra la colección y la reconstruye desde cero
+```
+- **Idempotente:** cada chunk se guarda con un id determinista (`uuid5` de su `chunk_id`).
+  - Re-ingestar no duplica.
+  - Los chunks cuyo texto no cambió no se re-embeben ni se reescriben.
+  - Los puntos de chunks que ya no existen se **borran** (sincronización completa).
+- **Caché de embeddings** en `EMBEDDINGS_CACHE_DIR` (`data/embeddings/`, ignorada por git): `--recreate` o un cambio de ids reutilizan los vectores ya calculados.
+- **Reporte:** chunks, nuevos, actualizados, sin cambios, eliminados, embebidos, desde caché, puntos y tiempos por etapa.
+- **Corrida real:** 3506 puntos en 2,5 min (casi todo embeddings en CPU). La re-ingesta sin cambios toma 0,2 s y no embebe nada ([evidencia M05](docs/modulos/M05.md#6-evidencia-manual)).
+- **Configuración:** por defecto `QDRANT_URL=http://localhost:6333` (el Qdrant del compose); dentro de la red de Docker (M12) será `http://qdrant:6333`. Si Qdrant no responde, `ingest` termina con un error claro (código 1).
+
+**Docker.** Hoy existen la imagen base (`docker build .`; `docker compose run --rm api` ejecuta el comando `version`) y el servicio `qdrant` para desarrollo (`docker compose up -d qdrant`).
 🚧 **El despliegue completo con `docker compose up -d --build` (Qdrant, API, UI) se completa en M12.** Ese arranque no scrapeará el sitio: usará un snapshot versionado de datos limpios.
 
 ---
@@ -177,6 +192,7 @@ El caso exige al menos 3. Previstos en la [visión general §6](docs/00_VISION_G
 | **Template Method** | [`src/rag_bbva/scraping/base.py`](src/rag_bbva/scraping/base.py): `BaseCrawler.crawl()`; subclase concreta [`SitemapBfsCrawler`](src/rag_bbva/scraping/crawler.py) | `crawl()` fija el algoritmo (`prepare` → `discover_urls` → `fetch` → `validate` → `persist` → `extract_links`) y aplica en un solo lugar los límites, la deduplicación y el corte por bloqueo. Las subclases solo redefinen los pasos | ✅ M2 |
 | **Chain of Responsibility / Pipeline** | [`src/rag_bbva/processing/steps.py`](src/rag_bbva/processing/steps.py): `CleaningStep` (`set_next`/`handle`) y sus pasos; [`src/rag_bbva/processing/pipeline.py`](src/rag_bbva/processing/pipeline.py): `CleaningPipeline` | Cada paso de la limpieza (parseo, metadatos, boilerplate, extracción, normalización, idioma, longitud, duplicados) es una clase que transforma el documento y lo pasa al siguiente, o corta la cadena con el motivo del descarte. Se prueban por separado y se pueden reordenar o sustituir | ✅ M3 |
 | **Factory** | [`src/rag_bbva/indexing/factory.py`](src/rag_bbva/indexing/factory.py): `ComponentFactory` (`create_chunker`, `create_embedder`); `llm/factory.py` | Crear chunker y embedder (luego LLM, vector store y reranker) desde la configuración (`CHUNKING_STRATEGY`, `EMBEDDING_PROVIDER`) sin acoplar el resto del código a clases concretas | ✅ parcial (M4). LLM, vector store y reranker: M5–M7 |
+| **Adapter** (puerto de la base vectorial) | [`src/rag_bbva/indexing/vector_store.py`](src/rag_bbva/indexing/vector_store.py): interfaz `VectorStore` → `QdrantVectorStore` | La ingesta (y la recuperación de M6) hablan con una interfaz propia: `ensure_collection`, `upsert`, `search` con filtro por sección, `count`, `delete`. El adaptador traduce a `qdrant-client` y sus errores a `IndexingError`. Los tests usan el mismo adaptador sobre `QdrantClient(":memory:")` | ✅ M5 |
 | **Repository** | `memory/repository.py` | Aislar la persistencia del historial (SQLite en producción, memoria en tests) | ⏳ M8 |
 | **Facade** | `services/rag_service.py` | Un único punto de entrada `ask(conversation_id, pregunta)` que orquesta todo el flujo | ⏳ M9 |
 
@@ -196,7 +212,7 @@ El caso exige al menos 3. Previstos en la [visión general §6](docs/00_VISION_G
 | Extracción de texto | `trafilatura` + reglas propias | Reglas por selector para el boilerplate conocido del sitio y trafilatura para el contenido principal, con *fallback* por selector cuando omite contenido | ✅ en uso (M3) |
 | Embeddings | `intfloat/multilingual-e5-small` vía `sentence-transformers` | Gratis, multilingüe, corre en CPU; 384 dimensiones ([ADR-005](docs/02_DECISIONES.md)) | ✅ en uso (M4) |
 | Cómputo de modelos | `torch` CPU-only | Instalado desde el índice CPU de PyTorch: sin CUDA, para una imagen Docker liviana (M12) | ✅ en uso (M4) |
-| Base vectorial | Qdrant self-hosted | Gratis, Docker oficial, filtros por metadatos ([ADR-002](docs/02_DECISIONES.md)) | ⏳ M5 |
+| Base vectorial | Qdrant self-hosted `v1.19.1` + `qdrant-client` 1.19 | Gratis, Docker oficial, filtros por metadatos ([ADR-002](docs/02_DECISIONES.md)) | ✅ en uso (M5; compose de desarrollo) |
 | Reranker | `cross-encoder/mmarco-mMiniLMv2-L12-H384-v1` | Multilingüe y liviano ([ADR-005](docs/02_DECISIONES.md)) | ⏳ M6 |
 | LLM | Grok (xAI) vía SDK `openai` | Calidad en español sin GPU local; es de pago y queda aislado tras una interfaz ([ADR-003](docs/02_DECISIONES.md)) | ⏳ M7 |
 | Orquestación RAG | Código propio, sin LangChain | Patrones visibles y testeables ([ADR-001](docs/02_DECISIONES.md)) | ⏳ M9 |
@@ -272,7 +288,7 @@ rag-bbva/
 │   ├── config.py · exceptions.py · logging_conf.py · cli.py
 │   ├── scraping/          # robots, sitemap, urls, fetcher, discovery, storage, base (Template Method), crawler, page_analysis, exploration
 │   ├── processing/        # models, markdown, steps (Chain of Responsibility), pipeline, quality
-│   ├── indexing/          # models, chunking (Strategy), embedding, factory (Factory), pipeline
+│   ├── indexing/          # models, chunking (Strategy), embedding, embedding_cache, factory (Factory), pipeline, vector_store (Adapter), ingest
 │   └── retrieval/ llm/ memory/ services/ api/ ui/ analytics/   # vacíos (próximos módulos)
 ├── scripts/explore_site.py · scripts/trim_html_fixture.py
 ├── tests/unit/ · tests/fixtures/ (robots, sitemaps, html: páginas reales recortadas de las 3 plantillas; clean: glosario limpio) · tests/integration/
@@ -285,5 +301,5 @@ Documentación:
 - [Plan de módulos](docs/01_PLAN_DE_MODULOS.md): tareas, pruebas de aceptación y Definition of Done.
 - [Decisiones (ADR)](docs/02_DECISIONES.md).
 - [Exploración del sitio](docs/exploracion_sitio.md) y su [evidencia JSON](docs/evidencia/).
-- Bitácoras por módulo: [M00](docs/modulos/M00.md) · [M01](docs/modulos/M01.md) · [M02](docs/modulos/M02.md) · [M03](docs/modulos/M03.md) · [M04](docs/modulos/M04.md).
+- Bitácoras por módulo: [M00](docs/modulos/M00.md) · [M01](docs/modulos/M01.md) · [M02](docs/modulos/M02.md) · [M03](docs/modulos/M03.md) · [M04](docs/modulos/M04.md) · [M05](docs/modulos/M05.md).
 - [CHANGELOG](CHANGELOG.md).

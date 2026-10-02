@@ -1,5 +1,7 @@
-# Compose mínimo de M0: solo el servicio `api` con un comando placeholder.
-# Qdrant, init, API real, UI y volúmenes (data/, historial) se agregan en M12.
+# Compose de desarrollo.
+# - M0: servicio `api` con un comando placeholder.
+# - M5: servicio `qdrant` para indexar y probar en local (`docker compose up -d qdrant`).
+# init, API real, UI y volúmenes de data/ e historial se completan en M12.
 services:
   api:
     build: .
@@ -8,3 +10,25 @@ services:
       - path: .env
         required: false
     command: ["python", "-m", "rag_bbva.cli", "version"]
+
+  qdrant:
+    # Versión fija, compatible con qdrant-client 1.19.x (pyproject.toml).
+    image: qdrant/qdrant:v1.19.1
+    ports:
+      - "127.0.0.1:6333:6333"   # API REST, solo en la máquina local
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      # La imagen no trae curl ni wget: se consulta /readyz con bash y /dev/tcp.
+      test:
+        - "CMD"
+        - "bash"
+        - "-c"
+        - "exec 3<>/dev/tcp/127.0.0.1/6333 && printf 'GET /readyz HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q '200 OK' <&3"
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+
+volumes:
+  qdrant_data:

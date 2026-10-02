@@ -197,6 +197,10 @@ El caso pide mínimo 3. Se implementan 6 para tener margen, pero el README desta
 | `CRAWL_DELAY_SECONDS` | `1.0` | Pausa entre peticiones (cortesía) |
 | `CRAWL_USER_AGENT` | `RAG-BBVA-TechTest/1.0` | User-Agent identificable |
 | `CRAWL_TIMEOUT_SECONDS` | `20` | Timeout por petición HTTP (agregada en M1) |
+| `CRAWL_MAX_RETRIES` | `3` | Reintentos ante errores transitorios (5xx, timeouts) con backoff exponencial (M2) |
+| `CRAWL_BACKOFF_SECONDS` | `2.0` | Espera base del backoff: 2, 4, 8 s… (M2) |
+| `CRAWL_BLOCK_THRESHOLD` | `5` | Respuestas 403/429 consecutivas que abortan el crawl (M2) |
+| `RAW_DATA_DIR` | `data/raw` | Carpeta de HTML crudo y `manifest.jsonl` (M2) |
 | `CHUNK_SIZE` | `800` | Tamaño de chunk (caracteres) |
 | `CHUNK_OVERLAP` | `120` | Solapamiento |
 | `EMBEDDING_MODEL` | `intfloat/multilingual-e5-small` | Modelo de embeddings |

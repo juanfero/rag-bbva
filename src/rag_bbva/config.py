@@ -13,6 +13,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
 LLMProviderName = Literal["xai", "fake"]
+ChunkingStrategyName = Literal["heading_aware", "fixed_size"]
+EmbeddingProviderName = Literal["sentence_transformers", "fake"]
 
 
 class Settings(BaseSettings):
@@ -47,9 +49,15 @@ class Settings(BaseSettings):
     clean_min_extraction_coverage: float = Field(default=0.9, ge=0, le=1)
 
     # Chunking y embeddings
+    chunks_data_dir: Path = Path("data/chunks")
+    chunking_strategy: ChunkingStrategyName = "heading_aware"
     chunk_size: int = Field(default=800, gt=0)
     chunk_overlap: int = Field(default=120, ge=0)
+    chunk_min_chars: int = Field(default=100, ge=0)
+    embedding_provider: EmbeddingProviderName = "sentence_transformers"
     embedding_model: str = "intfloat/multilingual-e5-small"
+    embedding_batch_size: int = Field(default=32, gt=0)
+    model_cache_dir: Path = Path("models")
 
     # Base vectorial
     qdrant_url: str = "http://qdrant:6333"

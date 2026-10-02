@@ -16,7 +16,7 @@ Prueba técnica de ML/AI Engineer: un sistema RAG (*Retrieval-Augmented Generati
 | M1 | Exploración del sitio: robots.txt, sitemaps, dependencia de JS, alcance | ✅ | `m01` |
 | M2 | Scraper (datos crudos): sitemaps + BFS, robots, reintentos, manifest incremental | ✅ | `m02` |
 | M3 | Limpieza (datos limpios): pipeline de pasos, metadatos, idioma, deduplicación, chequeo de fugas | ✅ | `m03` |
-| M4 | Chunking + embeddings | ⏳ | — |
+| M4 | Chunking + embeddings: estrategias de chunking, e5-small en CPU, fábrica de componentes | ✅ | `m04` |
 | M5 | Indexación vectorial (Qdrant) | ⏳ | — |
 | M6 | Recuperación + reranker | ⏳ | — |
 | M7 | Generación con LLM (Grok) | ⏳ | — |
@@ -34,7 +34,7 @@ Detalle de cada módulo: [plan de módulos](docs/01_PLAN_DE_MODULOS.md) y bitác
 
 ## Arquitectura
 
-Diseño objetivo ([visión general §3](docs/00_VISION_GENERAL.md)). Hoy existen las dos primeras etapas de la ingesta: **Crawler → `data/raw/`** (M2) y **Limpieza → `data/clean/`** (M3), además de la configuración, la CLI y la exploración del sitio (M0–M1).
+Diseño objetivo ([visión general §3](docs/00_VISION_GENERAL.md)). Hoy existen las tres primeras etapas de la ingesta: **Crawler → `data/raw/`** (M2), **Limpieza → `data/clean/`** (M3) y **Chunking → `data/chunks/`** con embeddings en CPU (M4, todavía sin base vectorial), además de la configuración, la CLI y la exploración del sitio (M0–M1).
 
 **Ingesta (offline)**
 ```
@@ -77,10 +77,15 @@ git clone https://github.com/juanfero/rag-bbva.git
 cd rag-bbva
 uv venv --python 3.11
 source .venv/bin/activate
+# 1) torch CPU-only primero, desde el índice de PyTorch: evita bajar CUDA (~GB) desde PyPI
+uv pip install torch --index-url https://download.pytorch.org/whl/cpu
+# 2) el proyecto y sus dependencias (torch ya instalado se respeta)
 uv pip install -e ".[dev]"
 cp .env.example .env            # opcional por ahora: sin .env se usan los defaults
 
-pytest                          # suite completa (sin red)
+pytest -m "not slow"            # suite rápida (sin red ni modelos)
+pytest                          # incluye los tests `slow`: descarga una vez el modelo
+                                # de embeddings (~470 MB) a MODEL_CACHE_DIR (models/)
 ruff check . && ruff format --check .
 
 python -m rag_bbva.cli version  # o: rag-bbva version
@@ -125,12 +130,29 @@ python -m rag_bbva.cli clean
 - `clean_report.json`: procesados, conservados, descartados por motivo (con la lista de URLs), distribución de longitudes, documentos por sección, plantilla, método de extracción e idioma, y el chequeo de **fugas de boilerplate**.
 
 Cómo limpia (pasos en [`processing/steps.py`](src/rag_bbva/processing/steps.py)):
-1. Quita del HTML la navegación, la cabecera y el pie, los menús de portlet con `${…}`, las cajas de error `.lrpError`, los iconos, el banner de cookies y el bloque rotativo de contenido relacionado (L-08).
-2. Toma el contenedor de cada plantilla del sitio (`main` → `#main-content` → `[role=main]`). Usa trafilatura si conserva al menos el 90 % del vocabulario del contenedor; si no, convierte el contenedor a markdown por selector.
+1. Quita del HTML la navegación, la cabecera y el pie, los menús de portlet con `${…}`, las cajas de error `.lrpError`, los iconos, el banner de cookies, el bloque rotativo de contenido relacionado (L-08), los bloques repetidos de venta cruzada ("Descubre otros canales…", "Si te gustó este producto…") y rótulos de interfaz como "Link copiado en porta papeles".
+2. Toma el contenedor de cada plantilla del sitio (`main` → `#main-content` → `[role=main]`). Usa trafilatura si conserva al menos el 90 % del vocabulario del contenedor y el orden de sus bloques; si no, convierte el contenedor a markdown por selector.
 3. Normaliza Unicode y espacios, y detecta el idioma.
 4. Descarta los textos de menos de 200 caracteres y los duplicados (soft-404), registrando el motivo.
 
 El resultado es determinista: la misma entrada produce la misma salida.
+
+**Chunking y embeddings (M4).** Trocea `data/clean/documents.jsonl` y deja en `data/chunks/` (ignorado por git) `chunks.jsonl` y `chunk_report.json`:
+```bash
+python -m rag_bbva.cli chunk                          # estrategia de CHUNKING_STRATEGY (heading_aware)
+python -m rag_bbva.cli chunk --strategy fixed_size    # línea base
+```
+- **`heading_aware`** (por defecto):
+  - Divide por los títulos markdown de la limpieza y agrupa secciones pequeñas consecutivas hasta `CHUNK_SIZE`=800 caracteres.
+  - Parte por tamaño, con `CHUNK_OVERLAP`=120 y sin cortar palabras, solo las secciones que no caben.
+  - Cada chunk lleva su `heading_path` ("Título > Sección > Subsección").
+- **`fixed_size`:** parte el texto completo por tamaño.
+- **Qué guarda cada chunk:** `chunk_id` determinista, `doc_id`, `url`, `title`, `section`, `heading_path`, `lang`, `position`, `n_chars`, `text` (para citar) y `embedding_text` (encabezado con título, sección y ruta + texto: lo que se embebe).
+- **El reporte** trae la distribución de tamaños, los chunks por documento y por sección, los chunks muy cortos y los que superarían los 512 tokens del modelo, contados con su tokenizer real. En la corrida real: 3506 chunks y 0 sobre el máximo.
+- **Embeddings:** `intfloat/multilingual-e5-small` (384 dimensiones) en CPU, con prefijos `query: `/`passage: ` y vectores normalizados (L2).
+  - El modelo se descarga una vez (~470 MB) a `MODEL_CACHE_DIR` (`models/`, ignorado por git).
+  - Embeber los ~3500 chunks toma ~2,6 min en CPU. Con el modelo ya en caché se carga sin consultar Hugging Face ([evidencia M04](docs/modulos/M04.md#6-evidencia-manual)).
+  - La base vectorial llega en M5.
 
 **Docker.** Hoy solo existe la imagen base: `docker build .` y `docker compose run --rm api` ejecutan el comando `version`.
 🚧 **El despliegue completo con `docker compose up -d --build` (Qdrant, API, UI) se completa en M12.** Ese arranque no scrapeará el sitio: usará un snapshot versionado de datos limpios.
@@ -150,10 +172,11 @@ El caso exige al menos 3. Previstos en la [visión general §6](docs/00_VISION_G
 | Patrón | Dónde | Por qué | Estado |
 |---|---|---|---|
 | **Singleton (vía caché)** | [`src/rag_bbva/config.py`](src/rag_bbva/config.py): `get_settings()` con `lru_cache` | La configuración se lee y valida una sola vez; todo el código la obtiene del mismo punto | ✅ M0 |
-| **Strategy** (inyección de dependencias) | [`src/rag_bbva/scraping/exploration.py`](src/rag_bbva/scraping/exploration.py): `Renderer` (`Protocol`); [`src/rag_bbva/scraping/storage.py`](src/rag_bbva/scraping/storage.py): función de huella inyectable en `RawStorage` | El explorador funciona con Playwright, con un doble o sin renderizador. El almacenamiento detecta cambios con la huella que se le inyecte (bytes por defecto, texto visible en el crawler) sin cambiar su código | ✅ parcial (M1–M2). Las estrategias principales (`ChunkingStrategy`, `LLMProvider`, `Reranker`) llegan en M4, M6 y M7 |
+| **Strategy** (inyección de dependencias) | [`src/rag_bbva/scraping/exploration.py`](src/rag_bbva/scraping/exploration.py): `Renderer` (`Protocol`); [`src/rag_bbva/scraping/storage.py`](src/rag_bbva/scraping/storage.py): función de huella inyectable en `RawStorage` | El explorador funciona con Playwright, con un doble o sin renderizador. El almacenamiento detecta cambios con la huella que se le inyecte (bytes por defecto, texto visible en el crawler) sin cambiar su código | ✅ parcial (M1–M2) |
+| **Strategy** (algoritmos intercambiables) | [`src/rag_bbva/indexing/chunking.py`](src/rag_bbva/indexing/chunking.py): `ChunkingStrategy` → `HeadingAwareChunker` / `FixedSizeChunker`; [`src/rag_bbva/indexing/embedding.py`](src/rag_bbva/indexing/embedding.py): `Embedder` → `SentenceTransformerEmbedder` / `FakeEmbedder` | Cambiar cómo se trocea o cómo se embebe sin tocar el pipeline: la línea base de chunking se compara con la principal y los tests usan un embedder falso, sin modelo | ✅ M4. `LLMProvider` y `Reranker` llegan en M6 y M7 |
 | **Template Method** | [`src/rag_bbva/scraping/base.py`](src/rag_bbva/scraping/base.py): `BaseCrawler.crawl()`; subclase concreta [`SitemapBfsCrawler`](src/rag_bbva/scraping/crawler.py) | `crawl()` fija el algoritmo (`prepare` → `discover_urls` → `fetch` → `validate` → `persist` → `extract_links`) y aplica en un solo lugar los límites, la deduplicación y el corte por bloqueo. Las subclases solo redefinen los pasos | ✅ M2 |
 | **Chain of Responsibility / Pipeline** | [`src/rag_bbva/processing/steps.py`](src/rag_bbva/processing/steps.py): `CleaningStep` (`set_next`/`handle`) y sus pasos; [`src/rag_bbva/processing/pipeline.py`](src/rag_bbva/processing/pipeline.py): `CleaningPipeline` | Cada paso de la limpieza (parseo, metadatos, boilerplate, extracción, normalización, idioma, longitud, duplicados) es una clase que transforma el documento y lo pasa al siguiente, o corta la cadena con el motivo del descarte. Se prueban por separado y se pueden reordenar o sustituir | ✅ M3 |
-| **Factory** | `indexing/factory.py`, `llm/factory.py` | Crear embedder, LLM, vector store y reranker desde la configuración sin acoplarse a clases concretas | ⏳ M4–M7 |
+| **Factory** | [`src/rag_bbva/indexing/factory.py`](src/rag_bbva/indexing/factory.py): `ComponentFactory` (`create_chunker`, `create_embedder`); `llm/factory.py` | Crear chunker y embedder (luego LLM, vector store y reranker) desde la configuración (`CHUNKING_STRATEGY`, `EMBEDDING_PROVIDER`) sin acoplar el resto del código a clases concretas | ✅ parcial (M4). LLM, vector store y reranker: M5–M7 |
 | **Repository** | `memory/repository.py` | Aislar la persistencia del historial (SQLite en producción, memoria en tests) | ⏳ M8 |
 | **Facade** | `services/rag_service.py` | Un único punto de entrada `ask(conversation_id, pregunta)` que orquesta todo el flujo | ⏳ M9 |
 
@@ -171,7 +194,8 @@ El caso exige al menos 3. Previstos en la [visión general §6](docs/00_VISION_G
 | Reintentos | `tenacity` | Backoff exponencial declarativo, solo ante errores transitorios | ✅ en uso (M2) |
 | Calidad | `pytest`, `respx`, `ruff` | Tests rápidos sin red (`respx` simula el sitio por HTTP); lint y formato uniformes | ✅ en uso |
 | Extracción de texto | `trafilatura` + reglas propias | Reglas por selector para el boilerplate conocido del sitio y trafilatura para el contenido principal, con *fallback* por selector cuando omite contenido | ✅ en uso (M3) |
-| Embeddings | `intfloat/multilingual-e5-small` | Gratis, multilingüe, corre en CPU ([ADR-005](docs/02_DECISIONES.md)) | ⏳ M4 |
+| Embeddings | `intfloat/multilingual-e5-small` vía `sentence-transformers` | Gratis, multilingüe, corre en CPU; 384 dimensiones ([ADR-005](docs/02_DECISIONES.md)) | ✅ en uso (M4) |
+| Cómputo de modelos | `torch` CPU-only | Instalado desde el índice CPU de PyTorch: sin CUDA, para una imagen Docker liviana (M12) | ✅ en uso (M4) |
 | Base vectorial | Qdrant self-hosted | Gratis, Docker oficial, filtros por metadatos ([ADR-002](docs/02_DECISIONES.md)) | ⏳ M5 |
 | Reranker | `cross-encoder/mmarco-mMiniLMv2-L12-H384-v1` | Multilingüe y liviano ([ADR-005](docs/02_DECISIONES.md)) | ⏳ M6 |
 | LLM | Grok (xAI) vía SDK `openai` | Calidad en español sin GPU local; es de pago y queda aislado tras una interfaz ([ADR-003](docs/02_DECISIONES.md)) | ⏳ M7 |
@@ -216,7 +240,7 @@ Registro completo: [`docs/02_DECISIONES.md`](docs/02_DECISIONES.md) (ADR) y supu
 | L-06 | **Sin sala de prensa (noticias y comunicados):** los sitemaps listan 74 URLs únicas bajo `/acerca-de/sala-prensa/`: 73 en `sitemap-sala-de-prensa.xml` y 1 solo en `sitemap-personas.xml`. Responden 301 hacia otro host, `prensa.bancolombia.com`. En el manifest de M2, la única procesada (1 de 1) redirige a la **portada** `https://prensa.bancolombia.com/`, no a la noticia, así que seguir la redirección no daría su contenido. Incluirlas exigiría explorar y crawlear un segundo sitio. Se excluyen sin pedirlas (`CRAWL_EXCLUDE_PATH_PREFIXES`, desde M3; quedan como `excluida`), y el asistente no responde sobre noticias. El resto de `acerca-de` sí se incluye | [ADR-010](docs/02_DECISIONES.md#adr-010--sala-de-prensa-fuera-del-alcance-del-scraping), M2 |
 | L-07 | **URLs muertas en el sitemap:** algunas páginas listadas responden 403 `AccessDenied` (origen S3; p. ej. `/negocios/especiales/wobi…`). Se registran como `error_http` con un fragmento del cuerpo | M2 |
 | L-08 | **Bloques que rotan (resuelta en la limpieza, M3):** varias páginas de educación financiera y del centro de ayuda muestran "contenido relacionado" aleatorio en cada petición. Por eso se reescribe su HTML crudo aunque el contenido principal no cambie. La limpieza quita ese bloque: en el crawl completo, 34 páginas lo traían y en ninguna quedó en el texto limpio | M2, M3 |
-| L-09 | **Simuladores y páginas cargadas por JS, sin contenido:** su contenido llega por JavaScript, así que el HTML estático no tiene texto propio. La limpieza las descarta como `texto_corto` (menos de `CLEAN_MIN_CHARS`=200 caracteres) y **el asistente no podrá responder sobre ellas**. En el crawl completo fueron 56 de 685 páginas: 10 simuladores y calculadoras, 17 páginas de resultados de búsqueda de preguntas frecuentes y 29 páginas con contenido por JS o solo con errores de WCM. Otros 4 simuladores muestran solo la pantalla de ingreso (`/personas/login`) y se descartan como duplicados. El listado está en `data/clean/clean_report.json` (`discarded_documents`) | ADR-009, M3 |
+| L-09 | **Simuladores y páginas cargadas por JS, sin contenido:** su contenido llega por JavaScript, así que el HTML estático no tiene texto propio. La limpieza las descarta como `texto_corto` (menos de `CLEAN_MIN_CHARS`=200 caracteres) y **el asistente no podrá responder sobre ellas**. En el crawl completo fueron 57 de 685 páginas: 10 simuladores y calculadoras, 17 páginas de resultados de búsqueda de preguntas frecuentes y 30 páginas con contenido por JS o solo con errores de WCM, entre ellas el buscador de puntos de atención. Otros 4 simuladores muestran solo la pantalla de ingreso (`/personas/login`) y se descartan como duplicados. El listado está en `data/clean/clean_report.json` (`discarded_documents`) | ADR-009, M3 |
 | L-10 | **Cobertura del enlace a enlace (BFS) acotada (aceptada, sin volver a crawlear):** con `CRAWL_MAX_PAGES=1200` se procesan todas las semillas del sitemap, pero solo 173 de los 639 enlaces internos de profundidad 1 encontrados. Además, 250 URLs retiradas redirigen a la portada de su sección (p. ej. `…/sostenibilidad/novacampo` → `/personas`) y consumen cupo, aunque no generan documentos (un solo documento por portada) | M3 |
 
 ---
@@ -248,9 +272,10 @@ rag-bbva/
 │   ├── config.py · exceptions.py · logging_conf.py · cli.py
 │   ├── scraping/          # robots, sitemap, urls, fetcher, discovery, storage, base (Template Method), crawler, page_analysis, exploration
 │   ├── processing/        # models, markdown, steps (Chain of Responsibility), pipeline, quality
-│   └── indexing/ retrieval/ llm/ memory/ services/ api/ ui/ analytics/   # vacíos (próximos módulos)
+│   ├── indexing/          # models, chunking (Strategy), embedding, factory (Factory), pipeline
+│   └── retrieval/ llm/ memory/ services/ api/ ui/ analytics/   # vacíos (próximos módulos)
 ├── scripts/explore_site.py · scripts/trim_html_fixture.py
-├── tests/unit/ · tests/fixtures/ (robots, sitemaps, html: páginas reales recortadas de las 3 plantillas) · tests/integration/
+├── tests/unit/ · tests/fixtures/ (robots, sitemaps, html: páginas reales recortadas de las 3 plantillas; clean: glosario limpio) · tests/integration/
 ├── eval/                  # golden set (M13)
 └── docs/
 ```
@@ -260,5 +285,5 @@ Documentación:
 - [Plan de módulos](docs/01_PLAN_DE_MODULOS.md): tareas, pruebas de aceptación y Definition of Done.
 - [Decisiones (ADR)](docs/02_DECISIONES.md).
 - [Exploración del sitio](docs/exploracion_sitio.md) y su [evidencia JSON](docs/evidencia/).
-- Bitácoras por módulo: [M00](docs/modulos/M00.md) · [M01](docs/modulos/M01.md) · [M02](docs/modulos/M02.md) · [M03](docs/modulos/M03.md).
+- Bitácoras por módulo: [M00](docs/modulos/M00.md) · [M01](docs/modulos/M01.md) · [M02](docs/modulos/M02.md) · [M03](docs/modulos/M03.md) · [M04](docs/modulos/M04.md).
 - [CHANGELOG](CHANGELOG.md).

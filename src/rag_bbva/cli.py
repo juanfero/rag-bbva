@@ -1,8 +1,8 @@
 """Interfaz de línea de comandos del proyecto.
 
 Uso: `python -m rag_bbva.cli <comando>` o `rag-bbva <comando>`.
-Comandos disponibles: `version`, `scrape` (M2) y `clean` (M3). Los de las etapas
-siguientes (ingest, chat, metrics) se agregan en sus módulos respectivos.
+Comandos disponibles: `version`, `scrape` (M2), `clean` (M3) y `chunk` (M4). Los de
+las etapas siguientes (ingest, chat, metrics) se agregan en sus módulos respectivos.
 """
 
 import json
@@ -18,7 +18,9 @@ import typer
 
 from rag_bbva import __version__
 from rag_bbva.config import get_settings
-from rag_bbva.exceptions import ProcessingError, ScrapingError
+from rag_bbva.exceptions import ConfigurationError, IndexingError, ProcessingError, ScrapingError
+from rag_bbva.indexing.factory import ComponentFactory
+from rag_bbva.indexing.pipeline import ChunkReport, chunk_documents, read_documents, write_chunks
 from rag_bbva.logging_conf import configure_logging
 from rag_bbva.processing.pipeline import CleaningPipeline, CleanReport, write_clean_output
 from rag_bbva.scraping.base import MOTIVO_INTERRUMPIDO, CrawlReport
@@ -166,6 +168,50 @@ def clean() -> None:
         raise typer.Exit(code=1) from exc
     typer.echo(_resumen_limpieza(resultado.report))
     typer.echo(f"Datos limpios: {documentos} · reporte: {reporte}")
+
+
+def _resumen_chunks(reporte: ChunkReport) -> str:
+    """Resumen legible del chunking."""
+    lineas = [
+        f"Estrategia: {reporte.chunker} (tamaño {reporte.chunk_size}, "
+        f"solapamiento {reporte.chunk_overlap})",
+        f"Documentos: {reporte.documents} · chunks: {reporte.total}",
+        f"Caracteres: {reporte.n_chars.model_dump() if reporte.n_chars else '-'}",
+        f"Chunks por documento: "
+        f"{reporte.chunks_per_document.model_dump() if reporte.chunks_per_document else '-'}",
+        f"Por sección: {reporte.by_section}",
+        f"Muy cortos (< {reporte.short_threshold} caracteres): {reporte.short_chunks}",
+        f"Tokens: {reporte.tokens.model_dump() if reporte.tokens else '-'} · "
+        f"máximo del modelo: {reporte.max_tokens} · lo superan: {reporte.over_max_tokens}",
+    ]
+    if reporte.over_max_tokens:
+        lineas.append("ADVERTENCIA: hay chunks que el modelo truncaría; reduzca CHUNK_SIZE.")
+    return "\n".join(lineas)
+
+
+@app.command()
+def chunk(
+    strategy: Annotated[
+        str | None,
+        typer.Option(help="heading_aware | fixed_size (default: CHUNKING_STRATEGY)."),
+    ] = None,
+) -> None:
+    """Trocea los documentos de CLEAN_DATA_DIR en chunks (CHUNKS_DATA_DIR)."""
+    settings = get_settings()
+    fabrica = ComponentFactory(settings)
+    try:
+        chunker = fabrica.create_chunker(strategy)
+        documentos = read_documents(settings.clean_data_dir)
+        # El embedder aporta el tokenizer real para verificar el máximo de tokens.
+        resultado = chunk_documents(
+            documentos, chunker, fabrica.create_embedder(), settings.chunk_min_chars
+        )
+        ruta_chunks, ruta_reporte = write_chunks(resultado, settings.chunks_data_dir)
+    except (IndexingError, ConfigurationError) as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(_resumen_chunks(resultado.report))
+    typer.echo(f"Chunks: {ruta_chunks} · reporte: {ruta_reporte}")
 
 
 if __name__ == "__main__":

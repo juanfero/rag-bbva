@@ -23,6 +23,7 @@ from rag_bbva.processing.steps import (
     ParseHtmlStep,
     RemoveBoilerplateStep,
     detect_language,
+    keeps_order,
     normalize_text,
     primary_language,
     word_coverage,
@@ -202,6 +203,58 @@ def test_boilerplate_visor_wcm_sin_configurar_y_angular_largo() -> None:
     assert " ".join(doc.soup.get_text(" ").split()) == "Tasa efectiva anual sin subsidio. Plazo"
 
 
+def test_boilerplate_quita_bloque_de_venta_cruzada_de_la_plantilla_a() -> None:
+    """Fixture real (cajeros): "Descubre otros canales que te van a interesar" se quita
+    entero (título y tarjetas), y el resto de la página se conserva."""
+    crudo = _fixture("plantilla_a_cajeros")
+    assert "Descubre otros canales que te van a interesar" in crudo
+
+    doc = _limpio("plantilla_a_cajeros")
+    assert doc.soup is not None
+    texto = doc.soup.get_text(" ")
+
+    assert "Descubre otros canales" not in texto
+    assert "Sucursal Telefónica" not in texto  # una de las tarjetas del bloque
+    assert "Tarifas y topes" in texto
+
+
+@pytest.mark.parametrize(
+    "titulo",
+    [
+        "Descubre otros canales que te van a interesar",
+        "Si te gustó este producto, estos te van a interesar",
+    ],
+)
+def test_boilerplate_venta_cruzada_con_estructura_real(titulo: str) -> None:
+    """Estructura de la plantilla A: el título va en `section.cbc-heading` dentro de la
+    sección del bloque; se quita la sección que contiene las tarjetas."""
+    html = (
+        "<html><body><main><section><h2>Arrendamiento</h2><p>Contenido propio.</p></section>"
+        "<section class='cbc-container--personalize'><div><section class='cbc-heading'>"
+        f"<h2 class='cbc-heading__title'>{titulo}</h2></section></div>"
+        "<div><h3>Leasing financiero</h3><p>Impulsa tu negocio financiando activos.</p></div>"
+        "</section></main></body></html>"
+    )
+
+    doc = _hasta(html, ParseHtmlStep(), ExtractMetadataStep(), RemoveBoilerplateStep())
+    assert doc.soup is not None
+
+    assert " ".join(doc.soup.get_text(" ").split()) == "Arrendamiento Contenido propio."
+
+
+def test_boilerplate_link_copiado() -> None:
+    html = (
+        "<html><body><main><h1>¿Cómo envío un comprobante?</h1>"
+        "<div><span>Link copiado en porta papeles</span></div><p>En la App puedes verlo.</p>"
+        "</main></body></html>"
+    )
+
+    doc = _hasta(html, ParseHtmlStep(), ExtractMetadataStep(), RemoveBoilerplateStep())
+    assert doc.soup is not None
+
+    assert "copiado" not in doc.soup.get_text(" ")
+
+
 def test_boilerplate_banner_de_cookies_y_textos_de_interfaz() -> None:
     html = (
         "<html><body><main><div id='CookieBanner'>Usamos cookies. Aceptar cookies</div>"
@@ -269,6 +322,36 @@ def test_fallback_si_trafilatura_no_devuelve_nada(monkeypatch: pytest.MonkeyPatc
 
     assert doc.extraction == "selector"
     assert doc.text == "## Título\n\nTexto del cuerpo."
+
+
+def test_fallback_si_trafilatura_reordena(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Caso real (cajeros, M4): trafilatura conservaba el vocabulario pero subía una
+    frase del final al comienzo; se usa el contenedor por selector."""
+    html = (
+        "<html><body><main><h1>Cajeros</h1>"
+        "<p>Te acompañamos en cada rincón de Colombia con cajeros.</p>"
+        "<p>Cambia la clave de tu tarjeta periódicamente.</p></main></body></html>"
+    )
+    reordenado = (
+        "Cambia la clave de tu tarjeta periódicamente.\n\n# Cajeros\n\n"
+        "Te acompañamos en cada rincón de Colombia con cajeros."
+    )
+    monkeypatch.setattr(steps.trafilatura, "extract", lambda *a, **k: reordenado)
+
+    doc = _hasta(html, ParseHtmlStep(), ExtractMetadataStep(), RemoveBoilerplateStep(),
+                 ExtractMainContentStep(min_coverage=0.9))  # fmt: skip
+
+    assert doc.extraction == "selector"
+    assert doc.text.startswith("# Cajeros")
+
+
+def test_keeps_order() -> None:
+    referencia = "# T\n\nPrimer bloque bastante largo aquí.\n\nSegundo bloque también largo."
+    assert keeps_order(referencia, referencia)
+    assert keeps_order(referencia, "Segundo bloque también largo.")  # falta uno: no es desorden
+    assert not keeps_order(
+        referencia, "Segundo bloque también largo.\n\nPrimer bloque bastante largo aquí."
+    )
 
 
 def test_word_coverage() -> None:

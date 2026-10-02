@@ -205,9 +205,15 @@ El caso pide mínimo 3. Se implementan 6 para tener margen, pero el README desta
 | `CLEAN_DATA_DIR` | `data/clean` | Carpeta de `documents.jsonl` y `clean_report.json` (M3) |
 | `CLEAN_MIN_CHARS` | `200` | Mínimo de caracteres del texto limpio; los más cortos se descartan (M3) |
 | `CLEAN_MIN_EXTRACTION_COVERAGE` | `0.9` | Fracción mínima del vocabulario del contenedor que debe conservar trafilatura; si no, *fallback* por selector (M3) |
+| `CHUNKS_DATA_DIR` | `data/chunks` | Carpeta de `chunks.jsonl` y `chunk_report.json` (M4) |
+| `CHUNKING_STRATEGY` | `heading_aware` | Estrategia de chunking (Strategy): `heading_aware` o `fixed_size` (M4) |
 | `CHUNK_SIZE` | `800` | Tamaño de chunk (caracteres) |
 | `CHUNK_OVERLAP` | `120` | Solapamiento |
+| `CHUNK_MIN_CHARS` | `100` | Umbral de "chunk muy corto" en el reporte (M4) |
+| `EMBEDDING_PROVIDER` | `sentence_transformers` | `sentence_transformers` o `fake` (tests) (M4) |
 | `EMBEDDING_MODEL` | `intfloat/multilingual-e5-small` | Modelo de embeddings |
+| `EMBEDDING_BATCH_SIZE` | `32` | Textos por lote al embeber (M4) |
+| `MODEL_CACHE_DIR` | `models` | Caché de modelos de Hugging Face, ignorada por git (M4; volumen en M12) |
 | `QDRANT_URL` | `http://qdrant:6333` | URL de Qdrant |
 | `QDRANT_COLLECTION` | `bancolombia_docs` | Colección |
 | `RETRIEVAL_TOP_K` | `20` | Candidatos recuperados |

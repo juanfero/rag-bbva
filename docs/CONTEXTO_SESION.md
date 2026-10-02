@@ -13,47 +13,55 @@
 | M0 — Fundaciones | `m00` | `bc14425` | `docs/modulos/M00.md` |
 | M1 — Exploración del sitio | `m01` | `f48a0d3` | `docs/modulos/M01.md` |
 | M2 — Scraper (datos crudos) | `m02` | `4a31943` | `docs/modulos/M02.md` |
-| M3 — Limpieza (datos limpios) | `m03` | merge `--no-ff` de `feat/m03-limpieza` en `main` (2026-10-02); el hash se ve con `git rev-parse --short m03^{commit}` | `docs/modulos/M03.md` |
+| M3 — Limpieza (datos limpios) | `m03` | `731c389` | `docs/modulos/M03.md` |
+| M4 — Chunking + embeddings | `m04` | merge `--no-ff` de `feat/m04-chunking-embeddings` en `main` (2026-10-02); el hash se ve con `git rev-parse --short m04^{commit}` | `docs/modulos/M04.md` |
 
 - Commits `docs` directos en `main`, pedidos de forma explícita por Juan Felipe:
   - `5edf0dd`, entre `m00` y `m01`.
   - `c38abdc` (README inicial) y `9a6e3ce` (regla del README incremental), entre `m01` y `m02`.
-- Los merges de M2 y M3 incluyen las correcciones de cada revisión. Ver `M02.md §10` y `M03.md §10`.
+- Los merges de M2, M3 y M4 incluyen las correcciones de cada revisión (§10 de cada bitácora). M4 incluye un ajuste a la limpieza de M3: quitar bloques de venta cruzada y "Link copiado", y trafilatura solo si conserva el orden.
 
-### Siguiente módulo: M4 — Chunking + embeddings
-- Juan Felipe pidió empezarlo junto con el cierre de M3, en la rama `feat/m04-chunking-embeddings`.
-- Pedido, resumido; el texto completo está en la conversación y en `M04.md` cuando exista:
-  - `sentence-transformers` y `torch` CPU-only (índice `https://download.pytorch.org/whl/cpu`), con el comando de instalación en el README.
-  - `MODEL_CACHE_DIR` configurable e ignorado por git.
-  - `HeadingAwareChunker` (títulos markdown, luego tamaño sin cortar palabras, `heading_path` y encabezado de contexto en el texto a embeber) y `FixedSizeChunker` como línea base (Strategy).
-  - `data/chunks/chunks.jsonl` + `chunk_report.json`, que incluye los chunks que superarían el máximo de tokens según el tokenizer real (debe ser 0).
-  - CLI `chunk`.
-  - `Embedder` → `SentenceTransformerEmbedder` (e5-small, prefijos `query:`/`passage:`, L2, lotes) y `FakeEmbedder`.
-  - `ComponentFactory` (Factory).
-  - Tests; los del modelo real marcados como `slow`.
-  - Evidencia: `chunk_report`, tiempo de embeber en CPU, recuperación por fuerza bruta en numpy con 5 preguntas, 2 chunks de ejemplo y comparación HeadingAware vs FixedSize.
+### Siguiente módulo: M5 — Indexación vectorial (Qdrant)
+- Juan Felipe pidió empezarlo junto con el cierre de M4, en la rama `feat/m05-qdrant`.
+- Pedido, resumido; el texto completo está en la conversación y en `M05.md` cuando exista:
+  - Servicio `qdrant` en `docker-compose.yml`: imagen con versión fija, volumen `qdrant_data` y healthcheck. `qdrant-client` compatible con esa imagen.
+  - `VectorStore` → `QdrantVectorStore`: colección coseno de 384 dimensiones, upsert por lotes con payload, búsqueda top-k con filtro por `section`, índice de payload, count y borrado por ids. Error de conexión → `IndexingError`.
+  - Comando `ingest`:
+    - ids `uuid5(chunk_id)`;
+    - sincronización completa, que borra los puntos obsoletos;
+    - caché de embeddings por hash del texto en `data/embeddings/`;
+    - `--recreate`;
+    - reporte por etapa.
+  - Tests con `QdrantClient(":memory:")`; el del Qdrant real va marcado `integration`.
+  - Evidencia:
+    - ingesta real con conteo y tiempo;
+    - re-ingesta sin cambios (0 embebidos);
+    - las 5 preguntas vía Qdrant iguales a la fuerza bruta;
+    - filtro por sección;
+    - tamaños en disco.
   - **Sin merge.**
 
-### Estado del árbol (al cerrar M3)
-- `main` con el merge de M3 y el tag `m03`, publicados en `origin`.
-- Las ramas `feat/m00…m03` siguen a sus pares en `origin`.
-- Solo en local, ignorado por git: `.venv/` y `data/`.
-  - `data/exploration/`: informe de M1.
-  - `data/raw/`: crawl completo del 2026-10-02 (15:44–16:12 UTC): manifest de 1275 entradas, 687 HTML (685 en el manifest + 2 de M2 cuya URL ahora redirige) y `crawl_report.json`.
-  - `data/clean/`: `documents.jsonl` (597 documentos) y `clean_report.json`.
-  - Logs: `data/scrape_m03_full.log` (crawl completo), `data/scrape_m03_full_interrumpido.log` (intento cortado en la página 500), `data/scrape_m02*.log` y copias de la corrida 1 de M2.
+### Estado del árbol (al cerrar M4)
+- `main` con el merge de M4 y el tag `m04`, publicados en `origin`. Las ramas `feat/m00…m04` siguen a sus pares en `origin`.
+- Solo en local, ignorado por git: `.venv/`, `models/` y `data/`.
+  - `models/`: caché de Hugging Face con `intfloat/multilingual-e5-small` (471 MB).
+  - `data/raw/`: crawl completo del 2026-10-02 (manifest de 1275 entradas, 687 HTML).
+  - `data/clean/`: 597 documentos, tras el ajuste de M4.
+  - `data/chunks/`: 3506 chunks `heading_aware` y `chunk_report.json`.
+  - Logs de los crawls en `data/`.
   - No hay `.env`; ningún comando lo necesita hasta M7.
 
 ---
 
 ## 2. Último pedido de Juan Felipe y hasta dónde se llegó
 
-Revisión de M3: **aprobado**. Decisiones:
-- Los 7 documentos fuera de las 6 secciones se incluyen: ADR-011 amplía S-03 y `section` sale de la URL real.
-- L-10 se acepta sin volver a crawlear; mejora futura: que el cupo de `--max-pages` cuente solo HTML únicos.
-- Se documenta qué contiene la plantilla `otra`.
+Revisión de M4: **aprobado con un ajuste**, ya aplicado:
+- bloques de venta cruzada y "Link copiado" fuera de la limpieza, con tests y chequeo de fugas;
+- `clean` + `chunk` + las 5 preguntas vueltas a correr: "¿dónde hay cajeros?" ahora devuelve `cajeros` y `puntos-de-atencion`;
+- tests `slow` que se saltan sin el modelo en la caché local;
+- nota para M6 sobre el umbral sobre el score del reranker.
 
-Se cerró M3: bitácora ✅, CHANGELOG `[m03]`, README ✅, merge `--no-ff`, tag `m03` y push. A continuación se empieza M4 (§1).
+Se cerró M4 (bitácora ✅, CHANGELOG `[m04]`, README ✅, merge `--no-ff`, tag `m04` y push). A continuación se empieza M5 (§1).
 
 ---
 
@@ -62,8 +70,8 @@ Se cerró M3: bitácora ✅, CHANGELOG `[m03]`, README ✅, merge `--no-ff`, tag
 ### Preguntas abiertas
 - Ninguna al cerrar M3.
 
-### Decisiones de implementación de M2 y M3
-Están en `M02.md §4`, `M03.md §4` y en la sección "Decisiones" del README, **no** en ADR:
+### Decisiones de implementación de M2, M3 y M4
+Están en `M02.md §4`, `M03.md §4`, `M04.md §4` y en la sección "Decisiones" del README, **no** en ADR:
 - **M2:**
   - semillas intercaladas por sección;
   - detección incremental por huella del texto visible;
@@ -79,6 +87,13 @@ Están en `M02.md §4`, `M03.md §4` y en la sección "Decisiones" del README, *
   - bloques repetidos de ≥ 60 caracteres se conservan una vez;
   - el manifest se escribe de forma incremental y Ctrl+C/SIGTERM cierran el crawl con `interrumpido` (exit 130);
   - el patrón de fuga `pie` solo cuenta las frases tal como están en el pie.
+- **M4:**
+  - `CHUNK_SIZE` en caracteres, verificado en tokens con el tokenizer real (máximo 422 de 512);
+  - HeadingAware agrupa secciones pequeñas bajo su ruta común y es la estrategia por defecto;
+  - encabezado de contexto (título | sección + `heading_path`) solo en `embedding_text`;
+  - torch CPU-only se instala antes desde el índice de PyTorch;
+  - con el modelo en caché se carga con `local_files_only`;
+  - los scores coseno de e5 están comprimidos (≈ 0,83–0,91): el umbral de "sin información" va sobre el reranker (M6).
 
 ### Prácticas acordadas en la conversación
 No están escritas en `CLAUDE.md`; la forma de trabajo de §4 las recoge:
@@ -131,13 +146,14 @@ Comandos de verificación:
 cd /home/pipe/Inetum/rag-bbva-docs/rag-bbva
 source .venv/bin/activate
 git status && git branch -vv && git log --oneline --graph --decorate -15 && git tag
-pytest                                   # al cerrar M3: 273 passed (sin red)
+pytest                                   # al cerrar M4: 319 passed (los 3 slow requieren el modelo en models/; sin él se saltan)
 pytest -m "not integration and not slow"
 ruff check . && ruff format --check .
 python -m rag_bbva.cli version
 python -m rag_bbva.cli scrape --max-pages 50   # red real: ~77 s contra www.bancolombia.com
 python -m rag_bbva.cli scrape --max-pages 1200 # crawl completo: ~28,5 min (correr en otra terminal)
 python -m rag_bbva.cli clean                   # ~51 s sobre el crawl completo
+python -m rag_bbva.cli chunk                   # ~10 s (carga el tokenizer del modelo)
 docker build -t rag-bbva:latest .
 ```
 
@@ -147,12 +163,14 @@ docker build -t rag-bbva:latest .
 
 Fuentes: `docs/01_PLAN_DE_MODULOS.md`, las bitácoras §8 y el README.
 
-- **M4 — Chunking + embeddings:** ver §1. El glosario (116 021 caracteres) es el documento más largo.
-- **M5 — Qdrant:** los filtros por sección deben aceptar secciones fuera de las 6 principales (ADR-011).
+- **M5 — Qdrant:** ver §1. Los filtros por sección deben aceptar secciones fuera de las 6 principales (ADR-011). `chunk_id` (SHA-1) → id de punto con `uuid5`.
+- **M6 — Reranker:** umbral de "sin información suficiente" sobre el score del reranker, no sobre el coseno de e5.
 - **M7 — LLM:**
   - Exigir `XAI_API_KEY` al crear `XaiGrokProvider`, con error claro (ADR-006).
   - Verificar que `LLM_MODEL` exista con `GET /v1/models`.
 - **M12 — Docker:**
+  - Montar `MODEL_CACHE_DIR` como volumen. Embeber ~3500 chunks toma ~2,6 min en CPU: indexar solo si la colección está vacía.
+  - Instalar torch desde el índice CPU de PyTorch antes del proyecto.
   - `docker compose up` **no scrapea**: se versiona un snapshot de `data/clean/`, `init` solo indexa si la colección está vacía y el scraping completo es un comando opcional.
   - Volúmenes de `data/` con permisos para el usuario no root (uid 1000). En M0 se quitó el volumen `./data` porque Docker lo creaba como root.
 - **M14:**
@@ -166,12 +184,12 @@ Fuentes: `docs/01_PLAN_DE_MODULOS.md`, las bitácoras §8 y el README.
 
 ## 7. Lo que la próxima sesión NO debe romper
 
-- **Los tags publicados no se mueven ni se reescriben:** `m00` → `bc14425`, `m01` → `f48a0d3`, `m02` → `4a31943`, `m03` → merge de M3. Tampoco se reescribe historial ya publicado en `origin`: nada de `push --force` ni rebase de ramas publicadas.
+- **Los tags publicados no se mueven ni se reescriben:** `m00` → `bc14425`, `m01` → `f48a0d3`, `m02` → `4a31943`, `m03` → `731c389`, `m04` → merge de M4. Tampoco se reescribe historial ya publicado en `origin`: nada de `push --force` ni rebase de ramas publicadas.
 - **Nunca escribir la `XAI_API_KEY`** en código, docs, tests ni commits; solo en `.env`, que está en `.gitignore`.
 - **Bancolombia en todo texto visible al usuario** (prompts, UI, respuestas, README, ayuda de la CLI). El código conserva `rag_bbva`. Un test de `tests/unit/test_cli.py` verifica que la ayuda de la CLI diga Bancolombia y no BBVA.
-- **Ningún módulo se mergea sin la aprobación explícita** de Juan Felipe; M4 tampoco.
+- **Ningún módulo se mergea sin la aprobación explícita** de Juan Felipe; M5 tampoco.
 - **Cortesía con el sitio:** respetar `robots.txt`, User-Agent `RAG-BBVA-TechTest/1.0`, pausa ≥ 1 s, sin seguir redirecciones a otros dominios y sin eludir el WAF o el bot-manager.
-- `data/` y `.env` no se versionan.
+- `data/`, `models/` y `.env` no se versionan.
 
 ---
 
@@ -183,6 +201,6 @@ Fuentes: `docs/01_PLAN_DE_MODULOS.md`, las bitácoras §8 y el README.
 4. `docs/00_VISION_GENERAL.md`: requisitos, arquitectura, configuración §7 y supuestos §9.
 5. `docs/01_PLAN_DE_MODULOS.md`: Definition of Done y el módulo en curso o siguiente.
 6. `docs/02_DECISIONES.md`: ADR-001 a ADR-011.
-7. `docs/modulos/M03.md` (último cerrado; §8 tiene los pendientes) y `M04.md` si existe; luego `M02.md`, `M01.md` y `M00.md` si hace falta.
+7. `docs/modulos/M04.md` (último cerrado; §8 tiene los pendientes) y `M05.md` si existe; luego `M03.md`, `M02.md`, `M01.md` y `M00.md` si hace falta.
 8. `docs/exploracion_sitio.md`: hallazgos del sitio, selectores y riesgos.
 9. `CHANGELOG.md`.

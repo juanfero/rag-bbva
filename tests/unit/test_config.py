@@ -33,8 +33,11 @@ def test_settings_defaults(clean_env: pytest.MonkeyPatch) -> None:
     assert settings.embedding_provider == "sentence_transformers"
     assert settings.embedding_batch_size == 32
     assert settings.model_cache_dir == Path("models")
-    assert settings.qdrant_url == "http://qdrant:6333"
+    assert settings.qdrant_url == "http://localhost:6333"
     assert settings.qdrant_collection == "bancolombia_docs"
+    assert settings.qdrant_timeout_seconds == 10
+    assert settings.qdrant_batch_size == 128
+    assert settings.embeddings_cache_dir == Path("data/embeddings")
     assert settings.retrieval_top_k == 20
     assert settings.reranker_enabled is True
     assert settings.reranker_model == "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1"

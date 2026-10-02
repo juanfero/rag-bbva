@@ -97,7 +97,7 @@ Usuario ─► UI (Streamlit) ─► API (FastAPI) ─► RAGService (Facade)
 
 | Servicio | Imagen | Propósito | Persistencia |
 |---|---|---|---|
-| `qdrant` | `qdrant/qdrant` | Base vectorial | volumen `qdrant_data` |
+| `qdrant` | `qdrant/qdrant:v1.19.1` | Base vectorial | volumen `qdrant_data` |
 | `api` | build propio | FastAPI: chat, historial, ingesta, analítica | volúmenes `./data`, `history.db` |
 | `ui` | build propio (misma imagen) | Streamlit: chat + panel de métricas | — |
 | `init` (one-shot) | build propio | Ingesta (scrape → clean → index) si la colección está vacía | — |
@@ -214,8 +214,11 @@ El caso pide mínimo 3. Se implementan 6 para tener margen, pero el README desta
 | `EMBEDDING_MODEL` | `intfloat/multilingual-e5-small` | Modelo de embeddings |
 | `EMBEDDING_BATCH_SIZE` | `32` | Textos por lote al embeber (M4) |
 | `MODEL_CACHE_DIR` | `models` | Caché de modelos de Hugging Face, ignorada por git (M4; volumen en M12) |
-| `QDRANT_URL` | `http://qdrant:6333` | URL de Qdrant |
+| `QDRANT_URL` | `http://localhost:6333` | URL de Qdrant: el del compose publicado en la máquina local (M5); dentro de la red de Docker, `http://qdrant:6333` (M12) |
 | `QDRANT_COLLECTION` | `bancolombia_docs` | Colección |
+| `QDRANT_TIMEOUT_SECONDS` | `10` | Timeout de las llamadas a Qdrant (M5) |
+| `QDRANT_BATCH_SIZE` | `128` | Puntos por lote en cada upsert (M5) |
+| `EMBEDDINGS_CACHE_DIR` | `data/embeddings` | Caché de embeddings por hash del texto, ignorada por git (M5) |
 | `RETRIEVAL_TOP_K` | `20` | Candidatos recuperados |
 | `RERANKER_ENABLED` | `true` | Activar reranker |
 | `RERANKER_MODEL` | `cross-encoder/mmarco-mMiniLMv2-L12-H384-v1` | Modelo de reranking |

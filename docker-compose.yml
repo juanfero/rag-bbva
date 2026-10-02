@@ -1,0 +1,10 @@
+# Compose mínimo de M0: solo el servicio `api` con un comando placeholder.
+# Qdrant, init, API real, UI y volúmenes (data/, historial) se agregan en M12.
+services:
+  api:
+    build: .
+    image: rag-bbva:latest
+    env_file:
+      - path: .env
+        required: false
+    command: ["python", "-m", "rag_bbva.cli", "version"]

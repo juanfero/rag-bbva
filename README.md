@@ -16,7 +16,7 @@ Prueba técnica de ML/AI Engineer: un sistema RAG (*Retrieval-Augmented Generati
 | M1 | Exploración del sitio: robots.txt, sitemaps, dependencia de JS, alcance | ✅ | `m01` |
 | M2 | Scraper (datos crudos): sitemaps + BFS, robots, reintentos, manifest incremental | ✅ | `m02` |
 | M3 | Limpieza (datos limpios): pipeline de pasos, metadatos, idioma, deduplicación, chequeo de fugas | ✅ | `m03` |
-| M4 | Chunking + embeddings: estrategias de chunking, e5-small en CPU, fábrica de componentes | 🚧 en revisión (rama `feat/m04-chunking-embeddings`) | — |
+| M4 | Chunking + embeddings: estrategias de chunking, e5-small en CPU, fábrica de componentes | ✅ | `m04` |
 | M5 | Indexación vectorial (Qdrant) | ⏳ | — |
 | M6 | Recuperación + reranker | ⏳ | — |
 | M7 | Generación con LLM (Grok) | ⏳ | — |
@@ -130,8 +130,8 @@ python -m rag_bbva.cli clean
 - `clean_report.json`: procesados, conservados, descartados por motivo (con la lista de URLs), distribución de longitudes, documentos por sección, plantilla, método de extracción e idioma, y el chequeo de **fugas de boilerplate**.
 
 Cómo limpia (pasos en [`processing/steps.py`](src/rag_bbva/processing/steps.py)):
-1. Quita del HTML la navegación, la cabecera y el pie, los menús de portlet con `${…}`, las cajas de error `.lrpError`, los iconos, el banner de cookies y el bloque rotativo de contenido relacionado (L-08).
-2. Toma el contenedor de cada plantilla del sitio (`main` → `#main-content` → `[role=main]`). Usa trafilatura si conserva al menos el 90 % del vocabulario del contenedor; si no, convierte el contenedor a markdown por selector.
+1. Quita del HTML la navegación, la cabecera y el pie, los menús de portlet con `${…}`, las cajas de error `.lrpError`, los iconos, el banner de cookies, el bloque rotativo de contenido relacionado (L-08), los bloques repetidos de venta cruzada ("Descubre otros canales…", "Si te gustó este producto…") y rótulos de interfaz como "Link copiado en porta papeles".
+2. Toma el contenedor de cada plantilla del sitio (`main` → `#main-content` → `[role=main]`). Usa trafilatura si conserva al menos el 90 % del vocabulario del contenedor y el orden de sus bloques; si no, convierte el contenedor a markdown por selector.
 3. Normaliza Unicode y espacios, y detecta el idioma.
 4. Descarta los textos de menos de 200 caracteres y los duplicados (soft-404), registrando el motivo.
 
@@ -148,10 +148,10 @@ python -m rag_bbva.cli chunk --strategy fixed_size    # línea base
   - Cada chunk lleva su `heading_path` ("Título > Sección > Subsección").
 - **`fixed_size`:** parte el texto completo por tamaño.
 - **Qué guarda cada chunk:** `chunk_id` determinista, `doc_id`, `url`, `title`, `section`, `heading_path`, `lang`, `position`, `n_chars`, `text` (para citar) y `embedding_text` (encabezado con título, sección y ruta + texto: lo que se embebe).
-- **El reporte** trae la distribución de tamaños, los chunks por documento y por sección, los chunks muy cortos y los que superarían los 512 tokens del modelo, contados con su tokenizer real. En la corrida real: 3574 chunks y 0 sobre el máximo.
+- **El reporte** trae la distribución de tamaños, los chunks por documento y por sección, los chunks muy cortos y los que superarían los 512 tokens del modelo, contados con su tokenizer real. En la corrida real: 3506 chunks y 0 sobre el máximo.
 - **Embeddings:** `intfloat/multilingual-e5-small` (384 dimensiones) en CPU, con prefijos `query: `/`passage: ` y vectores normalizados (L2).
   - El modelo se descarga una vez (~470 MB) a `MODEL_CACHE_DIR` (`models/`, ignorado por git).
-  - Embeber los ~3600 chunks toma ~2,7 min en CPU ([evidencia M04](docs/modulos/M04.md#6-evidencia-manual)).
+  - Embeber los ~3500 chunks toma ~2,6 min en CPU. Con el modelo ya en caché se carga sin consultar Hugging Face ([evidencia M04](docs/modulos/M04.md#6-evidencia-manual)).
   - La base vectorial llega en M5.
 
 **Docker.** Hoy solo existe la imagen base: `docker build .` y `docker compose run --rm api` ejecutan el comando `version`.
@@ -240,7 +240,7 @@ Registro completo: [`docs/02_DECISIONES.md`](docs/02_DECISIONES.md) (ADR) y supu
 | L-06 | **Sin sala de prensa (noticias y comunicados):** los sitemaps listan 74 URLs únicas bajo `/acerca-de/sala-prensa/`: 73 en `sitemap-sala-de-prensa.xml` y 1 solo en `sitemap-personas.xml`. Responden 301 hacia otro host, `prensa.bancolombia.com`. En el manifest de M2, la única procesada (1 de 1) redirige a la **portada** `https://prensa.bancolombia.com/`, no a la noticia, así que seguir la redirección no daría su contenido. Incluirlas exigiría explorar y crawlear un segundo sitio. Se excluyen sin pedirlas (`CRAWL_EXCLUDE_PATH_PREFIXES`, desde M3; quedan como `excluida`), y el asistente no responde sobre noticias. El resto de `acerca-de` sí se incluye | [ADR-010](docs/02_DECISIONES.md#adr-010--sala-de-prensa-fuera-del-alcance-del-scraping), M2 |
 | L-07 | **URLs muertas en el sitemap:** algunas páginas listadas responden 403 `AccessDenied` (origen S3; p. ej. `/negocios/especiales/wobi…`). Se registran como `error_http` con un fragmento del cuerpo | M2 |
 | L-08 | **Bloques que rotan (resuelta en la limpieza, M3):** varias páginas de educación financiera y del centro de ayuda muestran "contenido relacionado" aleatorio en cada petición. Por eso se reescribe su HTML crudo aunque el contenido principal no cambie. La limpieza quita ese bloque: en el crawl completo, 34 páginas lo traían y en ninguna quedó en el texto limpio | M2, M3 |
-| L-09 | **Simuladores y páginas cargadas por JS, sin contenido:** su contenido llega por JavaScript, así que el HTML estático no tiene texto propio. La limpieza las descarta como `texto_corto` (menos de `CLEAN_MIN_CHARS`=200 caracteres) y **el asistente no podrá responder sobre ellas**. En el crawl completo fueron 56 de 685 páginas: 10 simuladores y calculadoras, 17 páginas de resultados de búsqueda de preguntas frecuentes y 29 páginas con contenido por JS o solo con errores de WCM. Otros 4 simuladores muestran solo la pantalla de ingreso (`/personas/login`) y se descartan como duplicados. El listado está en `data/clean/clean_report.json` (`discarded_documents`) | ADR-009, M3 |
+| L-09 | **Simuladores y páginas cargadas por JS, sin contenido:** su contenido llega por JavaScript, así que el HTML estático no tiene texto propio. La limpieza las descarta como `texto_corto` (menos de `CLEAN_MIN_CHARS`=200 caracteres) y **el asistente no podrá responder sobre ellas**. En el crawl completo fueron 57 de 685 páginas: 10 simuladores y calculadoras, 17 páginas de resultados de búsqueda de preguntas frecuentes y 30 páginas con contenido por JS o solo con errores de WCM, entre ellas el buscador de puntos de atención. Otros 4 simuladores muestran solo la pantalla de ingreso (`/personas/login`) y se descartan como duplicados. El listado está en `data/clean/clean_report.json` (`discarded_documents`) | ADR-009, M3 |
 | L-10 | **Cobertura del enlace a enlace (BFS) acotada (aceptada, sin volver a crawlear):** con `CRAWL_MAX_PAGES=1200` se procesan todas las semillas del sitemap, pero solo 173 de los 639 enlaces internos de profundidad 1 encontrados. Además, 250 URLs retiradas redirigen a la portada de su sección (p. ej. `…/sostenibilidad/novacampo` → `/personas`) y consumen cupo, aunque no generan documentos (un solo documento por portada) | M3 |
 
 ---

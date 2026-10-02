@@ -4,8 +4,8 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Sin publicar]
 
-### M4 — Chunking + embeddings (en revisión, rama `feat/m04-chunking-embeddings`)
-#### Añadido
+## [m04] - 2026-10-02 — Chunking + embeddings
+### Añadido
 - Estrategias de chunking (Strategy):
   - `HeadingAwareChunker`: secciones markdown agrupadas hasta `CHUNK_SIZE` y partidas por tamaño solo si no caben, sin cortar palabras, con `heading_path` y encabezado de contexto en el texto a embeber;
   - `FixedSizeChunker` como línea base.
@@ -16,6 +16,12 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 - Dependencias: `sentence-transformers`, `torch` CPU-only (instalado desde el índice CPU de PyTorch) y `numpy`.
 - Fixture del glosario limpio real (116 021 caracteres).
 - README: instalación con torch CPU, comando `chunk`, patrones Strategy y Factory, stack.
+- Tests `slow` del modelo real que se saltan con motivo si el modelo no está en la caché local; carga sin consultar el Hub cuando ya está en caché (`local_files_only`).
+### Cambiado
+- Limpieza (ajuste a M3 derivado de la evidencia de recuperación):
+  - quita los bloques repetidos de venta cruzada ("Descubre otros canales que te van a interesar", "Si te gustó este producto, estos te van a interesar") y el rótulo "Link copiado en porta papeles";
+  - el chequeo de fugas los detecta (`venta_cruzada`, `interfaz`).
+- Limpieza: trafilatura solo se usa si además conserva el orden de los bloques del contenedor.
 
 ## [m03] - 2026-10-02 — Limpieza (datos limpios)
 ### Añadido

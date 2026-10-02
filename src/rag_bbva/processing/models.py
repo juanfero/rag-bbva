@@ -31,7 +31,8 @@ class CleanDocument(BaseModel):
     section: str
     breadcrumbs: list[str]
     text: str
-    lang: str | None
+    html_lang: str | None  # valor de `<html lang>` tal como lo declara el sitio
+    lang: str | None  # idioma del contenido (detectado; si no hay señal, el de html_lang)
     lastmod: str | None
     published_at: str | None
     scraped_at: str
@@ -57,6 +58,7 @@ class WorkingDocument:
     soup: BeautifulSoup | None = None
     container: Tag | None = None
     title: str | None = None
+    html_lang: str | None = None
     lang: str | None = None
     published_at: str | None = None
     breadcrumbs: list[str] = field(default_factory=list)

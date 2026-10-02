@@ -114,6 +114,7 @@ def test_documentos_y_metadatos(raw_dir: Path) -> None:
     assert cajeros.section == "personas"
     assert cajeros.template == "A_main"
     assert cajeros.breadcrumbs == ["Inicio", "Canales", "Cajeros"]
+    assert cajeros.html_lang == "es"
     assert cajeros.lang == "es"
     assert cajeros.lastmod == "2026-06-01T14:30:00-05:00"
     assert cajeros.scraped_at == FECHA
@@ -125,6 +126,7 @@ def test_documentos_y_metadatos(raw_dir: Path) -> None:
     deudas = docs[f"{B}/educacion-financiera/finanzas-personales/organiza-tus-deudas"]
     assert deudas.section == "educacion-financiera"
     assert deudas.template == "C_role_main"
+    assert (deudas.html_lang, deudas.lang) == ("en", "es")
     assert "## Refinanciar" in deudas.text
 
     assert docs[f"{B}/acerca-de/documentos-legales/gmf-iva"].template == "B_main_content"
@@ -157,6 +159,9 @@ def test_reporte(raw_dir: Path) -> None:
     assert reporte.n_chars is not None
     assert reporte.n_chars.min <= reporte.n_chars.p50 <= reporte.n_chars.p95 <= reporte.n_chars.max
     assert reporte.leaks.total == 0
+    assert reporte.by_lang == {"es": 3}
+    assert reporte.lang_mismatch == 1  # la página de la plantilla C
+    assert reporte.lang_mismatch_pairs == {"en → es": 1}
 
 
 def test_determinista(raw_dir: Path, tmp_path: Path) -> None:
@@ -236,7 +241,8 @@ def test_cada_patron_de_fuga_detecta_su_caso(patron: str, texto: str) -> None:
 def test_leak_report_cuenta_casos() -> None:
     doc = CleanDocument(
         doc_id="1", url=f"{B}/x", title=None, section="personas", breadcrumbs=[],
-        text="Hola ${title} y ${loading}. Copyright © 2026", lang="es", lastmod=None,
+        text="Hola ${title} y ${loading}. Copyright © 2026", html_lang="es", lang="es",
+        lastmod=None,
         published_at=None, scraped_at=FECHA, content_hash="h", n_chars=10,
         template="otra", extraction="selector",
     )  # fmt: skip

@@ -23,12 +23,14 @@ from rag_bbva.processing.quality import LeakReport, leak_report
 from rag_bbva.processing.steps import (
     CleaningStep,
     DeduplicateStep,
+    DetectLanguageStep,
     ExtractMainContentStep,
     ExtractMetadataStep,
     MinLengthFilterStep,
     NormalizeTextStep,
     ParseHtmlStep,
     RemoveBoilerplateStep,
+    primary_language,
 )
 from rag_bbva.scraping.sitemap import section_of
 from rag_bbva.scraping.storage import read_manifest
@@ -121,6 +123,11 @@ class CleanReport(BaseModel):
     by_section: dict[str, int]
     by_template: dict[str, int]
     by_extraction: dict[str, int]
+    by_lang: dict[str, int]
+    # Documentos cuyo idioma detectado difiere del declarado en `<html lang>`
+    # (comparando la subetiqueta principal: `es-CO` cuenta como `es`).
+    lang_mismatch: int
+    lang_mismatch_pairs: dict[str, int]
     leaks: LeakReport
 
 
@@ -164,6 +171,7 @@ class CleaningPipeline:
                 RemoveBoilerplateStep(),
                 ExtractMainContentStep(min_coverage=min_extraction_coverage),
                 NormalizeTextStep(),
+                DetectLanguageStep(),
                 MinLengthFilterStep(min_chars=min_chars),
                 DeduplicateStep(),
             ]
@@ -181,6 +189,7 @@ class CleaningPipeline:
             section=section_of(page.url),
             breadcrumbs=resultado.breadcrumbs,
             text=resultado.text,
+            html_lang=resultado.html_lang,
             lang=resultado.lang,
             lastmod=page.lastmod,
             published_at=resultado.published_at,
@@ -222,6 +231,11 @@ class CleaningPipeline:
             extra={"procesados": len(lectura.pages), "conservados": len(documentos)},
         )
         longitudes = [d.n_chars for d in documentos]
+        distintos = Counter(
+            f"{d.html_lang} → {d.lang}"
+            for d in documentos
+            if d.html_lang and primary_language(d.html_lang) != d.lang
+        )
         reporte = CleanReport(
             manifest_skipped=_ordenado(lectura.skipped),
             processed=len(lectura.pages),
@@ -239,6 +253,9 @@ class CleaningPipeline:
             by_section=_ordenado(Counter(d.section for d in documentos)),
             by_template=_ordenado(Counter(d.template for d in documentos)),
             by_extraction=_ordenado(Counter(d.extraction for d in documentos)),
+            by_lang=_ordenado(Counter(d.lang or "desconocido" for d in documentos)),
+            lang_mismatch=sum(distintos.values()),
+            lang_mismatch_pairs=_ordenado(distintos),
             leaks=leak_report(documentos),
         )
         return CleaningResult(documentos, reporte)

@@ -153,7 +153,7 @@ class ExtractMetadataStep(CleaningStep):
 
         html = soup.find("html")
         lang = html.get("lang") if isinstance(html, Tag) else None
-        doc.lang = str(lang).strip().lower() if lang else None
+        doc.html_lang = str(lang).strip() or None if lang else None
 
         meta = soup.find("meta", attrs={"property": "article:published_time"})
         contenido = meta.get("content") if isinstance(meta, Tag) else None
@@ -310,6 +310,65 @@ class NormalizeTextStep(CleaningStep):
 
     def process(self, doc: WorkingDocument) -> WorkingDocument | Discarded:
         doc.text = normalize_text(doc.text)
+        return doc
+
+
+# Palabras funcionales frecuentes y exclusivas de cada idioma (se evitan las ambiguas
+# como "a", "no" o "me").
+STOPWORDS: dict[str, frozenset[str]] = {
+    "es": frozenset(
+        [
+            "de", "la", "que", "el", "en", "y", "los", "del", "se", "las", "por", "un", "para",
+            "con", "una", "su", "al", "lo", "como", "más", "pero", "sus", "ya", "este", "esta",
+            "entre", "cuando", "muy", "sin", "sobre", "también", "hasta", "hay", "donde",
+            "desde", "todo", "nos", "tu", "tus", "puedes", "es", "son",
+        ]
+    ),
+    "en": frozenset(
+        [
+            "the", "and", "of", "to", "in", "is", "that", "for", "it", "with", "as", "was", "on",
+            "are", "be", "this", "by", "you", "your", "from", "at", "or", "an", "have", "not",
+            "can", "will", "our", "we", "they",
+        ]
+    ),
+}  # fmt: skip
+# Mínimo de palabras funcionales y ventaja (veces) del idioma ganador sobre el otro.
+MIN_STOPWORDS_IDIOMA = 5
+VENTAJA_IDIOMA = 2.0
+_TOKEN = re.compile(r"[a-záéíóúüñ]+")
+
+
+def detect_language(texto: str) -> str | None:
+    """Idioma del texto (`es`/`en`) por conteo de palabras funcionales.
+
+    Devuelve `None` si no hay señal clara: menos de `MIN_STOPWORDS_IDIOMA` coincidencias
+    o ningún idioma supera al otro por `VENTAJA_IDIOMA` veces.
+    """
+    conteo = dict.fromkeys(STOPWORDS, 0)
+    for token in _TOKEN.findall(texto.lower()):
+        for idioma, palabras in STOPWORDS.items():
+            if token in palabras:
+                conteo[idioma] += 1
+    (primero, n1), (_, n2) = sorted(conteo.items(), key=lambda kv: -kv[1])
+    if n1 + n2 < MIN_STOPWORDS_IDIOMA or n1 < VENTAJA_IDIOMA * n2:
+        return None
+    return primero
+
+
+def primary_language(etiqueta: str | None) -> str | None:
+    """Subetiqueta principal de una etiqueta BCP 47 (`es-CO` → `es`)."""
+    return etiqueta.split("-")[0].strip().lower() or None if etiqueta else None
+
+
+class DetectLanguageStep(CleaningStep):
+    """Idioma real del contenido. Necesario porque la plantilla C (WebSphere) declara
+    `<html lang="en">` en páginas escritas en español; `html_lang` conserva el valor
+    declarado para trazabilidad."""
+
+    name = "idioma"
+
+    def process(self, doc: WorkingDocument) -> WorkingDocument | Discarded:
+        doc.lang = detect_language(doc.text) or primary_language(doc.html_lang)
         return doc
 
 

@@ -15,13 +15,16 @@ from rag_bbva.processing.models import Discarded, RawPage, WorkingDocument
 from rag_bbva.processing.steps import (
     CleaningStep,
     DeduplicateStep,
+    DetectLanguageStep,
     ExtractMainContentStep,
     ExtractMetadataStep,
     MinLengthFilterStep,
     NormalizeTextStep,
     ParseHtmlStep,
     RemoveBoilerplateStep,
+    detect_language,
     normalize_text,
+    primary_language,
     word_coverage,
 )
 
@@ -65,7 +68,7 @@ def test_paso_fuera_de_orden_lanza_processing_error() -> None:
 
 
 @pytest.mark.parametrize(
-    ("fixture", "plantilla", "lang", "titulo"),
+    ("fixture", "plantilla", "html_lang", "titulo"),
     [
         ("plantilla_a_cajeros", "A_main", "es", "Cajeros automáticos"),
         ("plantilla_b_gmf_iva", "B_main_content", "es", "GMF e IVA"),
@@ -73,13 +76,13 @@ def test_paso_fuera_de_orden_lanza_processing_error() -> None:
     ],
 )
 def test_metadatos_de_las_tres_plantillas(
-    fixture: str, plantilla: str, lang: str, titulo: str
+    fixture: str, plantilla: str, html_lang: str, titulo: str
 ) -> None:
     """Plantilla detectada, `<html lang>` tal como lo declara el sitio y título."""
     doc = _hasta(_fixture(fixture), ParseHtmlStep(), ExtractMetadataStep())
 
     assert doc.template == plantilla
-    assert doc.lang == lang
+    assert doc.html_lang == html_lang
     assert doc.title == titulo
 
 
@@ -98,7 +101,7 @@ def test_plantilla_otra_y_sin_migas() -> None:
     assert doc.template == "otra"
     assert doc.breadcrumbs == []
     assert doc.published_at is None
-    assert doc.lang is None
+    assert doc.html_lang is None
 
 
 _LD = '<script type="application/ld+json">{}</script>'
@@ -306,6 +309,52 @@ def test_normalize_step_aplica_normalize_text() -> None:
     doc.text = "a  b\n\n\n\nc"
 
     assert NormalizeTextStep().process(doc).text == "a b\n\nc"  # type: ignore[union-attr]
+
+
+# ---------------------------------------------------------------- idioma
+
+
+def test_plantilla_c_declara_en_pero_el_contenido_es_espanol() -> None:
+    """WebSphere declara `<html lang="en">` en páginas en español: `html_lang` conserva
+    el valor declarado y `lang` refleja el idioma real del contenido."""
+    doc = _hasta(
+        _fixture("plantilla_c_organiza_deudas"),
+        ParseHtmlStep(), ExtractMetadataStep(), RemoveBoilerplateStep(),
+        ExtractMainContentStep(min_coverage=0.9), NormalizeTextStep(), DetectLanguageStep(),
+    )  # fmt: skip
+
+    assert doc.html_lang == "en"
+    assert doc.lang == "es"
+
+
+@pytest.mark.parametrize(
+    ("texto", "esperado"),
+    [
+        ("Abre tu cuenta de ahorros y mueve la plata desde la app con tu clave.", "es"),
+        ("Open your savings account and move the money from the app with your key.", "en"),
+        ("Cuenta Plan Oro $14,900", None),  # sin palabras funcionales suficientes
+        ("de la que el en the and of to in is", None),  # empate: sin señal clara
+        ("", None),
+    ],
+)
+def test_detect_language(texto: str, esperado: str | None) -> None:
+    assert detect_language(texto) == esperado
+
+
+def test_sin_senal_clara_usa_html_lang() -> None:
+    doc = _doc("")
+    doc.html_lang, doc.text = "es-CO", "Plan Oro $14,900"
+
+    assert DetectLanguageStep().process(doc).lang == "es"  # type: ignore[union-attr]
+    doc.html_lang = None
+    assert DetectLanguageStep().process(doc).lang is None  # type: ignore[union-attr]
+
+
+@pytest.mark.parametrize(
+    ("etiqueta", "esperado"), [("es-CO", "es"), ("EN", "en"), ("", None), (None, None)]
+)
+def test_primary_language(etiqueta: str | None, esperado: str | None) -> None:
+    assert primary_language(etiqueta) == esperado
 
 
 def test_min_length_descarta_con_motivo() -> None:

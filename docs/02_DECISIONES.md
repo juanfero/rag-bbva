@@ -106,3 +106,18 @@ Formato: una entrada por decisión. Estado: Propuesta · Aceptada · Reemplazada
   - Los mensajes se ordenan por su `id` autoincremental (orden de inserción), no por la hora: dos mensajes en el mismo instante no se desordenan.
   - El título de la conversación es su primera pregunta (una línea, máx. 80 caracteres).
 - **Consecuencias:** + un ID mal copiado no abre en silencio una conversación vacía, sin contexto, que el usuario creería continuar; + IDs no adivinables y sin choques entre clientes; − el cliente debe guardar el ID que recibe para continuar la conversación.
+
+## ADR-014 — Turno atómico: la pregunta y la respuesta se guardan juntas o ninguna
+- **Estado:** Aceptada (2026-10-03, M9; pedida por Juan Felipe al aprobar M8)
+- **Contexto:** si la pregunta se guardara al recibirla y luego fallara el LLM (cupo agotado, timeout) o Qdrant, quedaría una pregunta sin respuesta en el historial. La siguiente pregunta la recibiría como contexto y el reformulador mezclaría un tema que el usuario nunca vio respondido. Si la conversación es nueva, además quedaría una conversación vacía.
+- **Decisión:**
+  - `RAGService.ask` no escribe nada hasta tener la respuesta. Después, `ConversationRepository.add_turn` guarda la pregunta, la respuesta (con fuentes y métricas) y, si no había `conversation_id`, la conversación nueva, **en una sola transacción** de SQLite.
+  - Si falla la recuperación, el LLM o la propia base, no queda nada guardado y la API responde 503 (o 404 si el ID no existía, antes de gastar tokens).
+  - Las respuestas `no_answer` (el umbral cortó) sí se guardan: son un turno completo y la analítica de M11 las cuenta.
+- **Consecuencias:** + el contexto de la conversación solo tiene turnos completos; + no hay conversaciones vacías por errores; − una pregunta que falló no queda registrada en el historial (sí en el log de la API, como advertencia).
+
+## ADR-015 — En las preguntas de seguimiento, el prompt de respuesta lleva también la pregunta autónoma
+- **Estado:** Aceptada (2026-10-03, M9; cambia una decisión de M7)
+- **Contexto:** en M7 la pregunta reformulada solo se usaba para recuperar y el LLM respondía con la pregunta original. Con historial real (M9), el LLM recibiría solo "¿y cuáles son los requisitos?" y el contexto recuperado, sin saber de qué producto se habla.
+- **Decisión:** si el reformulador usó el LLM, el mensaje del usuario lleva la pregunta original y debajo `Pregunta autónoma (la misma pregunta, reescrita con el historial de la conversación): …`. El prompt de sistema no cambia; `PROMPT_VERSION` pasa a `2026-10-03.1`. Sin reformulación, el prompt queda idéntico al de M7.
+- **Consecuencias:** + el modelo responde la pregunta que el usuario quiso hacer, con sus palabras y con el referente resuelto; − si el reformulador interpreta mal la pregunta, la respuesta hereda el error (la pregunta original sigue en el prompt para mitigarlo).

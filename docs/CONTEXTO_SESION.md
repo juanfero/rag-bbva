@@ -25,13 +25,10 @@
   - `c38abdc` y `9a6e3ce`, entre `m01` y `m02`.
 - Cada merge incluye las correcciones de su revisión (§10 de cada bitácora).
 
-### Siguiente módulo: M9 — Servicio RAG + API
-- Juan Felipe aprobó M8 (con ADR-013) y pidió M9 en la rama `feat/m09-api`:
-  - `RAGService` (Facade): `ask(conversation_id | None, question)` → últimos N mensajes → reformulación → retrieve → rerank → umbral → generate → persistencia;
-  - **turno atómico** (pregunta y respuesta se guardan juntas o ninguna si falla el LLM), registrado como ADR;
-  - FastAPI con `create_app` y `Depends`: `POST /chat`, `GET /conversations`, `GET /conversations/{id}/messages`, `POST /messages/{id}/feedback`, `GET /health`. **Sin `/analytics`** (M11);
-  - errores JSON `{error, detail}`: 404, 422, 503 (LLM, Qdrant o cupo), sin trazas; lifespan con `warm_up`; comando `serve`;
-  - evidencia real con pocas llamadas (cupo de Gemini): 3 turnos por curl, reinicio del servidor y continuación, `/health` con Qdrant detenido.
+### Módulo en curso: M9 — Servicio RAG + API (implementado, **en revisión**)
+- Rama `feat/m09-api`. Detalle y evidencia real en `docs/modulos/M09.md`: `RAGService` (Facade), FastAPI (`create_app` + `Depends`), turno atómico (ADR-014), pregunta autónoma en el prompt (ADR-015, **pendiente de validación**), `/health` sin tokens y comando `serve`.
+- Para probar en esta máquina: `serve --port 8010`, porque el puerto 8000 lo ocupa un contenedor ajeno (`fabrix-startup-backend-1`).
+- El historial real (`data/history/history.db`, ignorado por git) tiene la conversación de la evidencia (`948ede08-…`, 10 mensajes).
 - **Sin merge** sin aprobación.
 
 ### Estado del árbol (al cerrar M8)

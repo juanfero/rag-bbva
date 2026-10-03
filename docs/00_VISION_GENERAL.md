@@ -245,6 +245,8 @@ El caso pide mínimo 3. Se implementan 6 para tener margen, pero el README desta
 | `HISTORY_DB_PATH` | `data/history/history.db` | Ruta SQLite |
 | `HISTORY_WINDOW_N` | `6` | **N mensajes previos** usados como contexto |
 | `MANUAL_SEARCH_MINUTES` | `5` | Supuesto para estimar tiempo ahorrado (analítica) |
+| `API_HOST` / `API_PORT` | `127.0.0.1` / `8000` | Dirección y puerto de `serve` (M9); en Docker, `0.0.0.0` (M12) |
+| `CHAT_QUESTION_MAX_CHARS` | `1000` | Largo máximo de una pregunta; más largo responde 422 (M9) |
 | `LOG_LEVEL` | `INFO` | Nivel de logs |
 
 ---

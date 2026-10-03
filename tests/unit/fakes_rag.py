@@ -135,14 +135,19 @@ class LLMGuionado(FakeLLMProvider):
 
 
 def ajustes(**cambios: object) -> Settings:
+    """Configuración de prueba aislada: no lee `.env` y fija los valores que las pruebas
+    comprueban, para que no cambien con variables del entorno (p. ej. `LLM_MODEL`)."""
     base: dict[str, object] = {
         "llm_provider": "fake",
+        "llm_model": "gemini-2.5-flash",
         "embedding_provider": "fake",
+        "qdrant_collection": "bancolombia_docs",
         "history_window_n": 6,
         "query_rewrite_mode": "history_only",
+        "chat_question_max_chars": 1000,
     }
     base.update(cambios)
-    return Settings(**base)  # type: ignore[arg-type]
+    return Settings(_env_file=None, **base)  # type: ignore[arg-type,call-arg]
 
 
 def servicio(

@@ -19,7 +19,7 @@ Prueba técnica de ML/AI Engineer: un sistema RAG (*Retrieval-Augmented Generati
 | M4 | Chunking + embeddings: estrategias de chunking, e5-small en CPU, fábrica de componentes | ✅ | `m04` |
 | M5 | Indexación vectorial (Qdrant): `ingest` idempotente con sincronización y caché de embeddings | ✅ | `m05` |
 | M6 | Recuperación + reranker: cross-encoder, diversidad por página, umbral calibrado de "sin información" | ✅ | `m06` |
-| M7 | Generación con LLM: Gemini 2.5 Flash (Grok como alternativa), prompts versionados, citas, reformulación | 🚧 en revisión (rama `feat/m07-llm`) | — |
+| M7 | Generación con LLM: Gemini 2.5 Flash (Grok como alternativa), prompts versionados, citas, reformulación | ✅ | `m07` |
 | M8 | Memoria conversacional | ⏳ | — |
 | M9 | Servicio RAG + API | ⏳ | — |
 | M10 | Interfaz conversacional | ⏳ | — |
@@ -208,10 +208,11 @@ python -m rag_bbva.cli llm-check   # lista los modelos de la clave y confirma LL
 - **Reintentos:** un solo mecanismo propio ante 429, 5xx y timeouts (el SDK no reintenta). Los errores llegan al usuario como mensajes claros, sin trazas.
 - **Costo:** con la clave gratuita el costo real es **$0**. El costo equivalente con los precios pagos de Google ($0,30 por millón de tokens de entrada y $2,50 de salida) fue **≈ $0,0014 por respuesta**: ~1550 tokens de entrada y ~360 de salida, medidos en 4 respuestas reales.
 - **El LLM es un servicio externo:** Gemini con clave gratuita tiene límites de uso (L-11) y condiciones sobre los datos (L-12). Grok es de pago (ADR-003).
-- **Si se agota el cupo diario de Gemini**, el asistente lo dice sin reintentar. El cupo es **por proyecto, no por clave**, así que una clave nueva del mismo proyecto no sirve. Para seguir:
+- **Si se agota el cupo diario de Gemini**, el asistente lo dice sin reintentar. El cupo es **por proyecto y por modelo, no por clave**, así que una clave nueva del mismo proyecto no sirve. Para seguir:
   1. En https://aistudio.google.com/api-keys → *Create API key* → **en un proyecto nuevo**.
   2. Reemplazar `GEMINI_API_KEY=` en `.env`.
   3. Verificar con `python -m rag_bbva.cli llm-check`.
+  - Alternativa sin clave nueva: cambiar `LLM_MODEL` a otro modelo con cupo propio (p. ej. `gemini-3.1-flash-lite`, verificado en M7). La calidad de sus respuestas no se midió.
 - **Las claves nunca se versionan:** solo van en `.env`, que está en `.gitignore`. El test `tests/unit/test_secrets.py` falla si algún archivo del repo contiene algo con forma de clave de Gemini o de xAI, o si `.env` dejara de estar ignorado.
 
 **Docker.** Hoy existen la imagen base (`docker build .`; `docker compose run --rm api` ejecuta el comando `version`) y el servicio `qdrant` para desarrollo (`docker compose up -d qdrant`).

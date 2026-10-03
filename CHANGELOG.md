@@ -4,8 +4,8 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Sin publicar]
 
-### M7 — Generación con LLM (en revisión, rama `feat/m07-llm`)
-#### Añadido
+## [m07] - 2026-10-03 — Generación con LLM
+### Añadido
 - `LLMProvider` (Strategy):
   - `OpenAICompatibleProvider` con dos variantes: `GeminiProvider` (por defecto, ADR-012) y `XaiGrokProvider`; más `FakeLLMProvider`;
   - SDK `openai` con reintentos propios (tenacity, el SDK con `max_retries=0`) solo ante 429, 5xx y timeouts;
@@ -24,7 +24,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 - README: generación, `llm-check`, configuración de la clave, Strategy del LLM, costo, L-11 (cupo diario) y L-12 (datos en el nivel gratuito).
 - `tests/unit/test_secrets.py`: falla si algún archivo del repo contiene una clave de API o si `.env` deja de estar ignorado.
 - El 429 de cupo diario no se reintenta y explica cómo seguir (clave de un proyecto nuevo, solo en `.env`).
-#### Cambiado
+### Cambiado
 - `LLM_PROVIDER` por defecto `gemini` y `LLM_MODEL` `gemini-2.5-flash` (antes `xai` / `grok-4.7`). ADR-003 queda reemplazada como opción por defecto.
 
 ## [m06] - 2026-10-02 — Recuperación + reranker

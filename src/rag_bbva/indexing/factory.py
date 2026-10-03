@@ -13,6 +13,7 @@ from rag_bbva.indexing.vector_store import QdrantVectorStore, VectorStore
 from rag_bbva.llm.generator import AnswerGenerator
 from rag_bbva.llm.provider import (
     FakeLLMProvider,
+    FallbackLLMProvider,
     GeminiProvider,
     LLMProvider,
     OpenAICompatibleProvider,
@@ -110,7 +111,8 @@ class ComponentFactory:
 
     def create_llm(self) -> LLMProvider:
         """Proveedor de `LLM_PROVIDER` (gemini | xai | fake). Exige la clave del proveedor
-        al crearlo (ADR-006): falla aquí y no a mitad de una conversación."""
+        al crearlo (ADR-006): falla aquí y no a mitad de una conversación. Con
+        `LLM_FALLBACK_MODEL` lo envuelve en `FallbackLLMProvider` (Decorator)."""
         ajustes = self.settings
         if ajustes.llm_provider == "fake":
             return FakeLLMProvider(model="fake-model")
@@ -127,17 +129,25 @@ class ComponentFactory:
                 "Agréguela en el archivo .env (ver .env.example) o use LLM_PROVIDER=fake "
                 "para pruebas."
             )
-        return clase(
-            api_key=clave.get_secret_value(),
-            base_url=base_url,
-            model=ajustes.llm_model,
-            temperature=ajustes.llm_temperature,
-            max_tokens=ajustes.llm_max_tokens,
-            timeout=ajustes.llm_timeout_seconds,
-            max_retries=ajustes.llm_max_retries,
-            backoff_seconds=ajustes.llm_backoff_seconds,
-            reasoning_effort=esfuerzo,
-        )
+
+        def proveedor(modelo: str) -> LLMProvider:
+            return clase(
+                api_key=clave.get_secret_value(),
+                base_url=base_url,
+                model=modelo,
+                temperature=ajustes.llm_temperature,
+                max_tokens=ajustes.llm_max_tokens,
+                timeout=ajustes.llm_timeout_seconds,
+                max_retries=ajustes.llm_max_retries,
+                backoff_seconds=ajustes.llm_backoff_seconds,
+                reasoning_effort=esfuerzo,
+            )
+
+        principal = proveedor(ajustes.llm_model)
+        respaldo = ajustes.llm_fallback_model.strip()
+        if not respaldo or respaldo == ajustes.llm_model:
+            return principal
+        return FallbackLLMProvider(principal, proveedor(respaldo))
 
     def create_query_rewriter(self, llm: LLMProvider, mode: str | None = None) -> QueryRewriter:
         """Reformulador con `QUERY_REWRITE_MODE` (o `mode`)."""

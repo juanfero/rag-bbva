@@ -95,6 +95,9 @@ class Settings(BaseSettings):
     xai_api_key: SecretStr | None = None
     xai_base_url: str = "https://api.x.ai/v1"
     llm_model: str = "gemini-2.5-flash"
+    # Modelo de respaldo ante un 429 del principal (cupo diario agotado). Vacío lo
+    # desactiva. Debe ser del mismo proveedor (con xai, un modelo de Grok o vacío).
+    llm_fallback_model: str = "gemini-3.1-flash-lite"
     # Solo Gemini: "none" apaga el razonamiento interno de gemini-2.5-flash (menos
     # latencia y tokens); "low" | "medium" | "high" lo activan; vacío no se envía.
     llm_reasoning_effort: str = "none"

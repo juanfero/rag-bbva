@@ -36,6 +36,7 @@ class QdrantHealth(ComponentHealth):
 class LLMHealth(ComponentHealth):
     provider: str
     model: str
+    fallback_model: str | None = None
     key_configured: bool
 
 
@@ -99,6 +100,7 @@ class HealthChecker:
             detail=None if hay_clave else f"Falta {clave_env} en .env",
             provider=ajustes.llm_provider,
             model=ajustes.llm_model,
+            fallback_model=ajustes.llm_fallback_model.strip() or None,
             key_configured=hay_clave,
         )
 

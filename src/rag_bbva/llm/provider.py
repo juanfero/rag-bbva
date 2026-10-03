@@ -21,7 +21,7 @@ import openai
 from pydantic import BaseModel
 from tenacity import Retrying, retry_if_exception, stop_after_attempt, wait_exponential
 
-from rag_bbva.exceptions import ConfigurationError, LLMError
+from rag_bbva.exceptions import ConfigurationError, LLMError, LLMQuotaError
 
 logger = logging.getLogger(__name__)
 
@@ -197,7 +197,12 @@ class OpenAICompatibleProvider(LLMProvider):
         try:
             return reintentador(funcion)
         except openai.OpenAIError as exc:
-            raise LLMError(self._mensaje_amigable(exc), detail=f"{operacion}: {exc!r}") from exc
+            raise self._error(exc, operacion) from exc
+
+    def _error(self, exc: openai.OpenAIError, operacion: str) -> LLMError:
+        """`LLMQuotaError` ante un 429 (cupo o límite); `LLMError` ante todo lo demás."""
+        clase = LLMQuotaError if isinstance(exc, openai.RateLimitError) else LLMError
+        return clase(self._mensaje_amigable(exc), detail=f"{operacion}: {exc!r}")
 
     def _parametros(self, messages: Sequence[Message], max_tokens: int | None) -> dict[str, Any]:
         parametros: dict[str, Any] = {
@@ -255,7 +260,7 @@ class OpenAICompatibleProvider(LLMProvider):
                         if eleccion.delta.content:
                             yield eleccion.delta.content
             except openai.OpenAIError as exc:
-                raise LLMError(self._mensaje_amigable(exc), detail=f"streaming: {exc!r}") from exc
+                raise self._error(exc, "streaming") from exc
 
         def cierre(texto: str) -> LLMResponse:
             return LLMResponse(
@@ -360,3 +365,50 @@ class UnconfiguredLLMProvider(LLMProvider):
 
     def list_models(self) -> list[str]:
         raise self.error
+
+
+class FallbackLLMProvider(LLMProvider):
+    """Decorator sobre `LLMProvider`: si el modelo principal responde 429 (cupo diario
+    agotado o límite por minuto tras los reintentos), repite la misma llamada con el
+    modelo de respaldo (`LLM_FALLBACK_MODEL`).
+
+    Solo actúa ante `LLMQuotaError`. Una clave inválida, un modelo inexistente o un
+    timeout se propagan sin respaldo: cambiar de modelo no los arregla y ocultaría un
+    error de configuración. Qué modelo respondió queda en `LLMResponse.model` y en el log.
+    """
+
+    def __init__(self, primary: LLMProvider, fallback: LLMProvider) -> None:
+        self.primary = primary
+        self.fallback = fallback
+        self.name = primary.name
+        self.model = primary.model
+
+    def _avisar(self, exc: LLMQuotaError) -> None:
+        logger.warning(
+            "Cupo agotado en el modelo principal; responde el de respaldo",
+            extra={
+                "modelo": self.primary.model,
+                "respaldo": self.fallback.model,
+                "error": str(exc),
+            },
+        )
+
+    def complete(
+        self, messages: Sequence[Message], *, max_tokens: int | None = None
+    ) -> LLMResponse:
+        try:
+            return self.primary.complete(messages, max_tokens=max_tokens)
+        except LLMQuotaError as exc:
+            self._avisar(exc)
+            return self.fallback.complete(messages, max_tokens=max_tokens)
+
+    def stream(self, messages: Sequence[Message], *, max_tokens: int | None = None) -> LLMStream:
+        """El respaldo aplica al abrir el flujo; un error a mitad del flujo se propaga."""
+        try:
+            return self.primary.stream(messages, max_tokens=max_tokens)
+        except LLMQuotaError as exc:
+            self._avisar(exc)
+            return self.fallback.stream(messages, max_tokens=max_tokens)
+
+    def list_models(self) -> list[str]:
+        return self.primary.list_models()

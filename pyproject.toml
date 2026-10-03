@@ -10,6 +10,8 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "beautifulsoup4>=4.12",
+    # API REST del servicio RAG (M9).
+    "fastapi>=0.115,<1",
     "httpx>=0.27",
     "lxml>=5.0",
     "numpy>=1.26",
@@ -27,6 +29,8 @@ dependencies = [
     "torch>=2.4",
     "trafilatura>=2.0",
     "typer>=0.12",
+    # Servidor ASGI para la API (comando `serve`, M9).
+    "uvicorn>=0.30,<1",
 ]
 
 [project.optional-dependencies]

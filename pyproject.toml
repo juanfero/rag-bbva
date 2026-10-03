@@ -20,6 +20,8 @@ dependencies = [
     # Misma serie que la imagen qdrant/qdrant:v1.19.1 de docker-compose.yml.
     "qdrant-client>=1.19.1,<1.20",
     "sentence-transformers>=3.0",
+    # Historial de conversaciones en SQLite (M8, patrón Repository).
+    "sqlalchemy>=2.0,<2.2",
     "tenacity>=8.2",
     # CPU-only: instalar antes desde https://download.pytorch.org/whl/cpu (ver README).
     "torch>=2.4",

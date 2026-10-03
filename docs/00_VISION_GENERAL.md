@@ -178,7 +178,7 @@ El caso pide mínimo 3. Se implementan 6 para tener margen, pero el README desta
 | Patrón | Tipo | Dónde | Por qué |
 |---|---|---|---|
 | **Factory** | Creacional | `indexing/factory.py`, `llm/factory.py` | Crear embedder, LLM, vector store y reranker a partir de la configuración sin acoplar el resto del código a clases concretas |
-| **Strategy** | Comportamental | `ChunkingStrategy`, `LLMProvider`, `Reranker` | Intercambiar algoritmos (chunking por secciones vs. tamaño fijo; Grok vs. otro proveedor / fake en tests; con/sin reranker) sin tocar el pipeline |
+| **Strategy** | Comportamental | `ChunkingStrategy`, `LLMProvider`, `Reranker` | Intercambiar algoritmos (chunking por secciones vs. tamaño fijo; Gemini (por defecto) vs. Grok / fake en tests; con/sin reranker) sin tocar el pipeline |
 | **Repository** | Estructural / arquitectónico | `memory/repository.py` | Aislar la persistencia del historial; permite cambiar SQLite por otra BD y usar un repo en memoria en tests |
 | **Facade** | Estructural | `services/rag_service.py` | Un único punto de entrada (`ask(conversation_id, pregunta)`) que orquesta memoria, recuperación, reranking y generación |
 | **Template Method** | Comportamental | `scraping/base.py` | Esqueleto fijo del crawl (descubrir → descargar → validar → guardar) con pasos sobrescribibles |
@@ -239,7 +239,7 @@ El caso pide mínimo 3. Se implementan 6 para tener margen, pero el README desta
 | `LLM_TIMEOUT_SECONDS` | `60` | Timeout por llamada |
 | `LLM_MAX_RETRIES` | `2` | Reintentos propios ante 429/5xx/timeouts; el SDK no reintenta (M7) |
 | `LLM_BACKOFF_SECONDS` | `1.0` | Espera base del backoff exponencial (M7) |
-| `LLM_PRICE_INPUT_PER_MTOK` / `LLM_PRICE_OUTPUT_PER_MTOK` | `2.0` / `6.0` | USD por millón de tokens para estimar costos; docs.x.ai, grok-4.7 < 200k (M7) |
+| `LLM_PRICE_INPUT_PER_MTOK` / `LLM_PRICE_OUTPUT_PER_MTOK` | `0.30` / `2.50` | USD por millón de tokens para estimar el costo equivalente: precios pagos de `gemini-2.5-flash` (ai.google.dev/gemini-api/docs/pricing). Con la clave gratuita el costo real es $0 (M7, ADR-012) |
 | `QUERY_REWRITE_MODE` | `history_only` | Reformulación de la pregunta: `off`, `history_only` o `always` (M7) |
 | `QUERY_REWRITE_MAX_TOKENS` | `120` | Tope de tokens de la pregunta reformulada (M7) |
 | `HISTORY_DB_PATH` | `data/history/history.db` | Ruta SQLite |
@@ -271,7 +271,7 @@ Salida: comando CLI `metrics`, endpoint `GET /analytics/summary`, página "Métr
 | S-02 | Se usa el sitio de **Bancolombia** (`www.bancolombia.com`) como fuente de datos: `www.bbva.com.co` responde 403 (WAF) a `robots.txt`, home y sitemap para cualquier cliente no navegador. BBVA Colombia sigue siendo el cliente ficticio y el código conserva los nombres (`rag-bbva`, `rag_bbva`), pero **todo texto visible al usuario (prompts, UI, respuestas, README) dice Bancolombia** | Confirmado (2026-10-01, ADR-008) |
 | S-03 | Alcance del scraping: páginas públicas HTML del dominio `www.bancolombia.com`: las 6 secciones principales (`personas`, `negocios`, `empresas`, `centro-de-ayuda`, `educacion-financiera`, `acerca-de`) y cualquier ruta del dominio alcanzada por enlace o redirección (p. ej. `/pagos`, `/tramites-digitales`); la `section` de cada documento se toma de su URL real (`final_url`). Se excluyen PDFs (además prohibidos por robots), formularios/solicitudes, áreas transaccionales/login, redirecciones a otros dominios (p. ej. `fiduciaria.bancolombia.com`) y URLs no HTML. La **sala de prensa** (`/acerca-de/sala-prensa/…`) queda **fuera**: sus URLs redirigen a otro host, `prensa.bancolombia.com` (ADR-010); el resto de `acerca-de` sigue dentro. `published_at` es un metadato opcional de M3, solo si la página trae la fecha en metadatos. Los PDFs y la sala de prensa pueden quedar como mejora futura | Confirmado (2026-10-01, checkpoint de M1; `docs/exploracion_sitio.md` §7). Acotado el 2026-10-02 (ADR-010) y ampliado a rutas alcanzadas por enlace o redirección el 2026-10-02 (ADR-011, revisión de M3) |
 | S-04 | El crawl se limita (`CRAWL_MAX_PAGES`) para respetar al sitio y el tiempo de la prueba. Defaults: `CRAWL_MAX_PAGES=1200` (cubre las 1.113 URLs permitidas de los sitemaps) y `CRAWL_MAX_DEPTH=1`; en desarrollo `--max-pages 50`. El arranque con `docker compose` **no** scrapea: usa un snapshot versionado de datos limpios y el scraping completo es un comando opcional (M12) | Confirmado (2026-10-01, checkpoint de M1) |
-| S-05 | "Usuarios internos" no implica autenticación; el `conversation_id` lo genera la UI o lo envía el cliente | Propuesto |
+| S-05 | "Usuarios internos" no implica autenticación. El `conversation_id` lo genera el servidor al crear la conversación (UUID4) y el cliente lo reenvía para continuarla; un ID desconocido se informa (404 en la API), no se crea al vuelo | Confirmado (2026-10-03, M8; contrato del ID en ADR-013) |
 | S-06 | El asistente responde solo con el contexto recuperado; si no hay información suficiente, lo dice explícitamente (no inventa) | Propuesto |
 | S-07 | El índice es una foto del sitio en una fecha; la actualización periódica queda como mejora futura | Propuesto |
 | S-08 | Se respeta `robots.txt` y un delay entre peticiones; si `robots.txt` prohíbe rutas, se excluyen y se documenta | Propuesto |

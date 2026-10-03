@@ -2,7 +2,7 @@
 
 Uso: `python -m rag_bbva.cli <comando>` o `rag-bbva <comando>`.
 Comandos disponibles: `version`, `scrape` (M2), `clean` (M3), `chunk` (M4), `ingest`
-(M5), `search` (M6) y `llm-check` (M7). Los de las etapas siguientes (chat, metrics)
+(M5), `search` (M6), `llm-check` (M7) y `history` (M8). Los de las etapas siguientes (chat, metrics)
 se agregan en sus módulos respectivos.
 """
 
@@ -21,6 +21,7 @@ from rag_bbva import __version__
 from rag_bbva.config import get_settings
 from rag_bbva.exceptions import (
     ConfigurationError,
+    HistoryError,
     IndexingError,
     LLMError,
     ProcessingError,
@@ -31,6 +32,7 @@ from rag_bbva.indexing.factory import ComponentFactory
 from rag_bbva.indexing.ingest import Ingestor, IngestReport
 from rag_bbva.indexing.pipeline import ChunkReport, chunk_documents, read_documents, write_chunks
 from rag_bbva.logging_conf import configure_logging
+from rag_bbva.memory.models import Conversation, Message
 from rag_bbva.processing.pipeline import CleaningPipeline, CleanReport, write_clean_output
 from rag_bbva.retrieval.models import RetrievalResult
 from rag_bbva.scraping.base import MOTIVO_INTERRUMPIDO, CrawlReport
@@ -354,6 +356,61 @@ def llm_check() -> None:
         err=True,
     )
     raise typer.Exit(code=EXIT_MODELO_NO_DISPONIBLE)
+
+
+def _formato_conversaciones(conversaciones: list[Conversation]) -> str:
+    if not conversaciones:
+        return "No hay conversaciones guardadas."
+    lineas = [f"Conversaciones ({len(conversaciones)}, más recientes primero):"]
+    for c in conversaciones:
+        cuando = c.updated_at.isoformat(timespec="seconds")
+        lineas.append(f"  {c.id}  {cuando}  {c.title or '(sin título)'}")
+    return "\n".join(lineas)
+
+
+def _formato_mensajes(conversacion: Conversation, mensajes: list[Message]) -> str:
+    lineas = [f"Conversación {conversacion.id} · {conversacion.title or '(sin título)'}"]
+    for m in mensajes:
+        extra = []
+        if m.sources:
+            extra.append(f"fuentes={len(m.sources)}")
+        if m.metrics.total_ms is not None:
+            extra.append(f"total_ms={m.metrics.total_ms:.0f}")
+        if m.feedback:
+            extra.append(f"feedback={m.feedback}")
+        detalle = f"  ({', '.join(extra)})" if extra else ""
+        cuando = m.created_at.isoformat(timespec="seconds")
+        lineas.append(f"[{m.id}] {cuando} {m.role}: {m.content}{detalle}")
+    return "\n".join(lineas)
+
+
+@app.command()
+def history(
+    conversation_id: Annotated[
+        str | None, typer.Argument(help="ID de la conversación; sin él, lista conversaciones.")
+    ] = None,
+    last: Annotated[
+        int | None,
+        typer.Option("--last", min=0, help="Solo los últimos N mensajes (como get_last_n)."),
+    ] = None,
+    limit: Annotated[int, typer.Option("--limit", min=1, help="Conversaciones a listar.")] = 20,
+) -> None:
+    """Muestra el historial guardado en HISTORY_DB_PATH (solo lectura)."""
+    try:
+        repo = ComponentFactory(get_settings()).create_conversation_repository()
+        if conversation_id is None:
+            typer.echo(_formato_conversaciones(repo.list_conversations(limit=limit)))
+            return
+        conversacion = repo.require_conversation(conversation_id)
+        mensajes = (
+            repo.get_messages(conversation_id)
+            if last is None
+            else repo.get_last_n(conversation_id, last)
+        )
+    except HistoryError as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(_formato_mensajes(conversacion, mensajes))
 
 
 if __name__ == "__main__":

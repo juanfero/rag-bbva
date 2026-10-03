@@ -20,7 +20,7 @@ Prueba técnica de ML/AI Engineer: un sistema RAG (*Retrieval-Augmented Generati
 | M5 | Indexación vectorial (Qdrant): `ingest` idempotente con sincronización y caché de embeddings | ✅ | `m05` |
 | M6 | Recuperación + reranker: cross-encoder, diversidad por página, umbral calibrado de "sin información" | ✅ | `m06` |
 | M7 | Generación con LLM: Gemini 2.5 Flash (Grok como alternativa), prompts versionados, citas, reformulación | ✅ | `m07` |
-| M8 | Memoria conversacional | ⏳ | — |
+| M8 | Memoria conversacional: historial en SQLite (Repository), últimos N mensajes, métricas por mensaje | ✅ | `m08` |
 | M9 | Servicio RAG + API | ⏳ | — |
 | M10 | Interfaz conversacional | ⏳ | — |
 | M11 | Analítica del historial | ⏳ | — |
@@ -34,7 +34,7 @@ Detalle de cada módulo: [plan de módulos](docs/01_PLAN_DE_MODULOS.md) y bitác
 
 ## Arquitectura
 
-Diseño objetivo ([visión general §3](docs/00_VISION_GENERAL.md)). Hoy existen la ingesta completa, la recuperación con reranker (M6) y la generación con citas (M7, todavía sin historial ni API): **Crawler → `data/raw/`** (M2), **Limpieza → `data/clean/`** (M3), **Chunking → `data/chunks/`** con embeddings en CPU (M4) e **indexación en Qdrant** (M5), además de la configuración, la CLI y la exploración del sitio (M0–M1).
+Diseño objetivo ([visión general §3](docs/00_VISION_GENERAL.md)). Hoy existen la ingesta completa, la recuperación con reranker (M6) y la generación con citas (M7) y el historial de conversaciones en SQLite (M8, todavía sin API que los una): **Crawler → `data/raw/`** (M2), **Limpieza → `data/clean/`** (M3), **Chunking → `data/chunks/`** con embeddings en CPU (M4) e **indexación en Qdrant** (M5), además de la configuración, la CLI y la exploración del sitio (M0–M1).
 
 **Ingesta (offline)**
 ```
@@ -215,6 +215,17 @@ python -m rag_bbva.cli llm-check   # lista los modelos de la clave y confirma LL
   - Alternativa sin clave nueva: cambiar `LLM_MODEL` a otro modelo con cupo propio (p. ej. `gemini-3.1-flash-lite`, verificado en M7). La calidad de sus respuestas no se midió.
 - **Las claves nunca se versionan:** solo van en `.env`, que está en `.gitignore`. El test `tests/unit/test_secrets.py` falla si algún archivo del repo contiene algo con forma de clave de Gemini o de xAI, o si `.env` dejara de estar ignorado.
 
+**Memoria conversacional (M8).** El historial se guarda en SQLite (`HISTORY_DB_PATH`, por defecto `data/history/history.db`, fuera de git) y sobrevive a reinicios.
+- Tablas `conversations` (id, fechas, título) y `messages` (rol, contenido, fuentes en JSON, latencias por etapa, score del reranker, `no_answer`, tokens y valoración 👍/👎). Las métricas alimentan la analítica de M11.
+- `get_last_n(conversation_id, n)` devuelve los últimos `n` mensajes en orden cronológico; el servicio de M9 usará `n=HISTORY_WINDOW_N` (6) para reformular preguntas de seguimiento. `n=0` desactiva el contexto.
+- **Contrato del ID** ([ADR-013](docs/02_DECISIONES.md)): el servidor crea la conversación y su ID (UUID4). Un ID que no existe **no se crea al vuelo**: se informa con un error (en la API será 404).
+- Consulta de solo lectura desde la CLI:
+```bash
+python -m rag_bbva.cli history                     # conversaciones, la más reciente primero
+python -m rag_bbva.cli history <ID> --last 6       # los últimos 6 mensajes (lo que vería el LLM)
+```
+- 🚧 Hoy nada escribe en el historial desde la CLI ni la API: lo hará el servicio RAG (M9).
+
 **Docker.** Hoy existen la imagen base (`docker build .`; `docker compose run --rm api` ejecuta el comando `version`) y el servicio `qdrant` para desarrollo (`docker compose up -d qdrant`).
 🚧 **El despliegue completo con `docker compose up -d --build` (Qdrant, API, UI) se completa en M12.** Ese arranque no scrapeará el sitio: usará un snapshot versionado de datos limpios.
 
@@ -241,7 +252,7 @@ El caso exige al menos 3. Previstos en la [visión general §6](docs/00_VISION_G
 | **Chain of Responsibility / Pipeline** | [`src/rag_bbva/processing/steps.py`](src/rag_bbva/processing/steps.py): `CleaningStep` (`set_next`/`handle`) y sus pasos; [`src/rag_bbva/processing/pipeline.py`](src/rag_bbva/processing/pipeline.py): `CleaningPipeline` | Cada paso de la limpieza (parseo, metadatos, boilerplate, extracción, normalización, idioma, longitud, duplicados) es una clase que transforma el documento y lo pasa al siguiente, o corta la cadena con el motivo del descarte. Se prueban por separado y se pueden reordenar o sustituir | ✅ M3 |
 | **Factory** | [`src/rag_bbva/indexing/factory.py`](src/rag_bbva/indexing/factory.py): `ComponentFactory` (`create_chunker`, `create_embedder`, `create_vector_store`, `create_reranker`, `create_retriever`, `create_llm`…) | Crear cada componente desde la configuración (`CHUNKING_STRATEGY`, `EMBEDDING_PROVIDER`, `RERANKER_ENABLED`, `LLM_PROVIDER`…) sin acoplar el resto del código a clases concretas. Si falta la clave del LLM, falla al crearlo con un error claro | ✅ M4–M7 |
 | **Adapter** (puerto de la base vectorial) | [`src/rag_bbva/indexing/vector_store.py`](src/rag_bbva/indexing/vector_store.py): interfaz `VectorStore` → `QdrantVectorStore` | La ingesta (y la recuperación de M6) hablan con una interfaz propia: `ensure_collection`, `upsert`, `search` con filtro por sección, `count`, `delete`. El adaptador traduce a `qdrant-client` y sus errores a `IndexingError`. Los tests usan el mismo adaptador sobre `QdrantClient(":memory:")` | ✅ M5 |
-| **Repository** | `memory/repository.py` | Aislar la persistencia del historial (SQLite en producción, memoria en tests) | ⏳ M8 |
+| **Repository** | [`src/rag_bbva/memory/repository.py`](src/rag_bbva/memory/repository.py): interfaz `ConversationRepository` → [`SqlAlchemyConversationRepository`](src/rag_bbva/memory/sql_repository.py) (SQLite) / `InMemoryConversationRepository` | El servicio pide "los últimos N mensajes" o "guarda este mensaje" sin saber de SQL. Las mismas pruebas de contrato corren contra las tres variantes (memoria, SQLite en memoria y en archivo) | ✅ M8 |
 | **Facade** | `services/rag_service.py` | Un único punto de entrada `ask(conversation_id, pregunta)` que orquesta todo el flujo | ⏳ M9 |
 
 ---
@@ -264,7 +275,7 @@ El caso exige al menos 3. Previstos en la [visión general §6](docs/00_VISION_G
 | Reranker | `cross-encoder/mmarco-mMiniLMv2-L12-H384-v1` | Multilingüe y liviano, corre en CPU (470 MB) ([ADR-005](docs/02_DECISIONES.md)) | ✅ en uso (M6) |
 | LLM | **Gemini 2.5 Flash** vía SDK `openai` (endpoint compatible); Grok (xAI) como alternativa | Calidad en español sin GPU local; clave **gratuita** de AI Studio (costo real $0) y aislado tras `LLMProvider` ([ADR-012](docs/02_DECISIONES.md), [ADR-003](docs/02_DECISIONES.md)) | ✅ en uso (M7) |
 | Orquestación RAG | Código propio, sin LangChain | Patrones visibles y testeables ([ADR-001](docs/02_DECISIONES.md)) | ⏳ M9 |
-| Historial | SQLite + SQLAlchemy | Cero infraestructura extra, persistente ([ADR-004](docs/02_DECISIONES.md)) | ⏳ M8 |
+| Historial | SQLite + SQLAlchemy 2 | Cero infraestructura extra, persistente ([ADR-004](docs/02_DECISIONES.md)) | ✅ en uso (M8) |
 | API / UI | FastAPI · Streamlit | Validación y OpenAPI · chat y panel en pocas líneas | ⏳ M9 / M10 |
 | Contenedores | Docker + Compose | Requisito del caso | ✅ imagen base (M0) · ⏳ completo en M12 |
 
@@ -288,6 +299,7 @@ Registro completo: [`docs/02_DECISIONES.md`](docs/02_DECISIONES.md) (ADR) y supu
 - **Umbral sobre el reranker, no sobre el coseno:** el coseno de e5 no separa preguntas respondibles de las que no lo son; el score del cross-encoder sí, en una escala de ~17 puntos (M6).
 - **`html_lang` y `lang` separados:** la plantilla de WebSphere declara `lang="en"` en páginas en español. `lang` se detecta en el texto por palabras funcionales, sin dependencias nuevas (M3).
 - **Gemini en lugar de Grok:** la API de xAI se quedó sin créditos; Gemini 2.5 Flash con clave gratuita, por el mismo SDK (ADR-012).
+- **Un `conversation_id` desconocido se informa, no se crea:** evita continuar sin contexto una conversación mal copiada ([ADR-013](docs/02_DECISIONES.md)).
 - **Claves del LLM opcionales** al cargar la configuración; se exigen al crear el proveedor (ADR-006).
 - **Dependencias incrementales:** cada módulo agrega solo lo que usa (ADR-007).
 - **Orquestación propia, sin LangChain** (ADR-001).
@@ -308,8 +320,9 @@ Registro completo: [`docs/02_DECISIONES.md`](docs/02_DECISIONES.md) (ADR) y supu
 | L-08 | **Bloques que rotan (resuelta en la limpieza, M3):** varias páginas de educación financiera y del centro de ayuda muestran "contenido relacionado" aleatorio en cada petición. Por eso se reescribe su HTML crudo aunque el contenido principal no cambie. La limpieza quita ese bloque: en el crawl completo, 34 páginas lo traían y en ninguna quedó en el texto limpio | M2, M3 |
 | L-09 | **Simuladores y páginas cargadas por JS, sin contenido:** su contenido llega por JavaScript, así que el HTML estático no tiene texto propio. La limpieza las descarta como `texto_corto` (menos de `CLEAN_MIN_CHARS`=200 caracteres) y **el asistente no podrá responder sobre ellas**. En el crawl completo fueron 57 de 685 páginas: 10 simuladores y calculadoras, 17 páginas de resultados de búsqueda de preguntas frecuentes y 30 páginas con contenido por JS o solo con errores de WCM, entre ellas el buscador de puntos de atención. Otros 4 simuladores muestran solo la pantalla de ingreso (`/personas/login`) y se descartan como duplicados. El listado está en `data/clean/clean_report.json` (`discarded_documents`) | ADR-009, M3 |
 | L-10 | **Cobertura del enlace a enlace (BFS) acotada (aceptada, sin volver a crawlear):** con `CRAWL_MAX_PAGES=1200` se procesan todas las semillas del sitemap, pero solo 173 de los 639 enlaces internos de profundidad 1 encontrados. Además, 250 URLs retiradas redirigen a la portada de su sección (p. ej. `…/sostenibilidad/novacampo` → `/personas`) y consumen cupo, aunque no generan documentos (un solo documento por portada) | M3 |
-| L-11 | **Cupo del nivel gratuito de Gemini:** la clave gratuita permite **20 solicitudes por día** a `gemini-2.5-flash` en este proyecto (lo informa el propio error 429). Al agotarse, el asistente responde con un aviso claro, sin reintentar, hasta el reinicio diario (medianoche del Pacífico) o hasta que se use una clave de **otro proyecto** (el cupo es por proyecto, no por clave). Las preguntas que el umbral corta no consumen cupo. Para uso real o evaluaciones grandes hace falta el nivel pago | M7, ADR-012 |
+| L-11 | **Cupo del nivel gratuito de Gemini:** la clave gratuita permite **20 solicitudes por día** a `gemini-2.5-flash` en este proyecto (lo informa el propio error 429). Al agotarse, el asistente responde con un aviso claro, sin reintentar, hasta el reinicio diario (medianoche del Pacífico) o hasta que se use una clave de **otro proyecto** (el cupo es por proyecto, no por clave). Las preguntas que el umbral corta no consumen cupo. **Modelo de respaldo configurable:** el cupo es por modelo, así que basta cambiar `LLM_MODEL` en `.env` a otro modelo de Gemini con cupo propio (verificado en M7: `gemini-3.1-flash-lite`, cuya calidad de respuesta no se midió) y comprobarlo con `llm-check`. El cambio es manual: no hay conmutación automática al agotarse el cupo. Para uso real o evaluaciones grandes hace falta el nivel pago | M7, ADR-012 |
 | L-12 | **Datos en el nivel gratuito de Gemini:** según los términos de la Gemini API, en los servicios sin pago Google puede usar prompts y respuestas para mejorar sus productos y pueden revisarlos personas (*"Do not submit sensitive, confidential, or personal information"*). El contexto es contenido público de Bancolombia, pero **las preguntas no deben incluir información sensible o personal**. El nivel pago no usa los datos para mejorar productos | M7, ADR-012 |
+| L-13 | **Historial en un solo archivo SQLite:** pensado para una instancia de la API y pocos usuarios a la vez; SQLite serializa las escrituras. Tampoco hay migraciones de esquema: las tablas se crean si faltan, pero un cambio de columnas en el futuro exigiría migrar (p. ej. con Alembic) o recrear `history.db`. Las preguntas quedan guardadas en texto plano en el volumen de datos | M8, ADR-004 |
 
 ---
 
@@ -343,7 +356,8 @@ rag-bbva/
 │   ├── indexing/          # models, chunking (Strategy), embedding, embedding_cache, factory (Factory), pipeline, vector_store (Adapter), ingest
 │   ├── retrieval/         # models, reranker (Strategy), retriever, calibration
 │   ├── llm/               # provider (Strategy: Gemini, Grok, Fake), prompts, citations, rewriter, generator
-│   └── memory/ services/ api/ ui/ analytics/   # vacíos (próximos módulos)
+│   ├── memory/            # models, repository (Repository: interfaz + memoria), sql_repository (SQLite)
+│   └── services/ api/ ui/ analytics/   # vacíos (próximos módulos)
 ├── scripts/explore_site.py · scripts/trim_html_fixture.py · scripts/calibrate_reranker.py · scripts/llm_evidence.py
 ├── tests/unit/ · tests/fixtures/ (robots, sitemaps, html: páginas reales recortadas de las 3 plantillas; clean: glosario limpio) · tests/integration/
 ├── eval/                  # calibration.jsonl (M6: umbral del reranker); golden set (M13)

@@ -1,6 +1,6 @@
 # Contexto de sesión — traspaso
 
-> Escrito el 2026-10-02 para retomar el proyecto en una sesión nueva de Claude Code sin el historial de la conversación anterior. Solo contiene hechos verificables en el repo; no incluye secretos.
+> Escrito el 2026-10-02 y actualizado al cerrar cada módulo (último: M8, 2026-10-03) para retomar el proyecto en una sesión nueva de Claude Code sin el historial de la conversación anterior. Solo contiene hechos verificables en el repo; no incluye secretos.
 > Si este archivo contradice al código o a `git log`, manda el repo: verifica con los comandos de §5.
 
 ---
@@ -17,24 +17,25 @@
 | M4 — Chunking + embeddings | `m04` | `777402b` | `docs/modulos/M04.md` |
 | M5 — Indexación vectorial (Qdrant) | `m05` | `a47323a` | `docs/modulos/M05.md` |
 | M6 — Recuperación + reranker | `m06` | `5ba0a69` | `docs/modulos/M06.md` |
-| M7 — Generación con LLM | `m07` | merge `--no-ff` de `feat/m07-llm` en `main` (2026-10-03); el hash se ve con `git rev-parse --short m07^{commit}` | `docs/modulos/M07.md` |
+| M7 — Generación con LLM | `m07` | `138a56a` | `docs/modulos/M07.md` |
+| M8 — Memoria conversacional | `m08` | merge `--no-ff` de `feat/m08-memory` en `main` (2026-10-03); el hash se ve con `git rev-parse --short m08^{commit}` | `docs/modulos/M08.md` |
 
 - Commits `docs` directos en `main`, pedidos de forma explícita por Juan Felipe:
   - `5edf0dd`, entre `m00` y `m01`.
   - `c38abdc` y `9a6e3ce`, entre `m01` y `m02`.
 - Cada merge incluye las correcciones de su revisión (§10 de cada bitácora).
 
-### Siguiente módulo: M8 — Memoria conversacional
-- Juan Felipe aprobó M7 y pidió seguir con M8, en la rama `feat/m08-memory`.
-- Alcance según `docs/01_PLAN_DE_MODULOS.md` (M8):
-  - `ConversationRepository` (Repository) con `SqlAlchemyConversationRepository` (SQLite) e `InMemoryConversationRepository` (tests);
-  - tablas `conversations` y `messages` (con métricas por mensaje para M11);
-  - `get_last_n(conversation_id, n=HISTORY_WINDOW_N)` en orden cronológico.
-- Conectar después el historial con `QueryRewriter` (M7 ya acepta los N mensajes; la fachada es M9).
+### Siguiente módulo: M9 — Servicio RAG + API
+- Juan Felipe aprobó M8 (con ADR-013) y pidió M9 en la rama `feat/m09-api`:
+  - `RAGService` (Facade): `ask(conversation_id | None, question)` → últimos N mensajes → reformulación → retrieve → rerank → umbral → generate → persistencia;
+  - **turno atómico** (pregunta y respuesta se guardan juntas o ninguna si falla el LLM), registrado como ADR;
+  - FastAPI con `create_app` y `Depends`: `POST /chat`, `GET /conversations`, `GET /conversations/{id}/messages`, `POST /messages/{id}/feedback`, `GET /health`. **Sin `/analytics`** (M11);
+  - errores JSON `{error, detail}`: 404, 422, 503 (LLM, Qdrant o cupo), sin trazas; lifespan con `warm_up`; comando `serve`;
+  - evidencia real con pocas llamadas (cupo de Gemini): 3 turnos por curl, reinicio del servidor y continuación, `/health` con Qdrant detenido.
 - **Sin merge** sin aprobación.
 
-### Estado del árbol (al cerrar M7)
-- `main` con el merge de M7 y el tag `m07`, publicados en `origin`. Las ramas `feat/m00…m07` siguen a sus pares en `origin`.
+### Estado del árbol (al cerrar M8)
+- `main` con el merge de M8 y el tag `m08`, publicados en `origin`. Las ramas `feat/m00…m08` siguen a sus pares en `origin`.
 - **Qdrant del compose levantado** (`docker compose up -d qdrant`), volumen `qdrant_data`, colección `bancolombia_docs` con 3506 puntos.
 - Solo en local, ignorado por git: `.venv/`, `.env`, `models/` (e5-small y cross-encoder, 936 MB) y `data/`.
   - `.env`: lo creó Juan Felipe. Tiene `GEMINI_API_KEY` (clave gratuita de AI Studio) y `XAI_API_KEY` (sin créditos), y `LLM_PROVIDER=gemini`, `LLM_MODEL=gemini-2.5-flash`. **No leer ni imprimir las claves.**
@@ -48,15 +49,12 @@
 
 ## 2. Último pedido de Juan Felipe y hasta dónde se llegó
 
-M7 **aprobado**. Durante el módulo:
-- El LLM pasó de Grok (sin créditos) a **Gemini 2.5 Flash con clave gratuita** (ADR-012); Grok queda como alternativa.
-- Reglas de Juan Felipe:
-  - si se agota el cupo de Gemini, él entrega otra clave y no se detiene el trabajo;
-  - **ninguna clave se sube al repo**: solo `.env`, y `tests/unit/test_secrets.py` lo vigila.
-- **El cupo gratuito es por proyecto y por modelo** (20 solicitudes por día para `gemini-2.5-flash`). Una clave del mismo proyecto no lo recupera.
-- Los tests de integración pasaron con `LLM_MODEL=gemini-3.1-flash-lite`, que tiene cupo propio.
+M8 **aprobado** el 2026-10-03, con ADR-013 aceptado (404 para ID inexistente, UUID4 del servidor, `POST /chat` sin ID crea una conversación). Antes del cierre:
+- Se verificó la trazabilidad del cambio de Grok a Gemini (ADR-003 Reemplazada → ADR-012; visión, README y este archivo sin restos de Grok como actual; L-11 con el modelo de respaldo `LLM_MODEL`). Detalle en `M08.md §10`.
+- `git log -p --all` sin claves (0 apariciones). Juan Felipe rotó las claves expuestas en el chat.
+- Antecedentes de M7 que siguen vigentes: el cupo gratuito de Gemini es **por proyecto y por modelo** (20 solicitudes por día para `gemini-2.5-flash`); los tests de integración del LLM pasaron con `LLM_MODEL=gemini-3.1-flash-lite`.
 
-Se cerró M7 (bitácora ✅, CHANGELOG `[m07]`, README ✅, merge `--no-ff`, tag `m07` y push). A continuación se empieza M8 (§1).
+Se cerró M8 (bitácora ✅, CHANGELOG `[m08]`, README ✅, merge `--no-ff`, tag `m08` y push). A continuación se empieza M9 (§1).
 
 ---
 
@@ -123,9 +121,9 @@ No están escritas en `CLAUDE.md`; la forma de trabajo de §4 las recoge:
 - Ante hallazgos en datos reales (fugas, idioma, redirecciones), primero se revisan los casos y se clasifican como reales o falsos positivos, y luego se corrige con test.
 
 Todo lo demás está registrado:
-- ADR-001 a 012.
+- ADR-001 a 013.
 - Supuestos S-01 a S-08 (S-02, S-03 y S-04 confirmados; S-03 acotado por ADR-010 y ampliado por ADR-011).
-- Limitaciones L-01 a L-10 en el README.
+- Limitaciones L-01 a L-13 en el README.
 - Reglas en `CLAUDE.md`.
 
 ---
@@ -164,7 +162,7 @@ Comandos de verificación:
 cd /home/pipe/Inetum/rag-bbva-docs/rag-bbva
 source .venv/bin/activate
 git status && git branch -vv && git log --oneline --graph --decorate -15 && git tag
-pytest                                   # al cerrar M7: 401 passed sin integración (slow: requieren el modelo en models/; integration: Qdrant levantado; si no, se saltan)
+pytest                                   # al cerrar M8: 469 passed sin integración (465 sin slow); 471 con integración (slow: requieren el modelo en models/; integration: Qdrant levantado; si no, se saltan)
 pytest -m "not integration and not slow"
 ruff check . && ruff format --check .
 python -m rag_bbva.cli version
@@ -187,13 +185,11 @@ docker build -t rag-bbva:latest .
 
 Fuentes: `docs/01_PLAN_DE_MODULOS.md`, las bitácoras §8 y el README.
 
-- **M8 — Memoria:** ver §1.
+- **M9 — API:** ver §1. El servicio traduce `ConversationNotFoundError` y `MessageNotFoundError` a 404.
+- **L-13:** sin migraciones de esquema del historial (Alembic si cambia) y SQLite para una sola instancia de la API.
 - **Cupo de Gemini:** 20 solicitudes por día y por modelo en el nivel gratuito. Para M13 hará falta otro proyecto, otro modelo o facturación (M07.md §8).
-- **M11:** guardar `retrieval_ms`, `rerank_ms`, `top_score` y `no_answer` por mensaje.
+- **M11:** las columnas de métricas por mensaje ya existen desde M8 (`retrieval_ms`, `rerank_ms`, `llm_ms`, `total_ms`, `top_score`, `no_answer`, tokens, `feedback`); M9 debe llenarlas.
 - **M13:** golden set separado para validar el umbral; varias URLs válidas por pregunta.
-- **M7 — LLM:**
-  - Exigir `XAI_API_KEY` al crear `XaiGrokProvider`, con error claro (ADR-006).
-  - Verificar que `LLM_MODEL` exista con `GET /v1/models`.
 - **M12 — Docker:**
   - Montar `MODEL_CACHE_DIR` como volumen. Embeber ~3500 chunks toma ~2,6 min en CPU: indexar solo si la colección está vacía. Con la caché de embeddings (6 MB) empaquetada, indexar toma ~1,6 s.
   - `QDRANT_URL=http://qdrant:6333` en los servicios; volumen `qdrant_data` (20 MB con 3506 puntos).
@@ -211,10 +207,10 @@ Fuentes: `docs/01_PLAN_DE_MODULOS.md`, las bitácoras §8 y el README.
 
 ## 7. Lo que la próxima sesión NO debe romper
 
-- **Los tags publicados no se mueven ni se reescriben:** `m00` → `bc14425`, `m01` → `f48a0d3`, `m02` → `4a31943`, `m03` → `731c389`, `m04` → `777402b`, `m05` → `a47323a`, `m06` → `5ba0a69`, `m07` → merge de M7. Tampoco se reescribe historial ya publicado en `origin`: nada de `push --force` ni rebase de ramas publicadas.
+- **Los tags publicados no se mueven ni se reescriben:** `m00` → `bc14425`, `m01` → `f48a0d3`, `m02` → `4a31943`, `m03` → `731c389`, `m04` → `777402b`, `m05` → `a47323a`, `m06` → `5ba0a69`, `m07` → `138a56a`, `m08` → merge de M8. Tampoco se reescribe historial ya publicado en `origin`: nada de `push --force` ni rebase de ramas publicadas.
 - **Nunca escribir `GEMINI_API_KEY` ni `XAI_API_KEY`** en código, docs, tests ni commits; solo en `.env`, que está en `.gitignore`. `tests/unit/test_secrets.py` lo vigila.
 - **Bancolombia en todo texto visible al usuario** (prompts, UI, respuestas, README, ayuda de la CLI). El código conserva `rag_bbva`. Un test de `tests/unit/test_cli.py` verifica que la ayuda de la CLI diga Bancolombia y no BBVA.
-- **Ningún módulo se mergea sin la aprobación explícita** de Juan Felipe; M8 tampoco.
+- **Ningún módulo se mergea sin la aprobación explícita** de Juan Felipe; M9 tampoco.
 - **Cortesía con el sitio:** respetar `robots.txt`, User-Agent `RAG-BBVA-TechTest/1.0`, pausa ≥ 1 s, sin seguir redirecciones a otros dominios y sin eludir el WAF o el bot-manager.
 - `data/`, `models/` y `.env` no se versionan.
 
@@ -224,10 +220,10 @@ Fuentes: `docs/01_PLAN_DE_MODULOS.md`, las bitácoras §8 y el README.
 
 1. `docs/CONTEXTO_SESION.md` (este archivo).
 2. `CLAUDE.md`: reglas obligatorias.
-3. `README.md`: estado, uso, patrones y limitaciones L-01 a L-10.
+3. `README.md`: estado, uso, patrones y limitaciones L-01 a L-13.
 4. `docs/00_VISION_GENERAL.md`: requisitos, arquitectura, configuración §7 y supuestos §9.
 5. `docs/01_PLAN_DE_MODULOS.md`: Definition of Done y el módulo en curso o siguiente.
-6. `docs/02_DECISIONES.md`: ADR-001 a ADR-012.
-7. `docs/modulos/M07.md` (último cerrado; §8 y §10 tienen los pendientes y las reglas de claves) y `M08.md` si existe; luego las bitácoras anteriores si hace falta.
+6. `docs/02_DECISIONES.md`: ADR-001 a ADR-013.
+7. `docs/modulos/M08.md` (último cerrado) y `M07.md` (§8 y §10: pendientes del LLM y reglas de claves); `M09.md` si existe; luego las bitácoras anteriores si hace falta.
 8. `docs/exploracion_sitio.md`: hallazgos del sitio, selectores y riesgos.
 9. `CHANGELOG.md`.

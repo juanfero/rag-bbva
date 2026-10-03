@@ -192,9 +192,6 @@ Fuentes: `docs/01_PLAN_DE_MODULOS.md`, las bitácoras §8 y el README.
 - **Cupo de Gemini:** 20 solicitudes por día y por modelo en el nivel gratuito. Para M13 hará falta otro proyecto, otro modelo o facturación (M07.md §8).
 - **M11:** guardar `retrieval_ms`, `rerank_ms`, `top_score` y `no_answer` por mensaje.
 - **M13:** golden set separado para validar el umbral; varias URLs válidas por pregunta.
-- **M7 — LLM:**
-  - Exigir `XAI_API_KEY` al crear `XaiGrokProvider`, con error claro (ADR-006).
-  - Verificar que `LLM_MODEL` exista con `GET /v1/models`.
 - **M12 — Docker:**
   - Montar `MODEL_CACHE_DIR` como volumen. Embeber ~3500 chunks toma ~2,6 min en CPU: indexar solo si la colección está vacía. Con la caché de embeddings (6 MB) empaquetada, indexar toma ~1,6 s.
   - `QDRANT_URL=http://qdrant:6333` en los servicios; volumen `qdrant_data` (20 MB con 3506 puntos).

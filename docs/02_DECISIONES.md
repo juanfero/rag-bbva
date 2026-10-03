@@ -17,7 +17,7 @@ Formato: una entrada por decisión. Estado: Propuesta · Aceptada · Reemplazada
 - **Consecuencias:** + filtros por payload, imagen oficial ligera; − un servicio más en compose.
 
 ## ADR-003 — LLM: Grok (xAI) vía API compatible con OpenAI
-- **Estado:** Reemplazada como proveedor por defecto por ADR-012 (2026-10-02); Grok sigue disponible con `LLM_PROVIDER=xai`. Original: aceptada el 2026-10-01, reemplaza la propuesta de Ollama local
+- **Estado:** **Reemplazada** por [ADR-012](#adr-012--llm-gemini-25-flash-clave-gratuita-de-ai-studio-grok-queda-como-alternativa) (2026-10-02, M7): el proveedor por defecto es Gemini 2.5 Flash con `GEMINI_API_KEY`. Grok queda solo como alternativa opcional con `LLM_PROVIDER=xai`. Original: aceptada el 2026-10-01, reemplazaba la propuesta de Ollama local
 - **Contexto:** el caso permite APIs de pago (no suman puntos). Un LLM local en CPU sería lento y pesado en RAM.
 - **Decisión:** Grok de xAI con el SDK `openai` (`base_url=https://api.x.ai/v1`, `XAI_API_KEY`), detrás de `LLMProvider` (Strategy). Embeddings, reranker y base vectorial siguen siendo open source y locales.
 - **Consecuencias:** + mejor calidad en español y menor latencia; + contenedores livianos (sin modelo de varios GB); − costo por token y dependencia externa (mitigado con tope de tokens, contexto acotado y `FakeLLMProvider` en tests); − no suma puntos en "herramientas sin costo", se declara en el README. Volver a un modelo open source = implementar otro `LLMProvider` (mejora futura).

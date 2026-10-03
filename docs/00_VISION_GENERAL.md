@@ -178,7 +178,7 @@ El caso pide mínimo 3. Se implementan 6 para tener margen, pero el README desta
 | Patrón | Tipo | Dónde | Por qué |
 |---|---|---|---|
 | **Factory** | Creacional | `indexing/factory.py`, `llm/factory.py` | Crear embedder, LLM, vector store y reranker a partir de la configuración sin acoplar el resto del código a clases concretas |
-| **Strategy** | Comportamental | `ChunkingStrategy`, `LLMProvider`, `Reranker` | Intercambiar algoritmos (chunking por secciones vs. tamaño fijo; Grok vs. otro proveedor / fake en tests; con/sin reranker) sin tocar el pipeline |
+| **Strategy** | Comportamental | `ChunkingStrategy`, `LLMProvider`, `Reranker` | Intercambiar algoritmos (chunking por secciones vs. tamaño fijo; Gemini (por defecto) vs. Grok / fake en tests; con/sin reranker) sin tocar el pipeline |
 | **Repository** | Estructural / arquitectónico | `memory/repository.py` | Aislar la persistencia del historial; permite cambiar SQLite por otra BD y usar un repo en memoria en tests |
 | **Facade** | Estructural | `services/rag_service.py` | Un único punto de entrada (`ask(conversation_id, pregunta)`) que orquesta memoria, recuperación, reranking y generación |
 | **Template Method** | Comportamental | `scraping/base.py` | Esqueleto fijo del crawl (descubrir → descargar → validar → guardar) con pasos sobrescribibles |
@@ -239,7 +239,7 @@ El caso pide mínimo 3. Se implementan 6 para tener margen, pero el README desta
 | `LLM_TIMEOUT_SECONDS` | `60` | Timeout por llamada |
 | `LLM_MAX_RETRIES` | `2` | Reintentos propios ante 429/5xx/timeouts; el SDK no reintenta (M7) |
 | `LLM_BACKOFF_SECONDS` | `1.0` | Espera base del backoff exponencial (M7) |
-| `LLM_PRICE_INPUT_PER_MTOK` / `LLM_PRICE_OUTPUT_PER_MTOK` | `2.0` / `6.0` | USD por millón de tokens para estimar costos; docs.x.ai, grok-4.7 < 200k (M7) |
+| `LLM_PRICE_INPUT_PER_MTOK` / `LLM_PRICE_OUTPUT_PER_MTOK` | `0.30` / `2.50` | USD por millón de tokens para estimar el costo equivalente: precios pagos de `gemini-2.5-flash` (ai.google.dev/gemini-api/docs/pricing). Con la clave gratuita el costo real es $0 (M7, ADR-012) |
 | `QUERY_REWRITE_MODE` | `history_only` | Reformulación de la pregunta: `off`, `history_only` o `always` (M7) |
 | `QUERY_REWRITE_MAX_TOKENS` | `120` | Tope de tokens de la pregunta reformulada (M7) |
 | `HISTORY_DB_PATH` | `data/history/history.db` | Ruta SQLite |

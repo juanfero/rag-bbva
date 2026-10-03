@@ -114,6 +114,12 @@ class Settings(BaseSettings):
     history_window_n: int = Field(default=6, ge=0)
     manual_search_minutes: float = Field(default=5, ge=0)
 
+    # API (M9). En Docker (M12) se usa API_HOST=0.0.0.0.
+    api_host: str = "127.0.0.1"
+    api_port: int = Field(default=8000, gt=0, le=65535)
+    # Largo máximo de una pregunta en caracteres (más largo → 422).
+    chat_question_max_chars: int = Field(default=1000, gt=0)
+
     # Observabilidad
     log_level: LogLevel = "INFO"
 

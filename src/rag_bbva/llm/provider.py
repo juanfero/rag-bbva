@@ -21,7 +21,7 @@ import openai
 from pydantic import BaseModel
 from tenacity import Retrying, retry_if_exception, stop_after_attempt, wait_exponential
 
-from rag_bbva.exceptions import LLMError
+from rag_bbva.exceptions import ConfigurationError, LLMError
 
 logger = logging.getLogger(__name__)
 
@@ -338,3 +338,25 @@ class FakeLLMProvider(LLMProvider):
 
     def list_models(self) -> list[str]:
         return list(self._modelos)
+
+
+class UnconfiguredLLMProvider(LLMProvider):
+    """Marcador cuando falta la configuración del LLM (p. ej. la clave): la API arranca y
+    `/health` lo informa, pero cada llamada lanza el `ConfigurationError` original."""
+
+    name = "sin-configurar"
+
+    def __init__(self, error: ConfigurationError) -> None:
+        self.model = "sin-configurar"
+        self.error = error
+
+    def complete(
+        self, messages: Sequence[Message], *, max_tokens: int | None = None
+    ) -> LLMResponse:
+        raise self.error
+
+    def stream(self, messages: Sequence[Message], *, max_tokens: int | None = None) -> LLMStream:
+        raise self.error
+
+    def list_models(self) -> list[str]:
+        raise self.error

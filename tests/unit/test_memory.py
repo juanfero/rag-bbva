@@ -352,3 +352,74 @@ def test_fabrica_crea_repositorio_sqlite_en_history_db_path(tmp_path: Path) -> N
     repo.create_conversation()
     assert ruta.is_file()
     repo.close()
+
+
+# --- Turno atómico (M9, ADR-014) -----------------------------------------------------
+
+
+def test_add_turn_sin_id_crea_conversacion_con_pregunta_y_respuesta(
+    repo: ConversationRepository,
+) -> None:
+    metricas = MessageMetrics(total_ms=10, no_answer=False)
+    turno = repo.add_turn(
+        None, "¿Qué es un CDT?", "Un CDT es… [1]", sources=[{"n": 1}], metrics=metricas
+    )
+
+    assert turno.conversation.title == "¿Qué es un CDT?"
+    assert [m.role for m in repo.get_messages(turno.conversation.id)] == ["user", "assistant"]
+    assert turno.question.id < turno.answer.id
+    assert turno.answer.sources == [{"n": 1}]
+    assert turno.answer.metrics == metricas
+    assert turno.question.metrics == MessageMetrics()
+
+
+def test_add_turn_continua_una_conversacion_existente(repo: ConversationRepository) -> None:
+    primero = repo.add_turn(None, "pregunta 1", "respuesta 1")
+    segundo = repo.add_turn(primero.conversation.id, "pregunta 2", "respuesta 2")
+
+    assert segundo.conversation.id == primero.conversation.id
+    assert segundo.conversation.title == "pregunta 1"
+    assert [m.content for m in repo.get_last_n(primero.conversation.id, 2)] == [
+        "pregunta 2",
+        "respuesta 2",
+    ]
+    assert len(repo.list_conversations()) == 1
+
+
+def test_add_turn_con_id_inexistente_no_guarda_nada(repo: ConversationRepository) -> None:
+    with pytest.raises(ConversationNotFoundError):
+        repo.add_turn("no-existe", "pregunta", "respuesta")
+    assert repo.list_conversations() == []
+
+
+def test_add_turn_invalido_no_guarda_nada(repo: ConversationRepository) -> None:
+    cid = repo.create_conversation().id
+    with pytest.raises(HistoryError):
+        repo.add_turn(cid, "pregunta válida", "   ")
+    with pytest.raises(HistoryError):
+        repo.add_turn(None, "pregunta válida", "")
+    assert repo.get_messages(cid) == []
+    assert len(repo.list_conversations()) == 1
+
+
+def test_add_turn_hace_rollback_si_falla_la_base(tmp_path: Path) -> None:
+    """Si la base rechaza la respuesta, tampoco quedan la pregunta ni la conversación."""
+    import sqlite3
+
+    ruta = tmp_path / "history.db"
+    repo = SqlAlchemyConversationRepository.from_path(ruta)
+    existente = repo.create_conversation().id
+    with sqlite3.connect(ruta) as conexion:
+        conexion.execute(
+            "CREATE TRIGGER falla BEFORE INSERT ON messages WHEN NEW.role = 'assistant' "
+            "BEGIN SELECT RAISE(ABORT, 'falla simulada'); END"
+        )
+
+    with pytest.raises(HistoryError, match="historial"):
+        repo.add_turn(None, "pregunta suelta", "respuesta")
+    with pytest.raises(HistoryError):
+        repo.add_turn(existente, "pregunta suelta", "respuesta")
+
+    assert [c.id for c in repo.list_conversations()] == [existente]
+    assert repo.get_messages(existente) == []
+    repo.close()

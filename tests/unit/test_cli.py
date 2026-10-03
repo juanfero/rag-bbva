@@ -379,3 +379,24 @@ def test_cli_history_conversacion_inexistente_sale_con_1(
 
     assert result.exit_code == 1
     assert "La conversación no existe" in result.output
+
+
+def test_cli_serve_usa_api_host_y_api_port_o_las_opciones(
+    clean_env: pytest.MonkeyPatch, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`serve` arma la app con create_app y la pasa a uvicorn (sustituido: no abre puertos)."""
+    import uvicorn
+    from fastapi import FastAPI
+
+    llamadas: list[dict[str, object]] = []
+    monkeypatch.setattr(uvicorn, "run", lambda app, **kw: llamadas.append({"app": app, **kw}))
+    clean_env.setenv("API_PORT", "8123")
+
+    por_defecto = runner.invoke(app, ["serve"])
+    con_opciones = runner.invoke(app, ["serve", "--host", "0.0.0.0", "--port", "9000"])
+
+    assert por_defecto.exit_code == 0, por_defecto.output
+    assert "http://127.0.0.1:8123/docs" in por_defecto.stdout
+    assert con_opciones.exit_code == 0, con_opciones.output
+    assert [(c["host"], c["port"]) for c in llamadas] == [("127.0.0.1", 8123), ("0.0.0.0", 9000)]
+    assert all(isinstance(c["app"], FastAPI) and c["log_config"] is None for c in llamadas)

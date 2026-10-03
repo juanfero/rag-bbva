@@ -339,3 +339,16 @@ def test_archivo_que_no_es_sqlite_lanza_history_error(tmp_path: Path) -> None:
     ruta.write_bytes(b"esto no es una base SQLite " * 100)
     with pytest.raises(HistoryError, match="esquema"):
         SqlAlchemyConversationRepository.from_path(ruta)
+
+
+def test_fabrica_crea_repositorio_sqlite_en_history_db_path(tmp_path: Path) -> None:
+    from rag_bbva.config import Settings
+    from rag_bbva.indexing.factory import ComponentFactory
+
+    ruta = tmp_path / "datos" / "history.db"
+    repo = ComponentFactory(Settings(history_db_path=ruta)).create_conversation_repository()
+
+    assert isinstance(repo, SqlAlchemyConversationRepository)
+    repo.create_conversation()
+    assert ruta.is_file()
+    repo.close()

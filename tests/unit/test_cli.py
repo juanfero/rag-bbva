@@ -335,3 +335,47 @@ def test_cli_llm_check_sin_clave(
 
     assert result.exit_code == 1
     assert "Falta XAI_API_KEY" in result.output
+
+
+def test_cli_history_lista_y_muestra_ultimos_n(
+    clean_env: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """`history` lee HISTORY_DB_PATH: sin ID lista conversaciones; con ID y --last, get_last_n."""
+    from rag_bbva.memory import MessageMetrics, SqlAlchemyConversationRepository
+
+    ruta = tmp_path / "history.db"
+    clean_env.setenv("HISTORY_DB_PATH", str(ruta))
+    repo = SqlAlchemyConversationRepository.from_path(ruta)
+    cid = repo.create_conversation().id
+    repo.add_message(cid, "user", "¿Qué es un CDT?")
+    repo.add_message(
+        cid,
+        "assistant",
+        "Un CDT es… [1]",
+        sources=[{"url": "u"}],
+        metrics=MessageMetrics(total_ms=9),
+    )
+    repo.add_message(cid, "user", "¿Y su plazo?")
+    repo.close()
+
+    listado = runner.invoke(app, ["history"])
+    detalle = runner.invoke(app, ["history", cid, "--last", "2"])
+
+    assert listado.exit_code == 0, listado.output
+    assert f"{cid}" in listado.stdout and "¿Qué es un CDT?" in listado.stdout
+    assert detalle.exit_code == 0, detalle.output
+    assert "assistant: Un CDT es… [1]  (fuentes=1, total_ms=9)" in detalle.stdout
+    assert "user: ¿Y su plazo?" in detalle.stdout
+    assert "user: ¿Qué es un CDT?" not in detalle.stdout
+
+
+def test_cli_history_conversacion_inexistente_sale_con_1(
+    clean_env: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    clean_env.setenv("HISTORY_DB_PATH", str(tmp_path / "history.db"))
+    assert "No hay conversaciones" in runner.invoke(app, ["history"]).stdout
+
+    result = runner.invoke(app, ["history", "no-existe"])
+
+    assert result.exit_code == 1
+    assert "La conversación no existe" in result.output

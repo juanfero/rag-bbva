@@ -3,13 +3,14 @@
 `QUERY_REWRITE_MODE`:
 - `off`: se busca con la pregunta tal cual.
 - `history_only`: se reformula solo si hay historial (preguntas de seguimiento como
-  "¿y su tasa?"); la primera pregunta de una conversación va tal cual. El historial se
-  conecta de verdad en M8/M9.
+  "¿y su tasa?"); la primera pregunta de una conversación va tal cual. El historial lo
+  entrega el servicio RAG (M9) con los últimos `HISTORY_WINDOW_N` mensajes.
 - `always`: se reformula siempre, también para expandir siglas y términos coloquiales
   ("4 por mil" → GMF).
 
-La pregunta reformulada solo se usa para recuperar; la respuesta se genera con la
-pregunta original del usuario.
+La pregunta reformulada se usa para recuperar. Al generar, el prompt lleva la pregunta
+original del usuario y, si hubo reformulación, también la autónoma (M9): sin ella el
+modelo no sabría a qué se refiere "¿y cuáles son los requisitos?".
 """
 
 import logging

@@ -123,9 +123,23 @@ class QdrantVectorStore(VectorStore):
                 detail=f"{operacion}: {exc}",
             ) from exc
         except UnexpectedResponse as exc:
+            if exc.status_code == 404:
+                raise self._coleccion_inexistente(operacion, exc) from exc
             raise IndexingError(
                 f"Qdrant rechazó la operación '{operacion}'", detail=str(exc)
             ) from exc
+        except ValueError as exc:
+            # El modo local (`:memory:`) de qdrant-client lanza ValueError en lugar de 404.
+            if "not found" not in str(exc).lower():
+                raise
+            raise self._coleccion_inexistente(operacion, exc) from exc
+
+    def _coleccion_inexistente(self, operacion: str, exc: Exception) -> IndexingError:
+        return IndexingError(
+            f"La colección '{self.collection}' no existe en Qdrant. Ejecute "
+            "`python -m rag_bbva.cli ingest`",
+            detail=f"{operacion}: {exc}",
+        )
 
     def ensure_collection(self, dimension: int, *, recreate: bool = False) -> None:
         def crear() -> None:

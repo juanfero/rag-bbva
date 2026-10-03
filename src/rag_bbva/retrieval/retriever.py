@@ -32,6 +32,9 @@ def _candidato(hit: SearchHit, posicion: int) -> Candidate:
 class Retriever:
     """Recupera el contexto de una pregunta.
 
+    Umbral doble (ADR-016): por debajo de `hard_min_score` no se llama al LLM; entre
+    `hard_min_score` y `min_score` (zona gris) sí, y el LLM decide si el contexto alcanza.
+
     El umbral `min_score` se aplica al score del reranker del #1: los scores coseno de
     e5 están comprimidos y no separan preguntas respondibles de las que no lo son
     (M04.md §8, M06.md §4). Sin reranker (`NoOpReranker`) no se aplica umbral.
@@ -44,6 +47,7 @@ class Retriever:
     top_n: int = 5
     max_per_doc: int = 2
     min_score: float = 0.0
+    hard_min_score: float | None = None  # None: sin zona gris (M6)
 
     def warm_up(self) -> None:
         """Carga los modelos perezosos (embedder y reranker) para que `retrieval_ms` y
@@ -68,6 +72,12 @@ class Retriever:
         sin_respuesta = not resultados or (
             aplica_umbral and (top_score is None or top_score < self.min_score)
         )
+        if self.hard_min_score is None or not aplica_umbral:
+            sin_respuesta_dura = sin_respuesta
+        else:
+            sin_respuesta_dura = not resultados or (
+                top_score is None or top_score < self.hard_min_score
+            )
         resultado = RetrievalResult(
             query=query,
             section=section,
@@ -80,6 +90,8 @@ class Retriever:
             no_answer=sin_respuesta,
             retrieval_ms=round((t_retrieval - inicio) * 1000, 1),
             rerank_ms=round((t_rerank - t_retrieval) * 1000, 1),
+            hard_min_score=self.hard_min_score if aplica_umbral else None,
+            hard_no_answer=sin_respuesta_dura,
         )
         logger.info(
             "Recuperación",
@@ -87,6 +99,7 @@ class Retriever:
                 "candidatos": len(candidatos),
                 "top_score": top_score,
                 "sin_respuesta": sin_respuesta,
+                "zona_gris": resultado.gray_zone,
                 "retrieval_ms": resultado.retrieval_ms,
                 "rerank_ms": resultado.rerank_ms,
             },

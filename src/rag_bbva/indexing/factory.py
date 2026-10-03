@@ -13,9 +13,11 @@ from rag_bbva.indexing.vector_store import QdrantVectorStore, VectorStore
 from rag_bbva.llm.generator import AnswerGenerator
 from rag_bbva.llm.provider import (
     FakeLLMProvider,
+    FallbackLLMProvider,
     GeminiProvider,
     LLMProvider,
     OpenAICompatibleProvider,
+    UnconfiguredLLMProvider,
     XaiGrokProvider,
 )
 from rag_bbva.llm.rewriter import QueryRewriter
@@ -23,6 +25,8 @@ from rag_bbva.memory.repository import ConversationRepository
 from rag_bbva.memory.sql_repository import SqlAlchemyConversationRepository
 from rag_bbva.retrieval.reranker import CrossEncoderReranker, NoOpReranker, Reranker
 from rag_bbva.retrieval.retriever import Retriever
+from rag_bbva.services.health import HealthChecker
+from rag_bbva.services.rag_service import RAGService
 
 _CHUNKERS: dict[str, type[ChunkingStrategy]] = {
     HeadingAwareChunker.name: HeadingAwareChunker,
@@ -32,7 +36,8 @@ _CHUNKERS: dict[str, type[ChunkingStrategy]] = {
 
 class ComponentFactory:
     """Crea chunker, embedder, caché, almacén vectorial, reranker, retriever, LLM,
-    reformulador, generador de respuestas e historial desde `Settings`."""
+    reformulador, generador de respuestas, historial, servicio RAG y chequeo de salud
+    desde `Settings`."""
 
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
@@ -101,11 +106,13 @@ class ComponentFactory:
             top_n=top_n or self.settings.rerank_top_n,
             max_per_doc=self.settings.rerank_max_chunks_per_doc,
             min_score=self.settings.rerank_min_score,
+            hard_min_score=self.settings.rerank_hard_min_score,
         )
 
     def create_llm(self) -> LLMProvider:
         """Proveedor de `LLM_PROVIDER` (gemini | xai | fake). Exige la clave del proveedor
-        al crearlo (ADR-006): falla aquí y no a mitad de una conversación."""
+        al crearlo (ADR-006): falla aquí y no a mitad de una conversación. Con
+        `LLM_FALLBACK_MODEL` lo envuelve en `FallbackLLMProvider` (Decorator)."""
         ajustes = self.settings
         if ajustes.llm_provider == "fake":
             return FakeLLMProvider(model="fake-model")
@@ -122,17 +129,25 @@ class ComponentFactory:
                 "Agréguela en el archivo .env (ver .env.example) o use LLM_PROVIDER=fake "
                 "para pruebas."
             )
-        return clase(
-            api_key=clave.get_secret_value(),
-            base_url=base_url,
-            model=ajustes.llm_model,
-            temperature=ajustes.llm_temperature,
-            max_tokens=ajustes.llm_max_tokens,
-            timeout=ajustes.llm_timeout_seconds,
-            max_retries=ajustes.llm_max_retries,
-            backoff_seconds=ajustes.llm_backoff_seconds,
-            reasoning_effort=esfuerzo,
-        )
+
+        def proveedor(modelo: str) -> LLMProvider:
+            return clase(
+                api_key=clave.get_secret_value(),
+                base_url=base_url,
+                model=modelo,
+                temperature=ajustes.llm_temperature,
+                max_tokens=ajustes.llm_max_tokens,
+                timeout=ajustes.llm_timeout_seconds,
+                max_retries=ajustes.llm_max_retries,
+                backoff_seconds=ajustes.llm_backoff_seconds,
+                reasoning_effort=esfuerzo,
+            )
+
+        principal = proveedor(ajustes.llm_model)
+        respaldo = ajustes.llm_fallback_model.strip()
+        if not respaldo or respaldo == ajustes.llm_model:
+            return principal
+        return FallbackLLMProvider(principal, proveedor(respaldo))
 
     def create_query_rewriter(self, llm: LLMProvider, mode: str | None = None) -> QueryRewriter:
         """Reformulador con `QUERY_REWRITE_MODE` (o `mode`)."""
@@ -149,3 +164,35 @@ class ComponentFactory:
     def create_conversation_repository(self) -> ConversationRepository:
         """Historial de conversaciones en SQLite (`HISTORY_DB_PATH`)."""
         return SqlAlchemyConversationRepository.from_path(self.settings.history_db_path)
+
+    def create_rag_service(
+        self,
+        *,
+        repository: ConversationRepository | None = None,
+        retriever: Retriever | None = None,
+        llm: LLMProvider | None = None,
+        tolerate_missing_llm: bool = False,
+    ) -> RAGService:
+        """Servicio RAG completo. Con `tolerate_missing_llm`, si falta la clave del LLM se
+        usa `UnconfiguredLLMProvider`: el servicio arranca, `/health` lo informa y cada
+        pregunta que necesite el LLM responde con el error de configuración."""
+        if llm is None:
+            try:
+                llm = self.create_llm()
+            except ConfigurationError as exc:
+                if not tolerate_missing_llm:
+                    raise
+                llm = UnconfiguredLLMProvider(exc)
+        return RAGService(
+            repository=repository or self.create_conversation_repository(),
+            retriever=retriever or self.create_retriever(),
+            rewriter=self.create_query_rewriter(llm),
+            generator=self.create_answer_generator(llm),
+            history_window_n=self.settings.history_window_n,
+        )
+
+    def create_health_checker(self, service: RAGService) -> HealthChecker:
+        """Chequeo de salud sobre el almacén vectorial y el historial del servicio."""
+        return HealthChecker(
+            store=service.retriever.store, repository=service.repository, settings=self.settings
+        )

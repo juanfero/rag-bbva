@@ -13,6 +13,9 @@ Contrato común a todas las implementaciones:
 - `get_last_n(id, n)` devuelve los últimos `n` mensajes en orden cronológico; `n=0`
   devuelve una lista vacía.
 - El título de la conversación es su primera pregunta del usuario (recortada).
+- `add_turn` guarda la pregunta y la respuesta **juntas o ninguna** (ADR-014). Con
+  `conversation_id=None` crea la conversación en la misma operación, así un turno
+  fallido no deja conversaciones vacías.
 """
 
 from abc import ABC, abstractmethod
@@ -28,6 +31,7 @@ from rag_bbva.memory.models import (
     Message,
     MessageMetrics,
     Role,
+    SavedTurn,
     title_from_question,
     utc_now,
 )
@@ -89,6 +93,19 @@ class ConversationRepository(ABC):
         """Agrega un mensaje al final de la conversación y actualiza `updated_at`."""
 
     @abstractmethod
+    def add_turn(
+        self,
+        conversation_id: str | None,
+        question: str,
+        answer: str,
+        *,
+        sources: Sequence[dict[str, Any]] = (),
+        metrics: MessageMetrics | None = None,
+    ) -> SavedTurn:
+        """Guarda pregunta y respuesta en una sola operación atómica. Si
+        `conversation_id` es `None`, crea la conversación en esa misma operación."""
+
+    @abstractmethod
     def get_messages(self, conversation_id: str) -> list[Message]:
         """Todos los mensajes de la conversación en orden cronológico."""
 
@@ -98,7 +115,8 @@ class ConversationRepository(ABC):
 
     @abstractmethod
     def set_feedback(self, message_id: int, feedback: Feedback | None) -> Message:
-        """Guarda (o quita, con `None`) la valoración 👍/👎 de un mensaje."""
+        """Guarda (o quita, con `None`) la valoración 👍/👎 de una respuesta del asistente.
+        Un id inexistente o de una pregunta del usuario lanza `MessageNotFoundError`."""
 
     def require_conversation(self, conversation_id: str) -> Conversation:
         """Devuelve la conversación o lanza `ConversationNotFoundError`."""
@@ -167,6 +185,32 @@ class InMemoryConversationRepository(ConversationRepository):
         )
         return mensaje
 
+    def add_turn(
+        self,
+        conversation_id: str | None,
+        question: str,
+        answer: str,
+        *,
+        sources: Sequence[dict[str, Any]] = (),
+        metrics: MessageMetrics | None = None,
+    ) -> SavedTurn:
+        """Guarda pregunta y respuesta juntas: valida todo antes de modificar nada."""
+        validate_message("user", question)
+        validate_message("assistant", answer)
+        if conversation_id is not None:
+            self.require_conversation(conversation_id)
+        else:
+            conversation_id = self.create_conversation().id
+        pregunta = self.add_message(conversation_id, "user", question)
+        respuesta = self.add_message(
+            conversation_id, "assistant", answer, sources=sources, metrics=metrics
+        )
+        return SavedTurn(
+            conversation=self.require_conversation(conversation_id),
+            question=pregunta,
+            answer=respuesta,
+        )
+
     def get_messages(self, conversation_id: str) -> list[Message]:
         """Todos los mensajes de la conversación en orden cronológico."""
         self.require_conversation(conversation_id)
@@ -179,10 +223,11 @@ class InMemoryConversationRepository(ConversationRepository):
         return mensajes[-n:] if n else []
 
     def set_feedback(self, message_id: int, feedback: Feedback | None) -> Message:
-        """Guarda (o quita, con `None`) la valoración 👍/👎 de un mensaje."""
+        """Guarda (o quita, con `None`) la valoración 👍/👎 de una respuesta."""
         validate_feedback(feedback)
-        if message_id not in self._messages:
-            raise MessageNotFoundError("El mensaje no existe", detail=str(message_id))
+        existente = self._messages.get(message_id)
+        if existente is None or existente.role != "assistant":
+            raise MessageNotFoundError("La respuesta no existe", detail=str(message_id))
         mensaje = self._messages[message_id].model_copy(update={"feedback": feedback})
         self._messages[message_id] = mensaje
         return mensaje

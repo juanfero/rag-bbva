@@ -13,7 +13,7 @@ import httpx2
 import pytest
 
 from rag_bbva.config import Settings
-from rag_bbva.exceptions import ConfigurationError, LLMError
+from rag_bbva.exceptions import ConfigurationError, LLMError, LLMQuotaError
 from rag_bbva.indexing.factory import ComponentFactory
 from rag_bbva.llm.citations import process_citations
 from rag_bbva.llm.generator import AnswerGenerator
@@ -24,7 +24,12 @@ from rag_bbva.llm.prompts import (
     build_answer_messages,
     build_rewrite_messages,
 )
-from rag_bbva.llm.provider import FakeLLMProvider, GeminiProvider, XaiGrokProvider
+from rag_bbva.llm.provider import (
+    FakeLLMProvider,
+    FallbackLLMProvider,
+    GeminiProvider,
+    XaiGrokProvider,
+)
 from rag_bbva.llm.rewriter import QueryRewriter
 from rag_bbva.retrieval.models import Candidate, RetrievalResult
 
@@ -262,6 +267,7 @@ def test_fabrica_crea_proveedor_falso_o_real_sin_llamar(clean_env: pytest.Monkey
     clean_env.setenv("LLM_PROVIDER", "xai")
     clean_env.setenv("XAI_API_KEY", "clave-de-prueba")
     clean_env.setenv("LLM_MAX_RETRIES", "4")
+    clean_env.setenv("LLM_FALLBACK_MODEL", "")  # con xai: sin respaldo (.env.example)
     proveedor = ComponentFactory(Settings(_env_file=None)).create_llm()
 
     assert isinstance(proveedor, XaiGrokProvider)
@@ -275,8 +281,14 @@ def test_fabrica_crea_gemini_por_defecto(clean_env: pytest.MonkeyPatch) -> None:
         ComponentFactory(Settings(_env_file=None)).create_llm()
 
     clean_env.setenv("GEMINI_API_KEY", "clave-de-prueba")
-    proveedor = ComponentFactory(Settings(_env_file=None)).create_llm()
+    envoltorio = ComponentFactory(Settings(_env_file=None)).create_llm()
 
+    # M9: por defecto Gemini va envuelto en el Decorator con el modelo de respaldo.
+    assert isinstance(envoltorio, FallbackLLMProvider)
+    assert isinstance(envoltorio.fallback, GeminiProvider)
+    assert envoltorio.fallback.model == "gemini-3.1-flash-lite"
+    assert envoltorio.fallback.reasoning_effort == "none"
+    proveedor = envoltorio.primary
     assert isinstance(proveedor, GeminiProvider)
     assert proveedor.name == "gemini" and proveedor.model == "gemini-2.5-flash"
     assert proveedor.reasoning_effort == "none"
@@ -367,7 +379,7 @@ def test_prompt_de_respuesta_snapshot() -> None:
     )
 
     assert render == SNAPSHOT.read_text("utf-8")
-    assert PROMPT_VERSION == "2026-10-02.1"
+    assert PROMPT_VERSION == "2026-10-03.2"
 
 
 def test_prompt_neutraliza_delimitadores_inyectados() -> None:
@@ -534,3 +546,153 @@ def test_fabrica_del_rewriter_respeta_el_modo(clean_env: pytest.MonkeyPatch) -> 
 
     assert fabrica.create_query_rewriter(llm).mode == "always"
     assert fabrica.create_query_rewriter(llm, mode="off").mode == "off"
+
+
+def test_prompt_de_seguimiento_agrega_la_pregunta_autonoma() -> None:
+    """M9: en una pregunta de seguimiento el prompt lleva la original y la autónoma."""
+    candidatos = [_cand(1, f"{B}/personas/vivienda", "Requisitos: ser mayor de edad.")]
+    autonoma = "¿Cuáles son los requisitos del crédito de vivienda de Bancolombia?"
+
+    con = build_answer_messages("¿y cuáles son los requisitos?", candidatos, autonoma)
+    sin = build_answer_messages("¿y cuáles son los requisitos?", candidatos)
+    igual = build_answer_messages("¿qué es un CDT?", candidatos, " ¿qué es un CDT? ")
+
+    assert con[0] == sin[0]  # el prompt de sistema no cambia
+    assert con[1]["content"].endswith(
+        "Pregunta: ¿y cuáles son los requisitos?\nPregunta autónoma (la misma pregunta, "
+        f"reescrita con el historial de la conversación): {autonoma}"
+    )
+    assert "Pregunta autónoma" not in sin[1]["content"]
+    assert "Pregunta autónoma" not in igual[1]["content"]
+
+
+def test_generador_pasa_la_pregunta_autonoma_al_llm() -> None:
+    llm = FakeLLMProvider("Debe ser mayor de edad [1].")
+    autonoma = "¿Requisitos del crédito de vivienda?"
+
+    AnswerGenerator(llm).generate("¿y los requisitos?", _recuperacion(), autonoma)
+
+    assert llm.calls[0][1]["content"].endswith(f"conversación): {autonoma}")
+
+
+# ---------------------------------------------------------------- respaldo (M9, Decorator)
+
+
+class _Proveedor(FakeLLMProvider):
+    """Doble que falla con la excepción dada o responde indicando su modelo."""
+
+    def __init__(self, modelo: str, error: Exception | None = None) -> None:
+        super().__init__(f"respuesta de {modelo}", model=modelo, models=(modelo,))
+        self.error = error
+
+    def complete(self, messages, *, max_tokens=None):  # type: ignore[no-untyped-def]
+        if self.error:
+            self.calls.append(list(messages))
+            raise self.error
+        return super().complete(messages, max_tokens=max_tokens)  # registra la llamada
+
+    def stream(self, messages, *, max_tokens=None):  # type: ignore[no-untyped-def]
+        if self.error:
+            raise self.error
+        return super().stream(messages, max_tokens=max_tokens)
+
+
+def test_respaldo_responde_cuando_el_principal_agota_el_cupo() -> None:
+    principal = _Proveedor("gemini-2.5-flash", LLMQuotaError("Se agotó el cupo diario"))
+    respaldo = _Proveedor("gemini-3.1-flash-lite")
+    llm = FallbackLLMProvider(principal, respaldo)
+
+    respuesta = llm.complete(MENSAJES)
+
+    assert respuesta.model == "gemini-3.1-flash-lite"  # queda registrado quién respondió
+    assert respuesta.text == "respuesta de gemini-3.1-flash-lite"
+    assert len(principal.calls) == 1 and len(respaldo.calls) == 1
+    assert llm.model == "gemini-2.5-flash" and llm.list_models() == ["gemini-2.5-flash"]
+    fragmentos = llm.stream(MENSAJES)
+    assert "".join(fragmentos) == "respuesta de gemini-3.1-flash-lite"
+
+
+def test_sin_error_de_cupo_no_se_usa_el_respaldo() -> None:
+    respaldo = _Proveedor("gemini-3.1-flash-lite")
+    respuesta = FallbackLLMProvider(_Proveedor("gemini-2.5-flash"), respaldo).complete(MENSAJES)
+    assert respuesta.model == "gemini-2.5-flash" and respaldo.calls == []
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        LLMError("La clave GEMINI_API_KEY no es válida"),
+        LLMError("El modelo configurado (LLM_MODEL) no existe"),
+        LLMError("El servicio de respuestas tardó demasiado"),
+    ],
+)
+def test_errores_que_no_son_de_cupo_no_activan_el_respaldo(error: LLMError) -> None:
+    respaldo = _Proveedor("gemini-3.1-flash-lite")
+    llm = FallbackLLMProvider(_Proveedor("gemini-2.5-flash", error), respaldo)
+    with pytest.raises(LLMError) as capturado:
+        llm.complete(MENSAJES)
+    assert capturado.value is error and respaldo.calls == []
+
+
+def test_si_el_respaldo_tambien_agota_el_cupo_se_informa() -> None:
+    llm = FallbackLLMProvider(
+        _Proveedor("a", LLMQuotaError("cupo a")), _Proveedor("b", LLMQuotaError("cupo b"))
+    )
+    with pytest.raises(LLMQuotaError, match="cupo b"):
+        llm.complete(MENSAJES)
+
+
+def test_proveedor_real_clasifica_429_como_cupo_y_401_404_como_error_comun() -> None:
+    """Con la API simulada: solo el 429 es LLMQuotaError (el que activa el respaldo)."""
+    casos = {
+        429: LLMQuotaError,
+        401: LLMError,
+        404: LLMError,
+    }
+    for codigo, clase in casos.items():
+        servidor = Servidor([httpx2.Response(codigo, json={"error": {"message": "x"}})])
+        with pytest.raises(LLMError) as error:
+            _proveedor(servidor).complete(MENSAJES)
+        assert type(error.value) is clase, codigo
+
+
+def test_respaldo_de_punta_a_punta_con_la_api_simulada() -> None:
+    """429 de cupo diario para gemini-2.5-flash y 200 para el respaldo, por el mismo SDK."""
+    violacion = {"quotaId": "GenerateRequestsPerDayPerProjectPerModel-FreeTier"}
+    error = {"code": 429, "status": "RESOURCE_EXHAUSTED", "message": "Quota exceeded"}
+    cuota = [{"error": {**error, "details": [{"violations": [violacion]}]}}]
+    modelos_pedidos: list[str] = []
+
+    def servidor(peticion: httpx2.Request) -> httpx2.Response:
+        modelo = json.loads(peticion.content)["model"]
+        modelos_pedidos.append(modelo)
+        if modelo == "gemini-2.5-flash":
+            return httpx2.Response(429, json=cuota)
+        completado = _completado("Respuesta del respaldo [1].")
+        return httpx2.Response(200, json={**completado, "model": modelo})
+
+    def gemini(modelo: str) -> GeminiProvider:
+        return GeminiProvider(
+            api_key="clave-de-prueba", base_url=BASE, model=modelo, max_retries=2,
+            http_client=httpx2.Client(transport=httpx2.MockTransport(servidor)),
+            sleep=lambda _s: None,
+        )  # fmt: skip
+
+    respuesta = FallbackLLMProvider(
+        gemini("gemini-2.5-flash"), gemini("gemini-3.1-flash-lite")
+    ).complete(MENSAJES)
+
+    assert respuesta.model == "gemini-3.1-flash-lite"
+    assert modelos_pedidos == [
+        "gemini-2.5-flash",
+        "gemini-3.1-flash-lite",
+    ]  # sin reintentar el cupo diario
+
+
+def test_fabrica_sin_respaldo_si_esta_vacio_o_es_el_mismo_modelo(
+    clean_env: pytest.MonkeyPatch,
+) -> None:
+    clean_env.setenv("GEMINI_API_KEY", "clave-de-prueba")
+    for valor in ("", "gemini-2.5-flash"):
+        clean_env.setenv("LLM_FALLBACK_MODEL", valor)
+        assert isinstance(ComponentFactory(Settings(_env_file=None)).create_llm(), GeminiProvider)

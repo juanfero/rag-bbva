@@ -81,6 +81,11 @@ class Settings(BaseSettings):
     # Score mínimo del reranker (top-1) para responder; por debajo: "sin información
     # suficiente". Calibrado con eval/calibration.jsonl: 27/30 aciertos (M06.md §6).
     rerank_min_score: float = 1.6
+    # Umbral duro (ADR-016): por debajo, "sin información" sin llamar al LLM (fuera de
+    # dominio). Entre este y RERANK_MIN_SCORE (zona gris) se llama al LLM, que puede
+    # abstenerse con la marca [SIN_INFO]. Elegido con eval/calibration.jsonl: todas las
+    # respondibles quedan por encima (mínima -2,58) y 8 de 15 no respondibles por debajo.
+    rerank_hard_min_score: float = -3.0
 
     # LLM vía API compatible con OpenAI: Gemini por defecto (ADR-012), Grok como
     # alternativa (ADR-003). Las claves son secretas: solo en .env.
@@ -90,6 +95,9 @@ class Settings(BaseSettings):
     xai_api_key: SecretStr | None = None
     xai_base_url: str = "https://api.x.ai/v1"
     llm_model: str = "gemini-2.5-flash"
+    # Modelo de respaldo ante un 429 del principal (cupo diario agotado). Vacío lo
+    # desactiva. Debe ser del mismo proveedor (con xai, un modelo de Grok o vacío).
+    llm_fallback_model: str = "gemini-3.1-flash-lite"
     # Solo Gemini: "none" apaga el razonamiento interno de gemini-2.5-flash (menos
     # latencia y tokens); "low" | "medium" | "high" lo activan; vacío no se envía.
     llm_reasoning_effort: str = "none"
@@ -114,6 +122,12 @@ class Settings(BaseSettings):
     history_window_n: int = Field(default=6, ge=0)
     manual_search_minutes: float = Field(default=5, ge=0)
 
+    # API (M9). En Docker (M12) se usa API_HOST=0.0.0.0.
+    api_host: str = "127.0.0.1"
+    api_port: int = Field(default=8000, gt=0, le=65535)
+    # Largo máximo de una pregunta en caracteres (más largo → 422).
+    chat_question_max_chars: int = Field(default=1000, gt=0)
+
     # Observabilidad
     log_level: LogLevel = "INFO"
 
@@ -128,6 +142,11 @@ class Settings(BaseSettings):
             raise ValueError(
                 f"CHUNK_OVERLAP ({self.chunk_overlap}) debe ser menor que "
                 f"CHUNK_SIZE ({self.chunk_size})"
+            )
+        if self.rerank_hard_min_score > self.rerank_min_score:
+            raise ValueError(
+                f"RERANK_HARD_MIN_SCORE ({self.rerank_hard_min_score}) no puede superar "
+                f"RERANK_MIN_SCORE ({self.rerank_min_score})"
             )
         if self.rerank_top_n > self.retrieval_top_k:
             raise ValueError(

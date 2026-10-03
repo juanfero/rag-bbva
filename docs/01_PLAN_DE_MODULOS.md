@@ -258,11 +258,12 @@
 
 **Tareas**
 - Dockerfile multi-stage, `torch` CPU-only, usuario no root, pre-descarga de modelos de embeddings/reranker en build (o caché en volumen).
-- `docker-compose.yml`: `qdrant`, `init` (ingesta si la colección está vacía), `api`, `ui`; healthchecks, `depends_on: condition`, volúmenes, `env_file` (la `XAI_API_KEY` entra solo por `.env`).
+- `docker-compose.yml`: `qdrant`, `init` (ingesta si la colección está vacía), `api`, `ui`; healthchecks, `depends_on: condition`, volúmenes, `env_file` (la `GEMINI_API_KEY` entra solo por `.env`).
+- **Red de la API (nota de M9):** dentro del contenedor la API escucha en `API_HOST=0.0.0.0` (el aislamiento lo da Docker y el puerto publicado); en local sigue `127.0.0.1`. `API_PORT` configurable y documentado: el 8000 puede estar ocupado en la máquina (pasó en M9). `healthcheck` del servicio `api` sobre `/health` (503 cuando algo falla).
 - **El arranque con `docker compose up` NO scrapea** (decisión del checkpoint de M1): se versiona un snapshot de `data/clean/` en el repo y `init` solo indexa ese snapshot si la colección está vacía. El scraping completo (`scrape` + `clean`) queda como comando opcional documentado en el README.
 
 **Pruebas de aceptación**
-- En una máquina Linux limpia: `cp .env.example .env` (+ `XAI_API_KEY`) y `docker compose up -d --build` → UI accesible y responde una pregunta con fuentes.
+- En una máquina Linux limpia: `cp .env.example .env` (+ `GEMINI_API_KEY`) y `docker compose up -d --build` → UI accesible y responde una pregunta con fuentes.
 - `docker compose down && docker compose up -d` → el historial persiste.
 - Smoke test automatizado `scripts/smoke_test.sh` contra `/health` y `/chat`.
 

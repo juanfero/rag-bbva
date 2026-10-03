@@ -258,6 +258,13 @@ def test_feedback_invalido_o_mensaje_inexistente(repo: ConversationRepository) -
         repo.set_feedback(9999, "up")
 
 
+def test_feedback_solo_para_respuestas_del_asistente(repo: ConversationRepository) -> None:
+    turno = repo.add_turn(None, "pregunta", "respuesta")
+    with pytest.raises(MessageNotFoundError, match="respuesta"):
+        repo.set_feedback(turno.question.id, "up")
+    assert repo.get_messages(turno.conversation.id)[0].feedback is None
+
+
 # --- Persistencia en SQLite ----------------------------------------------------------
 
 
@@ -351,4 +358,99 @@ def test_fabrica_crea_repositorio_sqlite_en_history_db_path(tmp_path: Path) -> N
     assert isinstance(repo, SqlAlchemyConversationRepository)
     repo.create_conversation()
     assert ruta.is_file()
+    repo.close()
+
+
+# --- Turno atómico (M9, ADR-014) -----------------------------------------------------
+
+
+def test_add_turn_sin_id_crea_conversacion_con_pregunta_y_respuesta(
+    repo: ConversationRepository,
+) -> None:
+    metricas = MessageMetrics(total_ms=10, no_answer=False)
+    turno = repo.add_turn(
+        None, "¿Qué es un CDT?", "Un CDT es… [1]", sources=[{"n": 1}], metrics=metricas
+    )
+
+    assert turno.conversation.title == "¿Qué es un CDT?"
+    assert [m.role for m in repo.get_messages(turno.conversation.id)] == ["user", "assistant"]
+    assert turno.question.id < turno.answer.id
+    assert turno.answer.sources == [{"n": 1}]
+    assert turno.answer.metrics == metricas
+    assert turno.question.metrics == MessageMetrics()
+
+
+def test_add_turn_continua_una_conversacion_existente(repo: ConversationRepository) -> None:
+    primero = repo.add_turn(None, "pregunta 1", "respuesta 1")
+    segundo = repo.add_turn(primero.conversation.id, "pregunta 2", "respuesta 2")
+
+    assert segundo.conversation.id == primero.conversation.id
+    assert segundo.conversation.title == "pregunta 1"
+    assert [m.content for m in repo.get_last_n(primero.conversation.id, 2)] == [
+        "pregunta 2",
+        "respuesta 2",
+    ]
+    assert len(repo.list_conversations()) == 1
+
+
+def test_add_turn_con_id_inexistente_no_guarda_nada(repo: ConversationRepository) -> None:
+    with pytest.raises(ConversationNotFoundError):
+        repo.add_turn("no-existe", "pregunta", "respuesta")
+    assert repo.list_conversations() == []
+
+
+def test_add_turn_invalido_no_guarda_nada(repo: ConversationRepository) -> None:
+    cid = repo.create_conversation().id
+    with pytest.raises(HistoryError):
+        repo.add_turn(cid, "pregunta válida", "   ")
+    with pytest.raises(HistoryError):
+        repo.add_turn(None, "pregunta válida", "")
+    assert repo.get_messages(cid) == []
+    assert len(repo.list_conversations()) == 1
+
+
+def test_add_turn_hace_rollback_si_falla_la_base(tmp_path: Path) -> None:
+    """Si la base rechaza la respuesta, tampoco quedan la pregunta ni la conversación."""
+    import sqlite3
+
+    ruta = tmp_path / "history.db"
+    repo = SqlAlchemyConversationRepository.from_path(ruta)
+    existente = repo.create_conversation().id
+    with sqlite3.connect(ruta) as conexion:
+        conexion.execute(
+            "CREATE TRIGGER falla BEFORE INSERT ON messages WHEN NEW.role = 'assistant' "
+            "BEGIN SELECT RAISE(ABORT, 'falla simulada'); END"
+        )
+
+    with pytest.raises(HistoryError, match="historial"):
+        repo.add_turn(None, "pregunta suelta", "respuesta")
+    with pytest.raises(HistoryError):
+        repo.add_turn(existente, "pregunta suelta", "respuesta")
+
+    assert [c.id for c in repo.list_conversations()] == [existente]
+    assert repo.get_messages(existente) == []
+    repo.close()
+
+
+def test_turnos_concurrentes_desde_varios_hilos(tmp_path: Path) -> None:
+    """La API escribe desde un threadpool: ningún turno se pierde ni se mezcla."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    repo = SqlAlchemyConversationRepository.from_path(tmp_path / "history.db")
+    cid = repo.create_conversation().id
+
+    def turno(i: int) -> int:
+        destino = cid if i % 2 else None
+        return repo.add_turn(destino, f"pregunta {i}", f"respuesta {i}").answer.id
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        ids = list(pool.map(turno, range(40)))
+
+    assert len(set(ids)) == 40
+    mensajes = repo.get_messages(cid)
+    assert len(mensajes) == 40  # 20 turnos impares, 2 mensajes cada uno
+    for pregunta, respuesta in zip(mensajes[::2], mensajes[1::2], strict=True):
+        assert pregunta.role == "user" and respuesta.role == "assistant"
+        assert pregunta.content.split()[-1] == respuesta.content.split()[-1]
+    assert len(repo.list_conversations(limit=100)) == 21
     repo.close()

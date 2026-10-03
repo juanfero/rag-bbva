@@ -4,6 +4,25 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Sin publicar]
 
+## [m09] - 2026-10-03 — Servicio RAG + API
+### Añadido
+- `RAGService` (Facade): historial (`HISTORY_WINDOW_N`) → reformulación → recuperación → reranking → umbral → generación → guardado; respuesta con `conversation_id`, `message_id`, `answer`, `sources[{n, url, title}]`, `no_answer`, `rewritten_query`, `timings` por etapa y `tokens`.
+- Turno atómico (ADR-014): `ConversationRepository.add_turn` guarda pregunta, respuesta y, si hace falta, la conversación nueva en una sola transacción.
+- API FastAPI con `create_app` e inyección de dependencias (`Depends`): `POST /chat`, `GET /conversations`, `GET /conversations/{id}/messages`, `POST /messages/{id}/feedback`, `GET /health` (sin gastar tokens). Lifespan con `warm_up` de embedder y reranker.
+- Errores JSON `{error, detail}` sin trazas: 422, 404, 503 (LLM, cupo, Qdrant, historial, configuración) y 500.
+- `HealthChecker` (Qdrant, SQLite, configuración del LLM) y `UnconfiguredLLMProvider` (la API arranca sin clave y lo informa).
+- Comando `serve` (uvicorn) y configuración `API_HOST`, `API_PORT`, `CHAT_QUESTION_MAX_CHARS`. Dependencias: `fastapi`, `uvicorn`.
+- README: sección API con ejemplos `curl`, `/docs`, Facade e inyección de dependencias ✅, L-14.
+- Umbral doble (ADR-016): `RERANK_HARD_MIN_SCORE=-3.0`, zona gris con LLM y marca de abstención `[SIN_INFO]` → `no_answer`; `gray_zone` en la respuesta de `/chat`; `scripts/zona_gris_evidence.py`.
+- `FallbackLLMProvider` (Decorator, ADR-017) con `LLM_FALLBACK_MODEL=gemini-3.1-flash-lite` solo ante 429 (`LLMQuotaError`); `/health` informa el modelo de respaldo.
+### Cambiado
+- Prompt de respuesta: en los seguimientos agrega la pregunta autónoma (ADR-015) y pide la marca `[SIN_INFO]` al abstenerse (ADR-016); `PROMPT_VERSION` 2026-10-03.2.
+- L-11: el respaldo de modelo pasa de manual a automático.
+- SQLite seguro entre hilos (`check_same_thread=False`, espera de 15 s, WAL) y valoración solo de respuestas del asistente.
+### Corregido
+- Plan de M12: la clave que entra por `.env` es `GEMINI_API_KEY` (quedaba `XAI_API_KEY`).
+- Una colección inexistente en Qdrant (servidor o `:memory:`) da un `IndexingError` claro que indica ejecutar `ingest`.
+
 ## [m08] - 2026-10-03 — Memoria conversacional
 ### Añadido
 - `ConversationRepository` (Repository) con `SqlAlchemyConversationRepository` (SQLite en `HISTORY_DB_PATH`) e `InMemoryConversationRepository`.

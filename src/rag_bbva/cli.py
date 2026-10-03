@@ -2,8 +2,8 @@
 
 Uso: `python -m rag_bbva.cli <comando>` o `rag-bbva <comando>`.
 Comandos disponibles: `version`, `scrape` (M2), `clean` (M3), `chunk` (M4), `ingest`
-(M5), `search` (M6), `llm-check` (M7) y `history` (M8). Los de las etapas siguientes (chat, metrics)
-se agregan en sus módulos respectivos.
+(M5), `search` (M6), `llm-check` (M7), `history` (M8) y `serve` (M9, la API). Los de
+las etapas siguientes (chat, metrics) se agregan en sus módulos respectivos.
 """
 
 import json
@@ -291,11 +291,15 @@ def _formato_busqueda(resultado: RetrievalResult) -> str:
     if resultado.min_score is None:
         lineas.append("Umbral: no se aplica sin reranker.")
     else:
-        veredicto = (
-            "NO lo supera: sin información suficiente"
-            if resultado.no_answer
-            else "lo supera: hay contexto para responder"
-        )
+        if not resultado.no_answer:
+            veredicto = "lo supera: hay contexto para responder"
+        elif resultado.gray_zone:
+            veredicto = (
+                f"NO lo supera, pero sí el umbral duro ({resultado.hard_min_score}): "
+                "zona gris, el LLM decide si el contexto alcanza"
+            )
+        else:
+            veredicto = "NO lo supera: sin información suficiente (no se llama al LLM)"
         lineas.append(
             f"Umbral RERANK_MIN_SCORE={resultado.min_score}: "
             f"el #1 ({_redondeo(resultado.top_score)}) {veredicto}."
@@ -411,6 +415,29 @@ def history(
         typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(code=1) from exc
     typer.echo(_formato_mensajes(conversacion, mensajes))
+
+
+@app.command()
+def serve(
+    host: Annotated[
+        str | None, typer.Option("--host", help="Dirección (default: API_HOST).")
+    ] = None,
+    port: Annotated[
+        int | None, typer.Option("--port", min=1, max=65535, help="Puerto (default: API_PORT).")
+    ] = None,
+) -> None:
+    """Levanta la API REST (FastAPI + uvicorn). Documentación interactiva en /docs."""
+    import uvicorn
+
+    from rag_bbva.api.app import create_app
+
+    settings = get_settings()
+    direccion, puerto = host or settings.api_host, port or settings.api_port
+    typer.echo(
+        f"API en http://{direccion}:{puerto} · documentación: http://{direccion}:{puerto}/docs"
+    )
+    # log_config=None: uvicorn usa el logging JSON del proyecto (configure_logging).
+    uvicorn.run(create_app(settings), host=direccion, port=puerto, log_config=None)
 
 
 if __name__ == "__main__":

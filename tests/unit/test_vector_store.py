@@ -143,3 +143,19 @@ def test_respuesta_inesperada_es_indexing_error() -> None:
 
     with pytest.raises(IndexingError, match="rechazó"):
         QdrantVectorStore(_Rechazo(), "c").count()  # type: ignore[arg-type]
+
+
+def test_coleccion_inexistente_es_indexing_error_con_mensaje_claro() -> None:
+    """Servidor (404) y modo `:memory:` (ValueError) dan el mismo error claro (M9)."""
+
+    class _Sin404:
+        def count(self, *_a: object, **_k: object) -> None:
+            raise UnexpectedResponse(404, "Not Found", b"{}", httpx.Headers())
+
+    for almacen in (
+        QdrantVectorStore.from_url(":memory:", "no_existe"),
+        QdrantVectorStore(_Sin404(), "no_existe"),  # type: ignore[arg-type]
+    ):
+        with pytest.raises(IndexingError, match="La colección 'no_existe' no existe") as error:
+            almacen.count()
+        assert "ingest" in str(error.value)

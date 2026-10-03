@@ -53,3 +53,8 @@ class ConversationNotFoundError(HistoryError):
 
 class MessageNotFoundError(HistoryError):
     """El `message_id` pedido no existe en el historial."""
+
+
+class LLMQuotaError(LLMError):
+    """El proveedor del LLM respondió 429: cupo diario agotado o límite por minuto tras
+    agotar los reintentos. Es el único error que activa el modelo de respaldo (M9)."""

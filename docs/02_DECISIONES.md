@@ -17,7 +17,7 @@ Formato: una entrada por decisión. Estado: Propuesta · Aceptada · Reemplazada
 - **Consecuencias:** + filtros por payload, imagen oficial ligera; − un servicio más en compose.
 
 ## ADR-003 — LLM: Grok (xAI) vía API compatible con OpenAI
-- **Estado:** Aceptada (2026-10-01, reemplaza la propuesta de Ollama local)
+- **Estado:** Reemplazada como proveedor por defecto por ADR-012 (2026-10-02); Grok sigue disponible con `LLM_PROVIDER=xai`. Original: aceptada el 2026-10-01, reemplaza la propuesta de Ollama local
 - **Contexto:** el caso permite APIs de pago (no suman puntos). Un LLM local en CPU sería lento y pesado en RAM.
 - **Decisión:** Grok de xAI con el SDK `openai` (`base_url=https://api.x.ai/v1`, `XAI_API_KEY`), detrás de `LLMProvider` (Strategy). Embeddings, reranker y base vectorial siguen siendo open source y locales.
 - **Consecuencias:** + mejor calidad en español y menor latencia; + contenedores livianos (sin modelo de varios GB); − costo por token y dependencia externa (mitigado con tope de tokens, contexto acotado y `FakeLLMProvider` en tests); − no suma puntos en "herramientas sin costo", se declara en el README. Volver a un modelo open source = implementar otro `LLMProvider` (mejora futura).
@@ -79,3 +79,20 @@ Formato: una entrada por decisión. Estado: Propuesta · Aceptada · Reemplazada
   - \+ No se descarta contenido válido del sitio por su ruta.
   - \+ `section` refleja dónde vive la página.
   - − Aparecen secciones con pocos documentos. Los filtros por sección (M5) deben aceptar valores fuera de las 6.
+
+## ADR-012 — LLM: Gemini 2.5 Flash (clave gratuita de AI Studio); Grok queda como alternativa
+- **Estado:** Aceptada (2026-10-02, M7; reemplaza ADR-003 como proveedor por defecto)
+- **Contexto:**
+  - En M7 la API de xAI respondió `403 permission-denied` para la clave del proyecto: *"…has either used all available credits or reached its monthly spending limit"*. Sin créditos no hay respuestas.
+  - Juan Felipe decidió cambiar a Gemini con una clave gratuita de Google AI Studio.
+  - Gemini ofrece un endpoint compatible con OpenAI (`https://generativelanguage.googleapis.com/v1beta/openai/`), así que se reutilizan el SDK `openai`, los reintentos, el streaming y el registro de tokens de M7.
+- **Decisión:**
+  - `LLM_PROVIDER=gemini` con `LLM_MODEL=gemini-2.5-flash` y `LLM_REASONING_EFFORT=none`, que apaga el razonamiento interno para bajar latencia y tokens.
+  - Grok sigue disponible con `LLM_PROVIDER=xai` (Strategy: `GeminiProvider` y `XaiGrokProvider` comparten `OpenAICompatibleProvider`).
+  - Se eligió `gemini-2.5-flash` frente a `gemini-3.8-flash`, el modelo de los ejemplos de AI Studio: el 2.5 respondió en ~0,8 s, mientras que el 3.8 devolvió `503 high demand` en la prueba del 2026-10-02.
+  - Precios pagos para estimar el costo equivalente: $0,30 de entrada y $2,50 de salida por millón de tokens (https://ai.google.dev/gemini-api/docs/pricing, actualizado el 2026-10-01).
+- **Consecuencias:**
+  - \+ Costo real 0 con la clave gratuita: suma en "herramientas sin costo" (R7).
+  - \+ Cambiar de proveedor es solo configuración.
+  - − **En el nivel gratuito Google puede usar prompts y respuestas para mejorar sus productos, y pueden revisarlos personas** (términos de la Gemini API: *"Do not submit sensitive, confidential, or personal information to the Unpaid Services"*). El contexto es contenido público de Bancolombia, pero las preguntas de los usuarios internos llegan a Google: se declara como limitación en el README. Para uso real habría que pasar al nivel pago, que no usa los datos para mejorar productos.
+  - − Los cupos del nivel gratuito son por proyecto y el diario se reinicia a medianoche del Pacífico; las cifras se ven en el panel de AI Studio. Al agotarse, la API responde 429 y el asistente lo informa con un mensaje claro.

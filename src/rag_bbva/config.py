@@ -12,9 +12,10 @@ from pydantic import Field, HttpUrl, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
-LLMProviderName = Literal["xai", "fake"]
+LLMProviderName = Literal["gemini", "xai", "fake"]
 ChunkingStrategyName = Literal["heading_aware", "fixed_size"]
 EmbeddingProviderName = Literal["sentence_transformers", "fake"]
+QueryRewriteMode = Literal["off", "history_only", "always"]
 
 
 class Settings(BaseSettings):
@@ -81,14 +82,32 @@ class Settings(BaseSettings):
     # suficiente". Calibrado con eval/calibration.jsonl: 27/30 aciertos (M06.md §6).
     rerank_min_score: float = 1.6
 
-    # LLM (Grok vía API compatible con OpenAI)
-    llm_provider: LLMProviderName = "xai"
+    # LLM vía API compatible con OpenAI: Gemini por defecto (ADR-012), Grok como
+    # alternativa (ADR-003). Las claves son secretas: solo en .env.
+    llm_provider: LLMProviderName = "gemini"
+    gemini_api_key: SecretStr | None = None
+    gemini_base_url: str = "https://generativelanguage.googleapis.com/v1beta/openai/"
     xai_api_key: SecretStr | None = None
     xai_base_url: str = "https://api.x.ai/v1"
-    llm_model: str = "grok-4.7"
+    llm_model: str = "gemini-2.5-flash"
+    # Solo Gemini: "none" apaga el razonamiento interno de gemini-2.5-flash (menos
+    # latencia y tokens); "low" | "medium" | "high" lo activan; vacío no se envía.
+    llm_reasoning_effort: str = "none"
     llm_temperature: float = Field(default=0.1, ge=0, le=2)
     llm_max_tokens: int = Field(default=800, gt=0)
     llm_timeout_seconds: float = Field(default=60, gt=0)
+    # Reintentos propios (tenacity) solo ante 429, 5xx, timeouts y fallos de conexión;
+    # los reintentos internos del SDK openai se desactivan (max_retries=0).
+    llm_max_retries: int = Field(default=2, ge=0)
+    llm_backoff_seconds: float = Field(default=1.0, ge=0)
+    # Precio pago por millón de tokens (USD) para estimar el costo equivalente por
+    # consulta. Fuente: https://ai.google.dev/gemini-api/docs/pricing, gemini-2.5-flash,
+    # texto (actualizado 2026-10-01). Con la clave gratuita de AI Studio el costo real es 0.
+    llm_price_input_per_mtok: float = Field(default=0.30, ge=0)
+    llm_price_output_per_mtok: float = Field(default=2.50, ge=0)
+    # Reformulación de la pregunta antes de recuperar: off | history_only | always.
+    query_rewrite_mode: QueryRewriteMode = "history_only"
+    query_rewrite_max_tokens: int = Field(default=120, gt=0)
 
     # Historial y analítica
     history_db_path: Path = Path("data/history/history.db")

@@ -2,8 +2,8 @@
 
 Uso: `python -m rag_bbva.cli <comando>` o `rag-bbva <comando>`.
 Comandos disponibles: `version`, `scrape` (M2), `clean` (M3), `chunk` (M4), `ingest`
-(M5) y `search` (M6). Los de las etapas siguientes (chat, metrics) se agregan en sus
-módulos respectivos.
+(M5), `search` (M6) y `llm-check` (M7). Los de las etapas siguientes (chat, metrics)
+se agregan en sus módulos respectivos.
 """
 
 import json
@@ -22,6 +22,7 @@ from rag_bbva.config import get_settings
 from rag_bbva.exceptions import (
     ConfigurationError,
     IndexingError,
+    LLMError,
     ProcessingError,
     RetrievalError,
     ScrapingError,
@@ -324,6 +325,35 @@ def search(
         typer.echo(f"Error: {exc}", err=True)
         raise typer.Exit(code=1) from exc
     typer.echo(_formato_busqueda(resultado))
+
+
+# Código de salida de `llm-check` cuando la API responde pero LLM_MODEL no está disponible.
+EXIT_MODELO_NO_DISPONIBLE = 3
+
+
+@app.command("llm-check")
+def llm_check() -> None:
+    """Lista los modelos del proveedor (GET /models) y confirma que LLM_MODEL existe, sin
+    gastar tokens."""
+    settings = get_settings()
+    try:
+        modelos = ComponentFactory(settings).create_llm().list_models()
+    except (ConfigurationError, LLMError) as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"Modelos disponibles ({len(modelos)}):")
+    for modelo in modelos:
+        marca = "  <- LLM_MODEL" if modelo == settings.llm_model else ""
+        typer.echo(f"  - {modelo}{marca}")
+    if settings.llm_model in modelos:
+        typer.echo(f"OK: LLM_MODEL={settings.llm_model} está disponible para esta clave.")
+        return
+    typer.echo(
+        f"LLM_MODEL={settings.llm_model} NO está en la lista. Elija uno de los anteriores "
+        "y configúrelo en .env (LLM_MODEL=...).",
+        err=True,
+    )
+    raise typer.Exit(code=EXIT_MODELO_NO_DISPONIBLE)
 
 
 if __name__ == "__main__":

@@ -10,6 +10,15 @@ from rag_bbva.indexing.chunking import ChunkingStrategy, FixedSizeChunker, Headi
 from rag_bbva.indexing.embedding import Embedder, FakeEmbedder, SentenceTransformerEmbedder
 from rag_bbva.indexing.embedding_cache import EmbeddingCache
 from rag_bbva.indexing.vector_store import QdrantVectorStore, VectorStore
+from rag_bbva.llm.generator import AnswerGenerator
+from rag_bbva.llm.provider import (
+    FakeLLMProvider,
+    GeminiProvider,
+    LLMProvider,
+    OpenAICompatibleProvider,
+    XaiGrokProvider,
+)
+from rag_bbva.llm.rewriter import QueryRewriter
 from rag_bbva.retrieval.reranker import CrossEncoderReranker, NoOpReranker, Reranker
 from rag_bbva.retrieval.retriever import Retriever
 
@@ -20,8 +29,8 @@ _CHUNKERS: dict[str, type[ChunkingStrategy]] = {
 
 
 class ComponentFactory:
-    """Crea chunker, embedder, caché, almacén vectorial, reranker y retriever desde
-    `Settings`."""
+    """Crea chunker, embedder, caché, almacén vectorial, reranker, retriever, LLM,
+    reformulador y generador de respuestas desde `Settings`."""
 
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
@@ -91,3 +100,46 @@ class ComponentFactory:
             max_per_doc=self.settings.rerank_max_chunks_per_doc,
             min_score=self.settings.rerank_min_score,
         )
+
+    def create_llm(self) -> LLMProvider:
+        """Proveedor de `LLM_PROVIDER` (gemini | xai | fake). Exige la clave del proveedor
+        al crearlo (ADR-006): falla aquí y no a mitad de una conversación."""
+        ajustes = self.settings
+        if ajustes.llm_provider == "fake":
+            return FakeLLMProvider(model="fake-model")
+        clase: type[OpenAICompatibleProvider]
+        if ajustes.llm_provider == "gemini":
+            clase, clave, base_url = GeminiProvider, ajustes.gemini_api_key, ajustes.gemini_base_url
+            esfuerzo = ajustes.llm_reasoning_effort or None
+        else:
+            clase, clave, base_url = XaiGrokProvider, ajustes.xai_api_key, ajustes.xai_base_url
+            esfuerzo = None
+        if clave is None or not clave.get_secret_value().strip():
+            raise ConfigurationError(
+                f"Falta {clase.key_env} para usar LLM_PROVIDER={ajustes.llm_provider}. "
+                "Agréguela en el archivo .env (ver .env.example) o use LLM_PROVIDER=fake "
+                "para pruebas."
+            )
+        return clase(
+            api_key=clave.get_secret_value(),
+            base_url=base_url,
+            model=ajustes.llm_model,
+            temperature=ajustes.llm_temperature,
+            max_tokens=ajustes.llm_max_tokens,
+            timeout=ajustes.llm_timeout_seconds,
+            max_retries=ajustes.llm_max_retries,
+            backoff_seconds=ajustes.llm_backoff_seconds,
+            reasoning_effort=esfuerzo,
+        )
+
+    def create_query_rewriter(self, llm: LLMProvider, mode: str | None = None) -> QueryRewriter:
+        """Reformulador con `QUERY_REWRITE_MODE` (o `mode`)."""
+        return QueryRewriter(
+            llm,
+            mode=mode or self.settings.query_rewrite_mode,
+            max_tokens=self.settings.query_rewrite_max_tokens,
+        )
+
+    def create_answer_generator(self, llm: LLMProvider) -> AnswerGenerator:
+        """Generador de respuestas con citas."""
+        return AnswerGenerator(llm, max_tokens=self.settings.llm_max_tokens)

@@ -46,13 +46,22 @@ def test_settings_defaults(clean_env: pytest.MonkeyPatch) -> None:
     assert settings.rerank_min_score == 1.6
     assert settings.reranker_max_length == 512
     assert settings.reranker_batch_size == 16
-    assert settings.llm_provider == "xai"
+    assert settings.llm_provider == "gemini"
     assert settings.xai_api_key is None
     assert settings.xai_base_url == "https://api.x.ai/v1"
-    assert settings.llm_model == "grok-4.7"
+    assert settings.llm_model == "gemini-2.5-flash"
+    assert settings.gemini_api_key is None
+    assert settings.gemini_base_url == "https://generativelanguage.googleapis.com/v1beta/openai/"
+    assert settings.llm_reasoning_effort == "none"
     assert settings.llm_temperature == 0.1
     assert settings.llm_max_tokens == 800
     assert settings.llm_timeout_seconds == 60
+    assert settings.llm_max_retries == 2
+    assert settings.llm_backoff_seconds == 1.0
+    assert settings.llm_price_input_per_mtok == 0.30
+    assert settings.llm_price_output_per_mtok == 2.50
+    assert settings.query_rewrite_mode == "history_only"
+    assert settings.query_rewrite_max_tokens == 120
     assert settings.history_db_path == Path("data/history/history.db")
     assert settings.history_window_n == 6
     assert settings.manual_search_minutes == 5
@@ -96,6 +105,7 @@ def test_settings_env_file_override(clean_env: pytest.MonkeyPatch, tmp_path: Pat
         ({"CRAWL_BLOCK_THRESHOLD": "0"}, "crawl_block_threshold"),
         ({"CHUNKING_STRATEGY": "semantico"}, "chunking_strategy"),
         ({"EMBEDDING_PROVIDER": "openai"}, "embedding_provider"),
+        ({"QUERY_REWRITE_MODE": "a_veces"}, "query_rewrite_mode"),
         ({"CRAWL_EXCLUDE_PATH_PREFIXES": '["acerca-de/"]'}, "CRAWL_EXCLUDE_PATH_PREFIXES"),
     ],
 )

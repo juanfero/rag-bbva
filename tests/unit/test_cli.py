@@ -34,6 +34,7 @@ def test_cli_sin_argumentos_muestra_ayuda(clean_env: pytest.MonkeyPatch) -> None
     assert "chunk" in result.output
     assert "ingest" in result.output
     assert "search" in result.output
+    assert "llm-check" in result.output
     # Regla del proyecto: todo texto visible al usuario dice Bancolombia (ADR-008).
     assert "Bancolombia" in result.output
     assert "BBVA" not in result.output
@@ -296,3 +297,41 @@ def test_cli_search_sin_qdrant_falla(clean_env: pytest.MonkeyPatch) -> None:
 
     assert result.exit_code == 1
     assert "No se pudo conectar con Qdrant" in result.output
+
+
+def test_cli_llm_check_confirma_el_modelo(clean_env: pytest.MonkeyPatch) -> None:
+    clean_env.setenv("LLM_PROVIDER", "fake")
+    clean_env.setenv("LLM_MODEL", "fake-model")
+
+    result = runner.invoke(app, ["llm-check"])
+
+    assert result.exit_code == 0, result.output
+    assert "fake-model  <- LLM_MODEL" in result.stdout
+    assert "OK: LLM_MODEL=fake-model" in result.stdout
+
+
+def test_cli_llm_check_modelo_inexistente_muestra_la_lista(clean_env: pytest.MonkeyPatch) -> None:
+    from rag_bbva.cli import EXIT_MODELO_NO_DISPONIBLE
+
+    clean_env.setenv("LLM_PROVIDER", "fake")
+    clean_env.setenv("LLM_MODEL", "grok-99")
+
+    result = runner.invoke(app, ["llm-check"])
+
+    assert result.exit_code == EXIT_MODELO_NO_DISPONIBLE
+    assert "- fake-model" in result.stdout
+    assert "LLM_MODEL=grok-99 NO está en la lista" in result.output
+
+
+def test_cli_llm_check_sin_clave(
+    clean_env: pytest.MonkeyPatch, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from rag_bbva.config import Settings
+
+    clean_env.setenv("LLM_PROVIDER", "xai")
+    monkeypatch.setattr("rag_bbva.cli.get_settings", lambda: Settings(_env_file=None))
+
+    result = runner.invoke(app, ["llm-check"])
+
+    assert result.exit_code == 1
+    assert "Falta XAI_API_KEY" in result.output

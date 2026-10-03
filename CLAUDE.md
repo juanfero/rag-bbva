@@ -21,15 +21,16 @@ Leer siempre antes de trabajar: `docs/00_VISION_GENERAL.md` y `docs/01_PLAN_DE_M
 
 ## Entorno
 - Linux + Docker. Scripts en bash; rutas POSIX.
-- LLM: Grok (xAI) vía SDK `openai` con `XAI_BASE_URL`. **Nunca** escribir la `XAI_API_KEY` en código, docs, tests ni commits; solo en `.env` (ignorado por git).
-- Los tests unitarios usan `FakeLLMProvider`: nunca consumen créditos de xAI.
+- LLM: Gemini 2.5 Flash (ADR-012) vía SDK `openai` con `GEMINI_BASE_URL`; Grok (xAI) como alternativa. **Nunca** escribir `GEMINI_API_KEY` ni `XAI_API_KEY` en código, docs, tests ni commits; solo en `.env` (ignorado por git).
+- Los tests unitarios usan `FakeLLMProvider` o un transporte simulado: nunca consumen cupo ni créditos del LLM.
+- `tests/unit/test_secrets.py` falla si algún archivo del repo contiene una clave de API. Si se agota el cupo gratuito de Gemini, Juan Felipe entrega una clave de un **proyecto nuevo** (el cupo es por proyecto): se pone solo en `.env` y se verifica con `llm-check`.
 
 ## Convenciones de código
 - Python 3.11, type hints en todo, docstrings en español.
 - Toda configuración sale de `rag_bbva.config.get_settings()`; nada hardcodeado.
 - Errores: lanzar excepciones de `rag_bbva.exceptions`; nunca `except Exception: pass`.
 - Logging con `logging.getLogger(__name__)`, nunca `print` en el core.
-- Dependencias externas (red, Qdrant, API de xAI, modelos) detrás de interfaces para poder usar dobles en tests.
+- Dependencias externas (red, Qdrant, API del LLM, modelos) detrás de interfaces para poder usar dobles en tests.
 - Tests unitarios **sin red**. Tests que requieren servicios reales: `@pytest.mark.integration`; modelos pesados: `@pytest.mark.slow`.
 
 ## Git

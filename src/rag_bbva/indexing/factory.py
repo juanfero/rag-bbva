@@ -19,6 +19,8 @@ from rag_bbva.llm.provider import (
     XaiGrokProvider,
 )
 from rag_bbva.llm.rewriter import QueryRewriter
+from rag_bbva.memory.repository import ConversationRepository
+from rag_bbva.memory.sql_repository import SqlAlchemyConversationRepository
 from rag_bbva.retrieval.reranker import CrossEncoderReranker, NoOpReranker, Reranker
 from rag_bbva.retrieval.retriever import Retriever
 
@@ -30,7 +32,7 @@ _CHUNKERS: dict[str, type[ChunkingStrategy]] = {
 
 class ComponentFactory:
     """Crea chunker, embedder, caché, almacén vectorial, reranker, retriever, LLM,
-    reformulador y generador de respuestas desde `Settings`."""
+    reformulador, generador de respuestas e historial desde `Settings`."""
 
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
@@ -143,3 +145,7 @@ class ComponentFactory:
     def create_answer_generator(self, llm: LLMProvider) -> AnswerGenerator:
         """Generador de respuestas con citas."""
         return AnswerGenerator(llm, max_tokens=self.settings.llm_max_tokens)
+
+    def create_conversation_repository(self) -> ConversationRepository:
+        """Historial de conversaciones en SQLite (`HISTORY_DB_PATH`)."""
+        return SqlAlchemyConversationRepository.from_path(self.settings.history_db_path)

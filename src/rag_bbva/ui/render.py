@@ -38,6 +38,12 @@ def source_lines(sources: Sequence[dict[str, Any]]) -> list[str]:
     return lineas
 
 
+def shorten(texto: str, maximo: int = 80) -> str:
+    """Texto en una línea y recortado, para citar la pregunta en un mensaje de error."""
+    linea = " ".join(texto.split())
+    return linea if len(linea) <= maximo else linea[: maximo - 1] + "…"
+
+
 def friendly_error(exc: ApiClientError) -> str:
     """Mensaje para el usuario según el código HTTP de la API."""
     if exc.status == 404:

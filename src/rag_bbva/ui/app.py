@@ -26,6 +26,7 @@ from rag_bbva.ui.render import (
     friendly_error,
     health_lines,
     link_citations,
+    shorten,
     source_lines,
 )
 
@@ -150,9 +151,10 @@ def _barra_lateral() -> bool:
             conversaciones = []
             st.caption(f"No se pudo cargar la lista: {friendly_error(exc)}")
         for c in conversaciones:
-            titulo = (c.title or "(sin título)")[:48]
+            titulo = shorten(c.title or "(sin título)", 40)
             st.button(
-                f"{'▶ ' if c.id == actual else ''}{titulo}",
+                # La fecha distingue conversaciones con la misma primera pregunta.
+                f"{'▶ ' if c.id == actual else ''}{titulo} · {c.updated_at:%d/%m %H:%M}",
                 key=f"conv_{c.id}",
                 on_click=_retomar,
                 args=(c.id,),
@@ -222,7 +224,9 @@ def _preguntar(pregunta: str) -> None:
         try:
             respuesta = _cliente().chat(pregunta, st.session_state.conversation_id)
         except ApiClientError as exc:
-            st.session_state.error = f"No se pudo responder «{pregunta}». {friendly_error(exc)}"
+            st.session_state.error = (
+                f"No se pudo responder «{shorten(pregunta)}». {friendly_error(exc)}"
+            )
             if exc.status == 404:  # la conversación ya no existe: la próxima abre otra
                 st.session_state.conversation_id = None
             return

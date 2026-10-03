@@ -236,19 +236,27 @@ def test_retomar_desde_la_lista(api: ApiFalsa) -> None:
     assert [m.name for m in at.chat_message] == ["user", "assistant"]
     assert f"[\\[1\\]]({B}/vivienda)" in _textos(at)
     assert at.button(key="down_18").disabled  # ya estaba valorada
+    assert at.button(key="conv_c-9").label == "▶ Crédito de vivienda · 03/10 15:05"
+
+
+def _boton(at: AppTest, etiqueta: str):  # type: ignore[no-untyped-def]
+    return next(b for b in at.button if b.label == etiqueta)
 
 
 def test_retomar_por_id_y_por_id_inexistente(api: ApiFalsa) -> None:
+    """Con conversaciones en la lista, "Retomar por ID" retoma la del ID, no otra."""
     api.historiales["c-9"] = _historial()
+    otra = _historial().conversation.model_copy(update={"id": "c-otra", "title": "Otra"})
+    api.conversaciones = [otra, _historial().conversation]
     at = _app(api)
 
     at.text_input[0].input("no-existe")
-    at = at.button[1].click().run()  # "Retomar por ID"
+    at = _boton(at, "Retomar por ID").click().run()
     assert "No encontré esa conversación" in at.error[0].value
     assert at.session_state["conversation_id"] is None
 
     at.text_input[0].input("  c-9 ")
-    at = at.button[1].click().run()
+    at = _boton(at, "Retomar por ID").click().run()
     assert at.session_state["conversation_id"] == "c-9"
     assert len(at.chat_message) == 2
 
@@ -256,7 +264,7 @@ def test_retomar_por_id_y_por_id_inexistente(api: ApiFalsa) -> None:
 def test_nueva_conversacion_limpia_el_chat(api: ApiFalsa) -> None:
     api.respuestas = [_respuesta(1)]
     at = _preguntar(_app(api), "¿Qué es un CDT?")
-    at = at.sidebar.button[0].click().run()  # "Nueva conversación"
+    at = _boton(at, "Nueva conversación").click().run()
     assert at.session_state["conversation_id"] is None
     assert len(at.chat_message) == 0
 
@@ -299,3 +307,18 @@ def test_estado_degradado_y_api_caida(api: ApiFalsa) -> None:
     api.salud = ApiClientError("No se pudo conectar con la API en http://127.0.0.1:8000.")
     estado = "\n".join(m.value for m in _app(api).sidebar.markdown)
     assert "🔴 **API**" in estado
+
+
+def test_error_de_pregunta_larga_cita_la_pregunta_recortada(api: ApiFalsa) -> None:
+    api.respuestas = [
+        ApiClientError(
+            "Solicitud inválida",
+            status=422,
+            detail="question: La pregunta supera el máximo de 1000 caracteres",
+        )
+    ]
+    at = _preguntar(_app(api), "x" * 1001)
+    assert at.error[0].value == (
+        f"No se pudo responder «{'x' * 79}…». "
+        "La pregunta no es válida: La pregunta supera el máximo de 1000 caracteres"
+    )

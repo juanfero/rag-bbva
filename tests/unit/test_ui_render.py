@@ -145,3 +145,10 @@ def test_la_ui_no_importa_el_nucleo() -> None:
             )
             for modulo in modulos:
                 assert not modulo.startswith(NUCLEO), f"{archivo.name} importa {modulo}"
+
+
+def test_shorten() -> None:
+    from rag_bbva.ui.render import shorten
+
+    assert shorten("  ¿Qué es\n un CDT?  ") == "¿Qué es un CDT?"
+    assert shorten("a" * 100, 10) == "aaaaaaaaa…"

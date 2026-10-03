@@ -105,6 +105,7 @@ class ComponentFactory:
             top_n=top_n or self.settings.rerank_top_n,
             max_per_doc=self.settings.rerank_max_chunks_per_doc,
             min_score=self.settings.rerank_min_score,
+            hard_min_score=self.settings.rerank_hard_min_score,
         )
 
     def create_llm(self) -> LLMProvider:

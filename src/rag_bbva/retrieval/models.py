@@ -1,6 +1,8 @@
 """Modelos de la recuperación (M6): candidatos y resultado de una consulta."""
 
-from pydantic import BaseModel
+from typing import Any
+
+from pydantic import BaseModel, model_validator
 
 
 class Candidate(BaseModel):
@@ -34,3 +36,20 @@ class RetrievalResult(BaseModel):
     no_answer: bool  # el #1 no alcanza el umbral: "sin información suficiente"
     retrieval_ms: float
     rerank_ms: float
+    # Umbral duro (ADR-016): por debajo no se llama al LLM. Si no se indica, coincide con
+    # `no_answer` (comportamiento de M6, sin zona gris).
+    hard_min_score: float | None = None
+    hard_no_answer: bool | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _hard_por_defecto(cls, datos: Any) -> Any:
+        if isinstance(datos, dict) and datos.get("hard_no_answer") is None:
+            datos = {**datos, "hard_no_answer": datos.get("no_answer", False)}
+        return datos
+
+    @property
+    def gray_zone(self) -> bool:
+        """Zona gris: no alcanza `RERANK_MIN_SCORE` pero sí el umbral duro; se le pide al
+        LLM que responda o se abstenga con el contexto (ADR-016)."""
+        return self.no_answer and not self.hard_no_answer and bool(self.results)

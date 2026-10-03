@@ -81,6 +81,11 @@ class Settings(BaseSettings):
     # Score mínimo del reranker (top-1) para responder; por debajo: "sin información
     # suficiente". Calibrado con eval/calibration.jsonl: 27/30 aciertos (M06.md §6).
     rerank_min_score: float = 1.6
+    # Umbral duro (ADR-016): por debajo, "sin información" sin llamar al LLM (fuera de
+    # dominio). Entre este y RERANK_MIN_SCORE (zona gris) se llama al LLM, que puede
+    # abstenerse con la marca [SIN_INFO]. Elegido con eval/calibration.jsonl: todas las
+    # respondibles quedan por encima (mínima -2,58) y 8 de 15 no respondibles por debajo.
+    rerank_hard_min_score: float = -3.0
 
     # LLM vía API compatible con OpenAI: Gemini por defecto (ADR-012), Grok como
     # alternativa (ADR-003). Las claves son secretas: solo en .env.
@@ -134,6 +139,11 @@ class Settings(BaseSettings):
             raise ValueError(
                 f"CHUNK_OVERLAP ({self.chunk_overlap}) debe ser menor que "
                 f"CHUNK_SIZE ({self.chunk_size})"
+            )
+        if self.rerank_hard_min_score > self.rerank_min_score:
+            raise ValueError(
+                f"RERANK_HARD_MIN_SCORE ({self.rerank_hard_min_score}) no puede superar "
+                f"RERANK_MIN_SCORE ({self.rerank_min_score})"
             )
         if self.rerank_top_n > self.retrieval_top_k:
             raise ValueError(

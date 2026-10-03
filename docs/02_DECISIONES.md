@@ -96,3 +96,13 @@ Formato: una entrada por decisión. Estado: Propuesta · Aceptada · Reemplazada
   - \+ Cambiar de proveedor es solo configuración.
   - − **En el nivel gratuito Google puede usar prompts y respuestas para mejorar sus productos, y pueden revisarlos personas** (términos de la Gemini API: *"Do not submit sensitive, confidential, or personal information to the Unpaid Services"*). El contexto es contenido público de Bancolombia, pero las preguntas de los usuarios internos llegan a Google: se declara como limitación en el README. Para uso real habría que pasar al nivel pago, que no usa los datos para mejorar productos.
   - − Los cupos del nivel gratuito son por proyecto y el diario se reinicia a medianoche del Pacífico; las cifras se ven en el panel de AI Studio. Al agotarse, la API responde 429 y el asistente lo informa con un mensaje claro.
+
+## ADR-013 — Historial: un `conversation_id` desconocido se informa, no se crea
+- **Estado:** Aceptada (2026-10-03, M8; pendiente de validación de Juan Felipe en la revisión del módulo)
+- **Contexto:** el plan de M8 deja abierto qué hacer con un `conversation_id` inexistente: crearlo al vuelo o informarlo, "según contrato documentado". S-05 decía que el ID lo genera la UI o lo envía el cliente.
+- **Decisión:**
+  - Las conversaciones se crean de forma explícita (`create_conversation`) y el **servidor** genera el ID (UUID4). El cliente lo recibe y lo reenvía en cada pregunta.
+  - Leer o escribir en un ID que no existe lanza `ConversationNotFoundError` (subclase de `HistoryError`); en M9 la API lo traduce a **404**. `POST /chat` sin `conversation_id` creará una conversación nueva.
+  - Los mensajes se ordenan por su `id` autoincremental (orden de inserción), no por la hora: dos mensajes en el mismo instante no se desordenan.
+  - El título de la conversación es su primera pregunta (una línea, máx. 80 caracteres).
+- **Consecuencias:** + un ID mal copiado no abre en silencio una conversación vacía, sin contexto, que el usuario creería continuar; + IDs no adivinables y sin choques entre clientes; − el cliente debe guardar el ID que recibe para continuar la conversación.

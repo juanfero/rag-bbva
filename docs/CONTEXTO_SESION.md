@@ -24,7 +24,8 @@
   - `c38abdc` y `9a6e3ce`, entre `m01` y `m02`.
 - Cada merge incluye las correcciones de su revisión (§10 de cada bitácora).
 
-### Siguiente módulo: M8 — Memoria conversacional
+### Módulo en curso: M8 — Memoria conversacional (implementado, **en revisión**)
+- Rama `feat/m08-memory`. Implementado y documentado en `docs/modulos/M08.md` (repositorio, tablas, `history`, ADR-013). Falta la aprobación de Juan Felipe, en particular del contrato del ID inexistente (ADR-013).
 - Juan Felipe aprobó M7 y pidió seguir con M8, en la rama `feat/m08-memory`.
 - Alcance según `docs/01_PLAN_DE_MODULOS.md` (M8):
   - `ConversationRepository` (Repository) con `SqlAlchemyConversationRepository` (SQLite) e `InMemoryConversationRepository` (tests);

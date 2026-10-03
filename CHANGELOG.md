@@ -4,6 +4,16 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Sin publicar]
 
+## [m08] - 2026-10-03 — Memoria conversacional
+### Añadido
+- `ConversationRepository` (Repository) con `SqlAlchemyConversationRepository` (SQLite en `HISTORY_DB_PATH`) e `InMemoryConversationRepository`.
+- Tablas `conversations` y `messages` del plan, con fuentes, latencias, score, `no_answer`, tokens y valoración por mensaje.
+- `get_last_n` en orden cronológico (por orden de inserción); `set_feedback`; título = primera pregunta.
+- `ConversationNotFoundError` y `MessageNotFoundError` (subclases de `HistoryError`).
+- `ComponentFactory.create_conversation_repository()` y comando `history` (solo lectura).
+- ADR-013: un `conversation_id` desconocido se informa, no se crea. S-05 actualizado.
+- README: memoria conversacional, Repository ✅, L-13. Dependencia: `sqlalchemy` 2.x.
+
 ## [m07] - 2026-10-03 — Generación con LLM
 ### Añadido
 - `LLMProvider` (Strategy):

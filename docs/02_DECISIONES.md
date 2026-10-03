@@ -98,7 +98,7 @@ Formato: una entrada por decisión. Estado: Propuesta · Aceptada · Reemplazada
   - − Los cupos del nivel gratuito son por proyecto y el diario se reinicia a medianoche del Pacífico; las cifras se ven en el panel de AI Studio. Al agotarse, la API responde 429 y el asistente lo informa con un mensaje claro.
 
 ## ADR-013 — Historial: un `conversation_id` desconocido se informa, no se crea
-- **Estado:** Aceptada (2026-10-03, M8; pendiente de validación de Juan Felipe en la revisión del módulo)
+- **Estado:** Aceptada (2026-10-03, M8; validada por Juan Felipe en la revisión del módulo)
 - **Contexto:** el plan de M8 deja abierto qué hacer con un `conversation_id` inexistente: crearlo al vuelo o informarlo, "según contrato documentado". S-05 decía que el ID lo genera la UI o lo envía el cliente.
 - **Decisión:**
   - Las conversaciones se crean de forma explícita (`create_conversation`) y el **servidor** genera el ID (UUID4). El cliente lo recibe y lo reenvía en cada pregunta.

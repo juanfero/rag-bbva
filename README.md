@@ -20,7 +20,7 @@ Prueba técnica de ML/AI Engineer: un sistema RAG (*Retrieval-Augmented Generati
 | M5 | Indexación vectorial (Qdrant): `ingest` idempotente con sincronización y caché de embeddings | ✅ | `m05` |
 | M6 | Recuperación + reranker: cross-encoder, diversidad por página, umbral calibrado de "sin información" | ✅ | `m06` |
 | M7 | Generación con LLM: Gemini 2.5 Flash (Grok como alternativa), prompts versionados, citas, reformulación | ✅ | `m07` |
-| M8 | Memoria conversacional: historial en SQLite (Repository), últimos N mensajes, métricas por mensaje | 🟡 en revisión | — |
+| M8 | Memoria conversacional: historial en SQLite (Repository), últimos N mensajes, métricas por mensaje | ✅ | `m08` |
 | M9 | Servicio RAG + API | ⏳ | — |
 | M10 | Interfaz conversacional | ⏳ | — |
 | M11 | Analítica del historial | ⏳ | — |

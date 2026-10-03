@@ -11,7 +11,7 @@ millón de tokens, de https://docs.x.ai/docs/models).
 
 Uso (Qdrant levantado e indexado, XAI_API_KEY en .env):
     python scripts/llm_evidence.py preguntas
-    python scripts/llm_evidence.py reformulacion
+    python scripts/llm_evidence.py reformulacion --pausa 7   # respeta el límite por minuto
 """
 
 import argparse
@@ -85,7 +85,7 @@ def preguntas(salida: Path) -> None:
     salida.write_text(json.dumps(filas, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def reformulacion(salida: Path) -> None:
+def reformulacion(salida: Path, pausa: float = 0.0) -> None:
     """off frente a always sobre las 30 preguntas de calibración."""
     ajustes = get_settings()
     fabrica = ComponentFactory(ajustes)
@@ -98,6 +98,10 @@ def reformulacion(salida: Path) -> None:
         filas = []
         for p in load_questions(Path("eval/calibration.jsonl")):
             reformulada = reformulador.rewrite(p.question)
+            if reformulada.used_llm and pausa:
+                # El nivel gratuito limita las solicitudes por minuto: sin pausa, las
+                # llamadas seguidas reciben 429 y la reformulación cae al respaldo.
+                time.sleep(pausa)
             r = retriever.retrieve(reformulada.query)
             filas.append(
                 {
@@ -108,6 +112,7 @@ def reformulacion(salida: Path) -> None:
                     "expected_in_top_n": (
                         any(c.url == p.expected_url for c in r.results) if p.expected_url else None
                     ),
+                    "used_llm": reformulada.used_llm,
                     "rewrite_ms": reformulada.latency_ms,
                     "tokens_in": reformulada.prompt_tokens,
                     "tokens_out": reformulada.completion_tokens,
@@ -119,11 +124,12 @@ def reformulacion(salida: Path) -> None:
         pos = [f["top_score"] for f in filas if f["answerable"]]
         neg = [f["top_score"] for f in filas if not f["answerable"]]
         matriz = evaluate(ajustes.rerank_min_score, pos, neg)  # type: ignore[arg-type]
-        latencias = [f["rewrite_ms"] for f in filas]
+        latencias = [f["rewrite_ms"] for f in filas if f["used_llm"]] or [0.0]
         resumen[modo] = {
             "umbral": ajustes.rerank_min_score,
             "matriz": matriz.model_dump(),
             "url_esperada_en_top_n": sum(1 for f in filas if f["expected_in_top_n"]),
+            "reformuladas_con_llm": sum(1 for f in filas if f["used_llm"]),
             "tokens_reformulacion": {
                 "entrada": sum(f["tokens_in"] for f in filas),  # type: ignore[misc]
                 "salida": sum(f["tokens_out"] for f in filas),  # type: ignore[misc]
@@ -156,11 +162,17 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("parte", choices=["preguntas", "reformulacion"])
     parser.add_argument("--output-dir", type=Path, default=Path("data/eval"))
+    parser.add_argument(
+        "--pausa", type=float, default=0.0, help="Segundos entre llamadas de reformulación."
+    )
     args = parser.parse_args()
     configure_logging()
     args.output_dir.mkdir(parents=True, exist_ok=True)
     destino = args.output_dir / f"m07_{args.parte}.json"
-    {"preguntas": preguntas, "reformulacion": reformulacion}[args.parte](destino)
+    if args.parte == "preguntas":
+        preguntas(destino)
+    else:
+        reformulacion(destino, args.pausa)
     print("Guardado en", destino)
 
 

@@ -4,6 +4,27 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Sin publicar]
 
+### M7 — Generación con LLM (en revisión, rama `feat/m07-llm`)
+#### Añadido
+- `LLMProvider` (Strategy):
+  - `OpenAICompatibleProvider` con dos variantes: `GeminiProvider` (por defecto, ADR-012) y `XaiGrokProvider`; más `FakeLLMProvider`;
+  - SDK `openai` con reintentos propios (tenacity, el SDK con `max_retries=0`) solo ante 429, 5xx y timeouts;
+  - streaming, registro de tokens y errores amigables (clave inválida, sin créditos, cupo).
+- Comando `llm-check`, que lista los modelos y confirma `LLM_MODEL`.
+- Prompts versionados (`llm/prompts.py`, versión `2026-10-02.1`):
+  - solo contexto, citas [n], no inventar cifras, aclarar si preguntan por otra entidad;
+  - contexto delimitado contra inyección;
+  - prompt de reformulación.
+- `QueryRewriter` (`QUERY_REWRITE_MODE=off|history_only|always`, por defecto `history_only` según el experimento).
+- `AnswerGenerator`: sin llamar al LLM si el umbral marca `no_answer`; con streaming.
+- Post-proceso de citas: [n] → URL, deduplicadas, sin índices inválidos.
+- Configuración: `GEMINI_API_KEY`, `GEMINI_BASE_URL`, `LLM_REASONING_EFFORT`, `LLM_MAX_RETRIES`, `LLM_BACKOFF_SECONDS`, `LLM_PRICE_*`, `QUERY_REWRITE_*`. Dependencia: `openai` 3.x.
+- `scripts/llm_evidence.py` (preguntas de punta a punta y experimento de reformulación) y prueba de integración contra el LLM real.
+- ADR-012: Gemini 2.5 Flash con clave gratuita; Grok queda como alternativa.
+- README: generación, `llm-check`, configuración de la clave, Strategy del LLM, costo, L-11 (cupo diario) y L-12 (datos en el nivel gratuito).
+#### Cambiado
+- `LLM_PROVIDER` por defecto `gemini` y `LLM_MODEL` `gemini-2.5-flash` (antes `xai` / `grok-4.7`). ADR-003 queda reemplazada como opción por defecto.
+
 ## [m06] - 2026-10-02 — Recuperación + reranker
 ### Añadido
 - `Retriever`: consulta con `query: `, top-k del `VectorStore` con filtro por sección, reranking, diversidad y marca `no_answer`. `RetrievalResult` con candidatos, scores y tiempos (`retrieval_ms`, `rerank_ms`). Incluye `warm_up()`.

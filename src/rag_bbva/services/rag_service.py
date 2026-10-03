@@ -60,7 +60,8 @@ class ChatResult(BaseModel):
     question_message_id: int
     answer: str
     sources: list[SourceRef]
-    no_answer: bool
+    no_answer: bool  # umbral duro o abstención del LLM con [SIN_INFO] (ADR-016)
+    gray_zone: bool  # el #1 del reranker cayó entre el umbral duro y RERANK_MIN_SCORE
     rewritten_query: str | None  # None si la pregunta se buscó tal cual
     timings: Timings
     tokens: TokenUsage
@@ -148,6 +149,7 @@ class RAGService:
             answer=respuesta.text,
             sources=fuentes,
             no_answer=respuesta.no_answer,
+            gray_zone=recuperacion.gray_zone,
             rewritten_query=autonoma,
             timings=Timings(
                 rewrite=_ms(t_rewrite),
@@ -172,6 +174,7 @@ class RAGService:
                 "historial": len(historial),
                 "reformulada": autonoma is not None,
                 "no_answer": resultado.no_answer,
+                "zona_gris": resultado.gray_zone,
                 "fuentes": len(fuentes),
                 "total_ms": resultado.timings.total,
             },

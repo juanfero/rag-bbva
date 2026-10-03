@@ -291,11 +291,15 @@ def _formato_busqueda(resultado: RetrievalResult) -> str:
     if resultado.min_score is None:
         lineas.append("Umbral: no se aplica sin reranker.")
     else:
-        veredicto = (
-            "NO lo supera: sin información suficiente"
-            if resultado.no_answer
-            else "lo supera: hay contexto para responder"
-        )
+        if not resultado.no_answer:
+            veredicto = "lo supera: hay contexto para responder"
+        elif resultado.gray_zone:
+            veredicto = (
+                f"NO lo supera, pero sí el umbral duro ({resultado.hard_min_score}): "
+                "zona gris, el LLM decide si el contexto alcanza"
+            )
+        else:
+            veredicto = "NO lo supera: sin información suficiente (no se llama al LLM)"
         lineas.append(
             f"Umbral RERANK_MIN_SCORE={resultado.min_score}: "
             f"el #1 ({_redondeo(resultado.top_score)}) {veredicto}."

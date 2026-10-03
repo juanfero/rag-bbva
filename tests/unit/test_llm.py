@@ -367,7 +367,7 @@ def test_prompt_de_respuesta_snapshot() -> None:
     )
 
     assert render == SNAPSHOT.read_text("utf-8")
-    assert PROMPT_VERSION == "2026-10-03.1"
+    assert PROMPT_VERSION == "2026-10-03.2"
 
 
 def test_prompt_neutraliza_delimitadores_inyectados() -> None:

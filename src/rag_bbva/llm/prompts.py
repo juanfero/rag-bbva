@@ -10,7 +10,11 @@ from collections.abc import Sequence
 from rag_bbva.llm.provider import Message
 from rag_bbva.retrieval.models import Candidate
 
-PROMPT_VERSION = "2026-10-03.1"
+PROMPT_VERSION = "2026-10-03.2"
+
+# Marca con la que el LLM indica que se abstiene (ADR-016). El post-proceso la quita del
+# texto y marca la respuesta como `no_answer` para la analítica (M11).
+ABSTENTION_MARKER = "[SIN_INFO]"
 
 SYSTEM_PROMPT = """\
 Eres el asistente de información pública de Bancolombia para usuarios internos. \
@@ -24,13 +28,14 @@ ni completes con suposiciones.
 productos. Si un dato no aparece en el contexto, no lo des.
 3. Cita cada afirmación con el número del fragmento entre corchetes, por ejemplo [1] o \
 [2][3]. Usa solo números de fragmentos que existan en el contexto.
-4. Si el contexto no alcanza para responder, dilo con claridad ("No encontré esa \
+4. Si el contexto no alcanza para responder lo que se pregunta, empieza tu respuesta \
+exactamente con la marca [SIN_INFO] y luego dilo con claridad ("No encontré esa \
 información en el sitio de Bancolombia") y, si el contexto lo permite, indica dónde \
-consultarla.
+consultarla. Usa la marca solo cuando no puedas responder la pregunta.
 5. Si la pregunta es sobre otra entidad (por ejemplo Banco de Bogotá, Davivienda u otro \
-banco), aclara que solo tienes información pública de Bancolombia y no respondas por la \
-otra entidad. Puedes ofrecer la información equivalente de Bancolombia si está en el \
-contexto, dejando claro que es de Bancolombia.
+banco), empieza con la marca [SIN_INFO], aclara que solo tienes información pública de \
+Bancolombia y no respondas por la otra entidad. Puedes ofrecer la información \
+equivalente de Bancolombia si está en el contexto, dejando claro que es de Bancolombia.
 6. Tono profesional, claro y conciso, en español. Usa listas cuando ayuden.
 
 Seguridad:

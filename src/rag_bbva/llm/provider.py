@@ -19,7 +19,7 @@ from typing import Any, TypeVar
 
 import openai
 from pydantic import BaseModel
-from tenacity import Retrying, retry_if_exception_type, stop_after_attempt, wait_exponential
+from tenacity import Retrying, retry_if_exception, stop_after_attempt, wait_exponential
 
 from rag_bbva.exceptions import LLMError
 
@@ -36,6 +36,18 @@ _TRANSITORIOS = (
     openai.APIConnectionError,
 )
 _BACKOFF_MAXIMO = 30.0
+
+
+def is_daily_quota_exhausted(exc: BaseException) -> bool:
+    """429 por cupo **diario** agotado (p. ej. el nivel gratuito de Gemini, con quotaId
+    `…PerDay…`). Reintentar en segundos no sirve: el cupo se reinicia al día siguiente."""
+    if not isinstance(exc, openai.RateLimitError):
+        return False
+    return "perday" in str(exc).lower().replace("_", "").replace("-", "")
+
+
+def _es_transitorio(exc: BaseException) -> bool:
+    return isinstance(exc, _TRANSITORIOS) and not is_daily_quota_exhausted(exc)
 
 
 class LLMResponse(BaseModel):
@@ -135,6 +147,13 @@ class OpenAICompatibleProvider(LLMProvider):
     def _mensaje_amigable(self, exc: Exception) -> str:
         """Mensaje para el usuario, sin trazas ni detalles internos."""
         texto = str(exc).lower()
+        if is_daily_quota_exhausted(exc):
+            return (
+                f"Se agotó el cupo diario de {self.key_env} (nivel gratuito). Se reinicia a "
+                "medianoche del Pacífico; para seguir antes, cree una clave en un proyecto "
+                f"nuevo en {self.console_url} (el cupo es por proyecto, no por clave) y "
+                f"reemplace {self.key_env} en .env."
+            )
         if isinstance(exc, openai.RateLimitError):
             return (
                 "El servicio de respuestas alcanzó su límite de solicitudes o su cupo "
@@ -167,7 +186,7 @@ class OpenAICompatibleProvider(LLMProvider):
         reintentador = Retrying(
             stop=stop_after_attempt(self.max_retries + 1),
             wait=wait_exponential(multiplier=self.backoff_seconds, max=_BACKOFF_MAXIMO),
-            retry=retry_if_exception_type(_TRANSITORIOS),
+            retry=retry_if_exception(_es_transitorio),
             sleep=self._sleep,
             reraise=True,
             before_sleep=lambda estado: logger.warning(

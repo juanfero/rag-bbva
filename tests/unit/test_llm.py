@@ -120,6 +120,26 @@ def test_429_persistente_es_llm_error_amigable() -> None:
     assert len(servidor.peticiones) == 3  # 1 + LLM_MAX_RETRIES
 
 
+def test_cupo_diario_agotado_no_se_reintenta_y_explica_como_seguir() -> None:
+    """Respuesta real de Gemini al agotar el cupo diario gratuito (M07.md §7)."""
+    cuota = "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+    mensaje = (
+        "You exceeded your current quota. Quota exceeded for metric: "
+        "generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20"
+    )
+    detalles = [{"violations": [{"quotaId": cuota}]}]
+    cuerpo = [{"error": {"code": 429, "status": "RESOURCE_EXHAUSTED", "message": mensaje,
+                         "details": detalles}}]  # fmt: skip
+    servidor = Servidor([httpx2.Response(429, json=cuerpo)])
+
+    with pytest.raises(LLMError) as error:
+        _gemini(servidor).complete(MENSAJES)
+
+    assert len(servidor.peticiones) == 1  # no se reintenta: el cupo es diario
+    assert "cupo diario de GEMINI_API_KEY" in error.value.message
+    assert "proyecto nuevo" in error.value.message
+
+
 def test_timeout_se_reintenta_y_termina_en_llm_error() -> None:
     servidor = Servidor([httpx2.ReadTimeout("lento")])
 

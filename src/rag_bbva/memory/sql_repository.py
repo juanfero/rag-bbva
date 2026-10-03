@@ -36,6 +36,7 @@ from rag_bbva.memory.models import (
     Message,
     MessageMetrics,
     Role,
+    SavedTurn,
     title_from_question,
     utc_now,
 )
@@ -240,6 +241,54 @@ class SqlAlchemyConversationRepository(ConversationRepository):
                 conversacion.title = title_from_question(content)
             sesion.flush()
             return _a_mensaje(fila)
+
+    def add_turn(
+        self,
+        conversation_id: str | None,
+        question: str,
+        answer: str,
+        *,
+        sources: Sequence[dict[str, Any]] = (),
+        metrics: MessageMetrics | None = None,
+    ) -> SavedTurn:
+        """Guarda pregunta y respuesta en una sola transacción (y la conversación nueva,
+        si `conversation_id` es `None`). Si algo falla, no queda nada guardado."""
+        validate_message("user", question)
+        validate_message("assistant", answer)
+        metricas = metrics or MessageMetrics()
+        fuentes_json = json.dumps(list(sources), ensure_ascii=False)
+        ahora = self._clock()
+        with self._session() as sesion:
+            if conversation_id is None:
+                conversacion = _ConversationRow(
+                    id=new_conversation_id(), created_at=ahora, updated_at=ahora, title=None
+                )
+                sesion.add(conversacion)
+            else:
+                conversacion = self._fila_conversacion(sesion, conversation_id)
+            pregunta = _MessageRow(
+                conversation_id=conversacion.id, role="user", content=question, created_at=ahora
+            )
+            respuesta = _MessageRow(
+                conversation_id=conversacion.id,
+                role="assistant",
+                content=answer,
+                created_at=ahora,
+                sources_json=fuentes_json,
+                **metricas.model_dump(),
+            )
+            sesion.add(pregunta)
+            sesion.flush()  # asigna el id de la pregunta antes que el de la respuesta
+            sesion.add(respuesta)
+            conversacion.updated_at = ahora
+            if conversacion.title is None:
+                conversacion.title = title_from_question(question)
+            sesion.flush()
+            return SavedTurn(
+                conversation=_a_conversacion(conversacion),
+                question=_a_mensaje(pregunta),
+                answer=_a_mensaje(respuesta),
+            )
 
     def get_messages(self, conversation_id: str) -> list[Message]:
         """Todos los mensajes de la conversación en orden cronológico."""

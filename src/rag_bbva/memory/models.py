@@ -67,3 +67,13 @@ class Message(BaseModel):
     def as_chat_message(self) -> dict[str, str]:
         """Formato `{"role", "content"}` que reciben el LLM y el reformulador."""
         return {"role": self.role, "content": self.content}
+
+
+class SavedTurn(BaseModel):
+    """Turno guardado de forma atómica: la pregunta y la respuesta (M9, ADR-014)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    conversation: Conversation
+    question: Message
+    answer: Message

@@ -13,6 +13,9 @@ Contrato común a todas las implementaciones:
 - `get_last_n(id, n)` devuelve los últimos `n` mensajes en orden cronológico; `n=0`
   devuelve una lista vacía.
 - El título de la conversación es su primera pregunta del usuario (recortada).
+- `add_turn` guarda la pregunta y la respuesta **juntas o ninguna** (ADR-014). Con
+  `conversation_id=None` crea la conversación en la misma operación, así un turno
+  fallido no deja conversaciones vacías.
 """
 
 from abc import ABC, abstractmethod
@@ -28,6 +31,7 @@ from rag_bbva.memory.models import (
     Message,
     MessageMetrics,
     Role,
+    SavedTurn,
     title_from_question,
     utc_now,
 )
@@ -87,6 +91,19 @@ class ConversationRepository(ABC):
         metrics: MessageMetrics | None = None,
     ) -> Message:
         """Agrega un mensaje al final de la conversación y actualiza `updated_at`."""
+
+    @abstractmethod
+    def add_turn(
+        self,
+        conversation_id: str | None,
+        question: str,
+        answer: str,
+        *,
+        sources: Sequence[dict[str, Any]] = (),
+        metrics: MessageMetrics | None = None,
+    ) -> SavedTurn:
+        """Guarda pregunta y respuesta en una sola operación atómica. Si
+        `conversation_id` es `None`, crea la conversación en esa misma operación."""
 
     @abstractmethod
     def get_messages(self, conversation_id: str) -> list[Message]:
@@ -166,6 +183,32 @@ class InMemoryConversationRepository(ConversationRepository):
             update={"updated_at": ahora, "title": titulo}
         )
         return mensaje
+
+    def add_turn(
+        self,
+        conversation_id: str | None,
+        question: str,
+        answer: str,
+        *,
+        sources: Sequence[dict[str, Any]] = (),
+        metrics: MessageMetrics | None = None,
+    ) -> SavedTurn:
+        """Guarda pregunta y respuesta juntas: valida todo antes de modificar nada."""
+        validate_message("user", question)
+        validate_message("assistant", answer)
+        if conversation_id is not None:
+            self.require_conversation(conversation_id)
+        else:
+            conversation_id = self.create_conversation().id
+        pregunta = self.add_message(conversation_id, "user", question)
+        respuesta = self.add_message(
+            conversation_id, "assistant", answer, sources=sources, metrics=metrics
+        )
+        return SavedTurn(
+            conversation=self.require_conversation(conversation_id),
+            question=pregunta,
+            answer=respuesta,
+        )
 
     def get_messages(self, conversation_id: str) -> list[Message]:
         """Todos los mensajes de la conversación en orden cronológico."""

@@ -367,7 +367,7 @@ def test_prompt_de_respuesta_snapshot() -> None:
     )
 
     assert render == SNAPSHOT.read_text("utf-8")
-    assert PROMPT_VERSION == "2026-10-02.1"
+    assert PROMPT_VERSION == "2026-10-03.1"
 
 
 def test_prompt_neutraliza_delimitadores_inyectados() -> None:
@@ -534,3 +534,30 @@ def test_fabrica_del_rewriter_respeta_el_modo(clean_env: pytest.MonkeyPatch) -> 
 
     assert fabrica.create_query_rewriter(llm).mode == "always"
     assert fabrica.create_query_rewriter(llm, mode="off").mode == "off"
+
+
+def test_prompt_de_seguimiento_agrega_la_pregunta_autonoma() -> None:
+    """M9: en una pregunta de seguimiento el prompt lleva la original y la autónoma."""
+    candidatos = [_cand(1, f"{B}/personas/vivienda", "Requisitos: ser mayor de edad.")]
+    autonoma = "¿Cuáles son los requisitos del crédito de vivienda de Bancolombia?"
+
+    con = build_answer_messages("¿y cuáles son los requisitos?", candidatos, autonoma)
+    sin = build_answer_messages("¿y cuáles son los requisitos?", candidatos)
+    igual = build_answer_messages("¿qué es un CDT?", candidatos, " ¿qué es un CDT? ")
+
+    assert con[0] == sin[0]  # el prompt de sistema no cambia
+    assert con[1]["content"].endswith(
+        "Pregunta: ¿y cuáles son los requisitos?\nPregunta autónoma (la misma pregunta, "
+        f"reescrita con el historial de la conversación): {autonoma}"
+    )
+    assert "Pregunta autónoma" not in sin[1]["content"]
+    assert "Pregunta autónoma" not in igual[1]["content"]
+
+
+def test_generador_pasa_la_pregunta_autonoma_al_llm() -> None:
+    llm = FakeLLMProvider("Debe ser mayor de edad [1].")
+    autonoma = "¿Requisitos del crédito de vivienda?"
+
+    AnswerGenerator(llm).generate("¿y los requisitos?", _recuperacion(), autonoma)
+
+    assert llm.calls[0][1]["content"].endswith(f"conversación): {autonoma}")

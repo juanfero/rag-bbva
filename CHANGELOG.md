@@ -4,6 +4,21 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Sin publicar]
 
+## [m10] - en revisión — Interfaz conversacional
+### Añadido
+- Interfaz Streamlit (`src/rag_bbva/ui/app.py`) que consume la API por HTTP con `ApiClient` (sin importar el núcleo; lo verifica una prueba):
+  - chat con indicador de espera;
+  - citas [n] como enlaces y fuentes en un desplegable;
+  - aviso propio para "sin información suficiente";
+  - 👍/👎 que se deshabilitan tras votar;
+  - barra lateral: nueva conversación, `conversation_id`, retomar por lista o por ID y estado de `/health`;
+  - modo detalle, errores 404/422/503 amigables y aviso de prototipo.
+- `ApiClient` y `ApiClientError` (código HTTP + mensaje para el usuario); `/health` con 503 se trata como reporte degradado.
+- Comandos `ui` (Streamlit con `--host`, `--port`, `--api-url`) y `chat` (CLI de respaldo sobre `RAGService`, con `--conversation-id`).
+- Configuración: `API_BASE_URL`, `UI_HOST`, `UI_PORT`, `UI_REQUEST_TIMEOUT_SECONDS`. Dependencia: `streamlit`.
+- `scripts/ui_guion.py`: guion de la interfaz contra la API real con `AppTest`.
+- README: sección "Uso de la interfaz conversacional" con capturas, Streamlit ✅, L-15.
+
 ## [m09] - 2026-10-03 — Servicio RAG + API
 ### Añadido
 - `RAGService` (Facade): historial (`HISTORY_WINDOW_N`) → reformulación → recuperación → reranking → umbral → generación → guardado; respuesta con `conversation_id`, `message_id`, `answer`, `sources[{n, url, title}]`, `no_answer`, `rewritten_query`, `timings` por etapa y `tokens`.

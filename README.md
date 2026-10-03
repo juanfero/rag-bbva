@@ -22,7 +22,7 @@ Prueba técnica de ML/AI Engineer: un sistema RAG (*Retrieval-Augmented Generati
 | M7 | Generación con LLM: Gemini 2.5 Flash (Grok como alternativa), prompts versionados, citas, reformulación | ✅ | `m07` |
 | M8 | Memoria conversacional: historial en SQLite (Repository), últimos N mensajes, métricas por mensaje | ✅ | `m08` |
 | M9 | Servicio RAG + API: fachada `RAGService`, FastAPI, turno atómico, umbral doble, LLM de respaldo, `/health` | ✅ | `m09` |
-| M10 | Interfaz conversacional | ⏳ | — |
+| M10 | Interfaz conversacional: Streamlit sobre la API, fuentes, 👍/👎, modo detalle, CLI `chat` | 🟡 en revisión | — |
 | M11 | Analítica del historial | ⏳ | — |
 | M12 | Dockerización completa | ⏳ | — |
 | M13 | Evaluación de calidad | ⏳ | — |
@@ -282,7 +282,46 @@ Respuesta de `/chat` (abreviada):
 
 ## Uso de la interfaz conversacional
 
-🚧 **La interfaz web se completa en M10** (Streamlit + CLI de respaldo). Hoy se conversa por la API REST de M9 (`curl` o http://127.0.0.1:8000/docs, ver arriba).
+Interfaz web en **Streamlit** (M10) que habla con el sistema **solo por HTTP**, a través de la API de M9 (`ApiClient`); no importa el núcleo, y una prueba lo verifica.
+
+**Levantarla** (Qdrant arriba y `GEMINI_API_KEY` en `.env`), en dos terminales:
+```bash
+python -m rag_bbva.cli serve                 # 1) API en http://127.0.0.1:8000
+python -m rag_bbva.cli ui                    # 2) interfaz en http://127.0.0.1:8501
+# Si el 8000 está ocupado:
+python -m rag_bbva.cli serve --port 8010
+python -m rag_bbva.cli ui --api-url http://127.0.0.1:8010
+```
+`UI_HOST`, `UI_PORT`, `API_BASE_URL` y `UI_REQUEST_TIMEOUT_SECONDS` (180 s) se configuran en `.env`.
+
+**Qué ofrece**
+- **Chat** con `st.chat_message` y un indicador "Buscando en el sitio de Bancolombia…" mientras responde.
+- **Citas como enlaces:** cada `[n]` lleva a su página. Las fuentes (título + URL) van en un desplegable.
+- **"Sin información suficiente"** con un aviso amarillo propio, tanto cuando el umbral corta como cuando el LLM se abstiene (ADR-016).
+- **👍 / 👎** por respuesta (`POST /messages/{id}/feedback`); se deshabilitan después de votar, también al retomar una conversación ya valorada.
+- **Barra lateral:**
+  - nueva conversación y el `conversation_id` actual, visible y copiable;
+  - lista para **retomar** conversaciones (título + fecha y hora UTC) y retomar **por ID**;
+  - **estado del servicio** según `/health`: búsqueda (Qdrant), historial (SQLite) y LLM con su modelo de respaldo.
+- **Modo detalle** (interruptor), para la demo: pregunta reformulada, zona gris, tiempos por etapa, tokens y modelo que respondió.
+- **Errores amigables:** 503 (LLM sin cupo, Qdrant caído), 422 (pregunta vacía o de más de 1000 caracteres), 404 (ID inexistente: la siguiente pregunta abre una conversación nueva), timeout y API caída, que indica cómo levantarla. Una pregunta que falla no se guarda (turno atómico) y se cita en el error para reintentarla.
+- **Aviso visible:** *"Prototipo de prueba técnica. No es un canal oficial de Bancolombia."* Sin logos ni marca: Bancolombia aparece solo como fuente.
+
+**Capturas** (guion completo en la [bitácora M10](docs/modulos/M10.md#6-evidencia-manual)):
+
+| | |
+|---|---|
+| ![Pantalla inicial](docs/img/m10_01_inicio.png) Pantalla inicial: aviso, estado del servicio y conversaciones para retomar | ![Respuesta con citas](docs/img/m10_02_citas_y_fuentes.png) Seguimiento "¿y cuáles son los requisitos?" con citas enlazadas y fuentes |
+| ![Modo detalle](docs/img/m10_03_modo_detalle.png) Modo detalle en la zona gris, con 👍 ya votado | ![Sin información](docs/img/m10_04_sin_informacion.png) Pregunta fuera de dominio: "sin información suficiente" |
+| ![Otra entidad](docs/img/m10_05_otra_entidad.png) Pregunta sobre otro banco: el asistente se abstiene | ![Retomar por ID](docs/img/m10_06_retomar_por_id.png) Conversación retomada por ID después de reiniciar la API |
+| ![API caída](docs/img/m10_07_api_caida.png) API detenida: estado en rojo y error amigable | |
+
+**CLI de respaldo**, sin API ni navegador, directo sobre `RAGService`:
+```bash
+python -m rag_bbva.cli chat                          # conversación nueva
+python -m rag_bbva.cli chat --conversation-id <ID>   # continuar una existente
+```
+Muestra la respuesta, las fuentes y, al salir (`salir` o línea vacía), el ID de la conversación.
 
 ---
 
@@ -328,7 +367,7 @@ El caso exige al menos 3. Previstos en la [visión general §6](docs/00_VISION_G
 | Orquestación RAG | Código propio, sin LangChain | Patrones visibles y testeables ([ADR-001](docs/02_DECISIONES.md)) | ✅ en uso (M9) |
 | Historial | SQLite + SQLAlchemy 2 | Cero infraestructura extra, persistente ([ADR-004](docs/02_DECISIONES.md)) | ✅ en uso (M8) |
 | API | FastAPI + uvicorn | Validación con Pydantic, OpenAPI automático (`/docs`), `TestClient` | ✅ en uso (M9) |
-| UI | Streamlit | Chat y panel en pocas líneas | ⏳ M10 |
+| UI | Streamlit | Chat en pocas líneas y testeable sin navegador (`AppTest`); consume la API por HTTP | ✅ en uso (M10) |
 | Contenedores | Docker + Compose | Requisito del caso | ✅ imagen base (M0) · ⏳ completo en M12 |
 
 ---
@@ -380,6 +419,7 @@ Registro completo: [`docs/02_DECISIONES.md`](docs/02_DECISIONES.md) (ADR) y supu
 | L-12 | **Datos en el nivel gratuito de Gemini:** según los términos de la Gemini API, en los servicios sin pago Google puede usar prompts y respuestas para mejorar sus productos y pueden revisarlos personas (*"Do not submit sensitive, confidential, or personal information"*). El contexto es contenido público de Bancolombia, pero **las preguntas no deben incluir información sensible o personal**. El nivel pago no usa los datos para mejorar productos | M7, ADR-012 |
 | L-13 | **Historial en un solo archivo SQLite:** pensado para una instancia de la API y pocos usuarios a la vez; SQLite serializa las escrituras. Tampoco hay migraciones de esquema: las tablas se crean si faltan, pero un cambio de columnas en el futuro exigiría migrar (p. ej. con Alembic) o recrear `history.db`. Las preguntas quedan guardadas en texto plano en el volumen de datos | M8, ADR-004 |
 | L-14 | **API sin autenticación ni límite de uso:** pensada para usuarios internos en una red de confianza (S-05). Cualquiera que alcance el puerto puede preguntar, gastar cupo del LLM y leer todas las conversaciones con `GET /conversations`. Por eso `API_HOST` es `127.0.0.1` por defecto. No hay streaming en la API: la respuesta llega completa (el generador de M7 ya lo soporta; la UI de M10 decidirá si lo expone) | M9, S-05 |
+| L-15 | **Interfaz sin streaming ni sesiones de usuario:** la respuesta aparece completa cuando termina (indicador de espera de hasta `UI_REQUEST_TIMEOUT_SECONDS`=180 s; con el LLM gratuito saturado, un turno real tardó ~150 s en M9). La lista de conversaciones muestra las de todos (no hay usuarios, L-14) y las horas van en UTC | M10 |
 
 ---
 
@@ -416,7 +456,8 @@ rag-bbva/
 │   ├── memory/            # models, repository (Repository: interfaz + memoria), sql_repository (SQLite)
 │   ├── services/          # rag_service (Facade), health (estado sin gastar tokens)
 │   ├── api/               # app (create_app, rutas, lifespan), schemas, errors (JSON {error, detail})
-│   └── ui/ analytics/     # vacíos (próximos módulos)
+│   ├── ui/                # app (Streamlit), api_client (HTTP de la API), render (presentación)
+│   └── analytics/         # vacío (M11)
 ├── scripts/explore_site.py · scripts/trim_html_fixture.py · scripts/calibrate_reranker.py · scripts/llm_evidence.py
 ├── tests/unit/ · tests/fixtures/ (robots, sitemaps, html: páginas reales recortadas de las 3 plantillas; clean: glosario limpio) · tests/integration/
 ├── eval/                  # calibration.jsonl (M6: umbral del reranker); golden set (M13)

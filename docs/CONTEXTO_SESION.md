@@ -26,13 +26,11 @@
   - `c38abdc` y `9a6e3ce`, entre `m01` y `m02`.
 - Cada merge incluye las correcciones de su revisión (§10 de cada bitácora).
 
-### Siguiente módulo: M10 — Interfaz conversacional
-- Juan Felipe aprobó M9 (ADR-015; umbral doble ADR-016 y respaldo ADR-017 agregados en la revisión) y pidió M10 en la rama `feat/m10-ui`:
-  - Streamlit que consume la API por HTTP (`ApiClient`, `API_BASE_URL`); la UI **no** importa el core;
-  - chat, barra lateral (nueva conversación, retomar, `conversation_id`, estado de `/health`), citas como enlaces, fuentes en un expander, `no_answer` con un estilo propio, 👍/👎, "modo detalle" y errores amigables;
-  - aviso "Prototipo de prueba técnica. No es un canal oficial de Bancolombia." y sin logos;
-  - CLI `chat` de respaldo; tests con respx, AppTest y CliRunner; guion manual con 3 conversaciones; lista de capturas en `docs/img/`.
-- Para probar la API en esta máquina: `serve --port 8010` (el 8000 lo ocupa un contenedor ajeno, `fabrix-startup-backend-1`).
+### Módulo en curso: M10 — Interfaz conversacional (implementado, **en revisión**)
+- Rama `feat/m10-ui`. Detalle, guion ejecutado y lista de capturas en `docs/modulos/M10.md`.
+- Comandos: `serve --port 8010` y `ui --api-url http://127.0.0.1:8010` (el 8000 lo ocupa un contenedor ajeno, `fabrix-startup-backend-1`); `chat` de respaldo.
+- **Falta:** las 7 capturas de `M10.md §6.4` (las toma Juan Felipe en `docs/img/`, ya enlazadas en el README) y la aprobación.
+- Historial real: la conversación C (`6c0b76f6-…`, Banco de Bogotá) tiene un turno de más por un error del guion (`M10.md §7`).
 - **Sin merge** sin aprobación.
 
 ### Estado del árbol (al cerrar M9)
@@ -125,7 +123,7 @@ No están escritas en `CLAUDE.md`; la forma de trabajo de §4 las recoge:
 Todo lo demás está registrado:
 - ADR-001 a 017.
 - Supuestos S-01 a S-08 (S-02, S-03 y S-04 confirmados; S-03 acotado por ADR-010 y ampliado por ADR-011).
-- Limitaciones L-01 a L-14 en el README.
+- Limitaciones L-01 a L-15 en el README.
 - Reglas en `CLAUDE.md`.
 
 ---
@@ -223,7 +221,7 @@ Fuentes: `docs/01_PLAN_DE_MODULOS.md`, las bitácoras §8 y el README.
 
 1. `docs/CONTEXTO_SESION.md` (este archivo).
 2. `CLAUDE.md`: reglas obligatorias.
-3. `README.md`: estado, uso, patrones y limitaciones L-01 a L-14.
+3. `README.md`: estado, uso, patrones y limitaciones L-01 a L-15.
 4. `docs/00_VISION_GENERAL.md`: requisitos, arquitectura, configuración §7 y supuestos §9.
 5. `docs/01_PLAN_DE_MODULOS.md`: Definition of Done y el módulo en curso o siguiente.
 6. `docs/02_DECISIONES.md`: ADR-001 a ADR-017.

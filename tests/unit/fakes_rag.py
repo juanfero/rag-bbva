@@ -140,6 +140,7 @@ def ajustes(**cambios: object) -> Settings:
     base: dict[str, object] = {
         "llm_provider": "fake",
         "llm_model": "gemini-2.5-flash",
+        "llm_fallback_model": "gemini-3.1-flash-lite",
         "embedding_provider": "fake",
         "qdrant_collection": "bancolombia_docs",
         "history_window_n": 6,

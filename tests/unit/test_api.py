@@ -213,7 +213,8 @@ def test_llm_sin_clave_503(tmp_path: Path) -> None:
     assert salud.status_code == 503
     assert salud.json()["llm"] == {
         "status": "down", "detail": "Falta GEMINI_API_KEY en .env",
-        "provider": "gemini", "model": "gemini-2.5-flash", "key_configured": False,
+        "provider": "gemini", "model": "gemini-2.5-flash",
+        "fallback_model": "gemini-3.1-flash-lite", "key_configured": False,
     }  # fmt: skip
 
 
@@ -251,7 +252,7 @@ def test_health_ok(client: TestClient) -> None:
         "sqlite": {"status": "ok", "detail": None},
         "llm": {
             "status": "ok", "detail": None, "provider": "fake", "model": "gemini-2.5-flash",
-            "key_configured": True,
+            "fallback_model": "gemini-3.1-flash-lite", "key_configured": True,
         },
     }  # fmt: skip
 

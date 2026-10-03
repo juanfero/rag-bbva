@@ -45,3 +45,11 @@ class LLMError(RagBbvaError):
 
 class HistoryError(RagBbvaError):
     """Fallo al leer o persistir el historial de conversaciones."""
+
+
+class ConversationNotFoundError(HistoryError):
+    """El `conversation_id` pedido no existe en el historial."""
+
+
+class MessageNotFoundError(HistoryError):
+    """El `message_id` pedido no existe en el historial."""

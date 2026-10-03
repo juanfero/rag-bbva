@@ -249,6 +249,9 @@ El caso pide mínimo 3. Se implementan 6 para tener margen, pero el README desta
 | `MANUAL_SEARCH_MINUTES` | `5` | Supuesto para estimar tiempo ahorrado (analítica) |
 | `API_HOST` / `API_PORT` | `127.0.0.1` / `8000` | Dirección y puerto de `serve` (M9); en Docker, `0.0.0.0` (M12) |
 | `CHAT_QUESTION_MAX_CHARS` | `1000` | Largo máximo de una pregunta; más largo responde 422 (M9) |
+| `API_BASE_URL` | `http://127.0.0.1:8000` | URL de la API que consume la UI (M10); en Docker, `http://api:8000` (M12) |
+| `UI_HOST` / `UI_PORT` | `127.0.0.1` / `8501` | Dirección y puerto de la UI Streamlit (`ui`, M10) |
+| `UI_REQUEST_TIMEOUT_SECONDS` | `180` | Espera máxima de la UI por una respuesta de la API (M10) |
 | `LOG_LEVEL` | `INFO` | Nivel de logs |
 
 ---

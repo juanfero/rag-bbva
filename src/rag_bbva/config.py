@@ -128,6 +128,14 @@ class Settings(BaseSettings):
     # Largo máximo de una pregunta en caracteres (más largo → 422).
     chat_question_max_chars: int = Field(default=1000, gt=0)
 
+    # Interfaz web (M10): consume la API por HTTP en API_BASE_URL.
+    api_base_url: str = "http://127.0.0.1:8000"
+    ui_host: str = "127.0.0.1"
+    ui_port: int = Field(default=8501, gt=0, le=65535)
+    # Espera máxima de la UI por una respuesta de la API. Alta a propósito: con el LLM
+    # gratuito saturado, un turno real llegó a tardar ~150 s (M09.md §10.1).
+    ui_request_timeout_seconds: float = Field(default=180, gt=0)
+
     # Observabilidad
     log_level: LogLevel = "INFO"
 

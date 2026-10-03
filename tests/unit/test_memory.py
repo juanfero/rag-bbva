@@ -258,6 +258,13 @@ def test_feedback_invalido_o_mensaje_inexistente(repo: ConversationRepository) -
         repo.set_feedback(9999, "up")
 
 
+def test_feedback_solo_para_respuestas_del_asistente(repo: ConversationRepository) -> None:
+    turno = repo.add_turn(None, "pregunta", "respuesta")
+    with pytest.raises(MessageNotFoundError, match="respuesta"):
+        repo.set_feedback(turno.question.id, "up")
+    assert repo.get_messages(turno.conversation.id)[0].feedback is None
+
+
 # --- Persistencia en SQLite ----------------------------------------------------------
 
 
@@ -422,4 +429,28 @@ def test_add_turn_hace_rollback_si_falla_la_base(tmp_path: Path) -> None:
 
     assert [c.id for c in repo.list_conversations()] == [existente]
     assert repo.get_messages(existente) == []
+    repo.close()
+
+
+def test_turnos_concurrentes_desde_varios_hilos(tmp_path: Path) -> None:
+    """La API escribe desde un threadpool: ningún turno se pierde ni se mezcla."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    repo = SqlAlchemyConversationRepository.from_path(tmp_path / "history.db")
+    cid = repo.create_conversation().id
+
+    def turno(i: int) -> int:
+        destino = cid if i % 2 else None
+        return repo.add_turn(destino, f"pregunta {i}", f"respuesta {i}").answer.id
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        ids = list(pool.map(turno, range(40)))
+
+    assert len(set(ids)) == 40
+    mensajes = repo.get_messages(cid)
+    assert len(mensajes) == 40  # 20 turnos impares, 2 mensajes cada uno
+    for pregunta, respuesta in zip(mensajes[::2], mensajes[1::2], strict=True):
+        assert pregunta.role == "user" and respuesta.role == "assistant"
+        assert pregunta.content.split()[-1] == respuesta.content.split()[-1]
+    assert len(repo.list_conversations(limit=100)) == 21
     repo.close()

@@ -10,7 +10,7 @@ from collections.abc import Sequence
 from rag_bbva.llm.provider import Message
 from rag_bbva.retrieval.models import Candidate
 
-PROMPT_VERSION = "2026-10-02.1"
+PROMPT_VERSION = "2026-10-03.1"
 
 SYSTEM_PROMPT = """\
 Eres el asistente de información pública de Bancolombia para usuarios internos. \
@@ -75,11 +75,24 @@ def format_context(results: Sequence[Candidate]) -> str:
     return f"{_ABRE}\n" + "\n\n".join(partes) + f"\n{_CIERRA}"
 
 
-def build_answer_messages(question: str, results: Sequence[Candidate]) -> list[Message]:
-    """Mensajes para responder: sistema + contexto delimitado + pregunta."""
+def build_answer_messages(
+    question: str, results: Sequence[Candidate], standalone_question: str | None = None
+) -> list[Message]:
+    """Mensajes para responder: sistema + contexto delimitado + pregunta.
+
+    En una pregunta de seguimiento ("¿y cuáles son los requisitos?") se agrega la pregunta
+    autónoma que produjo el reformulador con el historial (M9): sin ella, el modelo no
+    sabría a qué se refiere la pregunta original.
+    """
+    pregunta = f"Pregunta: {question}"
+    if standalone_question and standalone_question.strip() != question.strip():
+        pregunta += (
+            "\nPregunta autónoma (la misma pregunta, reescrita con el historial de la "
+            f"conversación): {standalone_question}"
+        )
     return [
         {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": f"{format_context(results)}\n\nPregunta: {question}"},
+        {"role": "user", "content": f"{format_context(results)}\n\n{pregunta}"},
     ]
 
 

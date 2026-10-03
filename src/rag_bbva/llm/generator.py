@@ -47,12 +47,16 @@ class AnswerGenerator:
             prompt_version=PROMPT_VERSION,
         )
 
-    def generate(self, question: str, retrieval: RetrievalResult) -> Answer:
-        """Respuesta completa (sin streaming)."""
+    def generate(
+        self, question: str, retrieval: RetrievalResult, standalone_question: str | None = None
+    ) -> Answer:
+        """Respuesta completa (sin streaming). `standalone_question` es la pregunta
+        reformulada con el historial, si la hubo (se agrega al prompt)."""
         if retrieval.no_answer or not retrieval.results:
             return self._sin_respuesta()
         respuesta = self.llm.complete(
-            build_answer_messages(question, retrieval.results), max_tokens=self.max_tokens
+            build_answer_messages(question, retrieval.results, standalone_question),
+            max_tokens=self.max_tokens,
         )
         texto, fuentes = process_citations(respuesta.text, retrieval.results)
         return Answer(
@@ -68,7 +72,7 @@ class AnswerGenerator:
         )
 
     def stream(
-        self, question: str, retrieval: RetrievalResult
+        self, question: str, retrieval: RetrievalResult, standalone_question: str | None = None
     ) -> tuple[Iterator[str], "StreamedAnswer"]:
         """Fragmentos de texto a medida que llegan y un objeto que, al terminar, tiene la
         respuesta final con las citas procesadas (para la UI de M10)."""
@@ -77,7 +81,8 @@ class AnswerGenerator:
             resultado.answer = self._sin_respuesta()
             return iter([NO_ANSWER_MESSAGE]), resultado
         flujo = self.llm.stream(
-            build_answer_messages(question, retrieval.results), max_tokens=self.max_tokens
+            build_answer_messages(question, retrieval.results, standalone_question),
+            max_tokens=self.max_tokens,
         )
 
         def fragmentos() -> Iterator[str]:

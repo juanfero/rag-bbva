@@ -2,6 +2,11 @@
 
 Persiste en `HISTORY_DB_PATH`: sobrevive a reinicios del proceso y del contenedor
 (volumen `./data`). Las tablas se crean al construir el repositorio si no existen.
+
+Concurrencia (M9): la API atiende peticiones en varios hilos. Cada operación abre su
+propia sesión del pool; las conexiones se pueden usar desde cualquier hilo
+(`check_same_thread=False`), SQLite espera hasta `_ESPERA_BLOQUEO_S` si otra escritura
+tiene la base bloqueada y el modo WAL deja leer mientras se escribe.
 """
 
 import json
@@ -49,6 +54,9 @@ from rag_bbva.memory.repository import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Segundos que una escritura espera a que se libere el bloqueo de otra antes de fallar.
+_ESPERA_BLOQUEO_S = 15
 
 
 class _Base(DeclarativeBase):
@@ -130,6 +138,13 @@ def _activar_claves_foraneas(conexion: Any, _registro: Any) -> None:
     cursor.close()
 
 
+def _activar_wal(conexion: Any, _registro: Any) -> None:
+    """Modo WAL: las lecturas no esperan a las escrituras (solo para archivos)."""
+    cursor = conexion.cursor()
+    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.close()
+
+
 class SqlAlchemyConversationRepository(ConversationRepository):
     """Historial persistente en una base SQL (SQLite por defecto)."""
 
@@ -153,8 +168,12 @@ class SqlAlchemyConversationRepository(ConversationRepository):
         except OSError as exc:
             mensaje = "No se pudo crear la carpeta del historial"
             raise HistoryError(mensaje, detail=str(exc)) from exc
-        engine = create_engine(f"sqlite:///{path}")
+        engine = create_engine(
+            f"sqlite:///{path}",
+            connect_args={"check_same_thread": False, "timeout": _ESPERA_BLOQUEO_S},
+        )
         event.listen(engine, "connect", _activar_claves_foraneas)
+        event.listen(engine, "connect", _activar_wal)
         logger.info("Historial de conversaciones en %s", path)
         return cls(engine, clock)
 
@@ -318,12 +337,12 @@ class SqlAlchemyConversationRepository(ConversationRepository):
         return [_a_mensaje(f) for f in reversed(filas)]
 
     def set_feedback(self, message_id: int, feedback: Feedback | None) -> Message:
-        """Guarda (o quita, con `None`) la valoración 👍/👎 de un mensaje."""
+        """Guarda (o quita, con `None`) la valoración 👍/👎 de una respuesta."""
         validate_feedback(feedback)
         with self._session() as sesion:
             fila = sesion.get(_MessageRow, message_id)
-            if fila is None:
-                raise MessageNotFoundError("El mensaje no existe", detail=str(message_id))
+            if fila is None or fila.role != "assistant":
+                raise MessageNotFoundError("La respuesta no existe", detail=str(message_id))
             fila.feedback = feedback
             sesion.flush()
             return _a_mensaje(fila)

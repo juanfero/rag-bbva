@@ -115,7 +115,8 @@ class ConversationRepository(ABC):
 
     @abstractmethod
     def set_feedback(self, message_id: int, feedback: Feedback | None) -> Message:
-        """Guarda (o quita, con `None`) la valoración 👍/👎 de un mensaje."""
+        """Guarda (o quita, con `None`) la valoración 👍/👎 de una respuesta del asistente.
+        Un id inexistente o de una pregunta del usuario lanza `MessageNotFoundError`."""
 
     def require_conversation(self, conversation_id: str) -> Conversation:
         """Devuelve la conversación o lanza `ConversationNotFoundError`."""
@@ -222,10 +223,11 @@ class InMemoryConversationRepository(ConversationRepository):
         return mensajes[-n:] if n else []
 
     def set_feedback(self, message_id: int, feedback: Feedback | None) -> Message:
-        """Guarda (o quita, con `None`) la valoración 👍/👎 de un mensaje."""
+        """Guarda (o quita, con `None`) la valoración 👍/👎 de una respuesta."""
         validate_feedback(feedback)
-        if message_id not in self._messages:
-            raise MessageNotFoundError("El mensaje no existe", detail=str(message_id))
+        existente = self._messages.get(message_id)
+        if existente is None or existente.role != "assistant":
+            raise MessageNotFoundError("La respuesta no existe", detail=str(message_id))
         mensaje = self._messages[message_id].model_copy(update={"feedback": feedback})
         self._messages[message_id] = mensaje
         return mensaje

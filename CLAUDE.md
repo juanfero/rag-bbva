@@ -23,6 +23,7 @@ Leer siempre antes de trabajar: `docs/00_VISION_GENERAL.md` y `docs/01_PLAN_DE_M
 - Linux + Docker. Scripts en bash; rutas POSIX.
 - LLM: Gemini 2.5 Flash (ADR-012) vía SDK `openai` con `GEMINI_BASE_URL`; Grok (xAI) como alternativa. **Nunca** escribir `GEMINI_API_KEY` ni `XAI_API_KEY` en código, docs, tests ni commits; solo en `.env` (ignorado por git).
 - Los tests unitarios usan `FakeLLMProvider` o un transporte simulado: nunca consumen cupo ni créditos del LLM.
+- `tests/unit/test_secrets.py` falla si algún archivo del repo contiene una clave de API. Si se agota el cupo gratuito de Gemini, Juan Felipe entrega una clave de un **proyecto nuevo** (el cupo es por proyecto): se pone solo en `.env` y se verifica con `llm-check`.
 
 ## Convenciones de código
 - Python 3.11, type hints en todo, docstrings en español.

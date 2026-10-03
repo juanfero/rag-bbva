@@ -22,6 +22,8 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 - `scripts/llm_evidence.py` (preguntas de punta a punta y experimento de reformulación) y prueba de integración contra el LLM real.
 - ADR-012: Gemini 2.5 Flash con clave gratuita; Grok queda como alternativa.
 - README: generación, `llm-check`, configuración de la clave, Strategy del LLM, costo, L-11 (cupo diario) y L-12 (datos en el nivel gratuito).
+- `tests/unit/test_secrets.py`: falla si algún archivo del repo contiene una clave de API o si `.env` deja de estar ignorado.
+- El 429 de cupo diario no se reintenta y explica cómo seguir (clave de un proyecto nuevo, solo en `.env`).
 #### Cambiado
 - `LLM_PROVIDER` por defecto `gemini` y `LLM_MODEL` `gemini-2.5-flash` (antes `xai` / `grok-4.7`). ADR-003 queda reemplazada como opción por defecto.
 

@@ -121,3 +121,27 @@ Formato: una entrada por decisión. Estado: Propuesta · Aceptada · Reemplazada
 - **Contexto:** en M7 la pregunta reformulada solo se usaba para recuperar y el LLM respondía con la pregunta original. Con historial real (M9), el LLM recibiría solo "¿y cuáles son los requisitos?" y el contexto recuperado, sin saber de qué producto se habla.
 - **Decisión:** si el reformulador usó el LLM, el mensaje del usuario lleva la pregunta original y debajo `Pregunta autónoma (la misma pregunta, reescrita con el historial de la conversación): …`. El prompt de sistema no cambia; `PROMPT_VERSION` pasa a `2026-10-03.1`. Sin reformulación, el prompt queda idéntico al de M7.
 - **Consecuencias:** + el modelo responde la pregunta que el usuario quiso hacer, con sus palabras y con el referente resuelto; − si el reformulador interpreta mal la pregunta, la respuesta hereda el error (la pregunta original sigue en el prompt para mitigarlo).
+
+## ADR-016 — Umbral doble: corte duro sin LLM y zona gris donde decide el LLM
+- **Estado:** Aceptada (2026-10-03, M9; pedida por Juan Felipe en la revisión de M9)
+- **Contexto:** con un solo umbral (`RERANK_MIN_SCORE=1.6`, M6), las preguntas de seguimiento reformuladas quedaban por debajo aunque el sitio tuviera la respuesta: en la conversación de vivienda de M9, "¿y qué costos adicionales tiene?" se cortaba sin llamar al LLM. La demo de M10 y la sustentación dependen de que eso funcione.
+- **Decisión:**
+  - **`RERANK_HARD_MIN_SCORE=-3.0`:** por debajo, "sin información" sin llamar al LLM. Se eligió con la calibración de M6: todas las respondibles quedan por encima (la más baja, "¿qué es el GMF o 4 por mil?", tiene −2,58) y 8 de 15 no respondibles por debajo (mediana −3,31). Fuera de dominio claro (arepas, Python, dólar hoy, Davivienda, Itaú) no gasta tokens.
+  - **Zona gris [−3,0; 1,6):** se llama al LLM con el contexto.
+  - **Marca de abstención:** el prompt de sistema pide empezar con `[SIN_INFO]` cuando el contexto no alcanza (regla 4) o cuando la pregunta es sobre otra entidad (regla 5). El post-proceso quita la marca (también en streaming) y deja `no_answer=true`, aunque el texto conserve una explicación y citas útiles. Aplica en cualquier zona, no solo en la gris. `PROMPT_VERSION` 2026-10-03.2.
+  - `RetrievalResult.no_answer` conserva el significado de M6 (por debajo de `RERANK_MIN_SCORE`); se agregan `hard_no_answer` y `gray_zone`. Si `hard_min_score` no se indica, todo se comporta como en M6.
+- **Consecuencias:**
+  - \+ Los seguimientos con contexto real se responden. Las preguntas de otra entidad con score alto (Banco de Bogotá, 5,32) ahora también cuentan como `no_answer` para la analítica.
+  - \+ Mismas 27/30 decisiones correctas que el umbral único sobre la calibración, con un costo de 8 llamadas extra al LLM de 30 (M09.md §10).
+  - − La calidad de la abstención depende del modelo: `gemini-2.5-flash` se abstuvo en "requisitos para crédito de vivienda" porque el contexto traía requisitos de otros productos; `flash-lite` respondió dos no respondibles de la zona gris con contenido real del sitio (noticias, tasa de un CDT).
+  - − Calibrado dentro de la muestra: el golden set de M13 debe confirmarlo.
+
+## ADR-017 — Modelo de respaldo ante cupo agotado (Decorator)
+- **Estado:** Aceptada (2026-10-03, M9; pedida por Juan Felipe)
+- **Contexto:** el cupo gratuito de Gemini es de 20 solicitudes por día por proyecto y por modelo (L-11). Al agotarse `gemini-2.5-flash`, el asistente quedaba inutilizable hasta el reinicio diario, salvo que se cambiara `LLM_MODEL` a mano.
+- **Decisión:**
+  - `FallbackLLMProvider` envuelve al proveedor principal (patrón **Decorator** sobre `LLMProvider`) y, **solo ante un 429** (`LLMQuotaError`: cupo diario o límite por minuto tras los reintentos), repite la llamada con `LLM_FALLBACK_MODEL` (por defecto `gemini-3.1-flash-lite`).
+  - Una clave inválida, un modelo inexistente o un timeout **no** activan el respaldo: cambiar de modelo no los arregla y ocultaría un error de configuración.
+  - El modelo que respondió queda en `LLMResponse.model`, en la respuesta de la API (`model`) y en el log (`Cupo agotado en el modelo principal; responde el de respaldo`). No se guarda en la base: el esquema de M8 no tiene esa columna y no hay migraciones (L-13).
+  - `LLM_FALLBACK_MODEL` vacío, o igual a `LLM_MODEL`, lo desactiva. Con `LLM_PROVIDER=xai` debe ser un modelo de Grok o quedar vacío.
+- **Consecuencias:** + el asistente sigue respondiendo cuando se agota el cupo del modelo principal; el 429 del principal llega al instante y no se reintenta, así que agrega pocos milisegundos; − las respuestas del respaldo pueden tener otra calidad (no medida aún, M13); − si el respaldo también agota su cupo, el usuario recibe el mismo 503 amigable.

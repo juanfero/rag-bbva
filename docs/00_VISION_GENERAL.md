@@ -225,6 +225,7 @@ El caso pide mínimo 3. Se implementan 6 para tener margen, pero el README desta
 | `RERANK_TOP_N` | `5` | Chunks finales al LLM |
 | `RERANK_MAX_CHUNKS_PER_DOC` | `2` | Máximo de chunks de una misma página en el top-n; 0 = sin límite (M6) |
 | `RERANK_MIN_SCORE` | `1.6` | Score mínimo del reranker (#1) para responder; por debajo, "sin información suficiente". Calibrado en M6 |
+| `RERANK_HARD_MIN_SCORE` | `-3.0` | Umbral duro: debajo, "sin información" sin llamar al LLM; entre este y `RERANK_MIN_SCORE`, zona gris donde el LLM decide (M9, ADR-016) |
 | `RERANKER_MAX_LENGTH` | `512` | Tokens máximos del par pregunta + fragmento en el cross-encoder (M6) |
 | `RERANKER_BATCH_SIZE` | `16` | Pares por lote en el cross-encoder (M6) |
 | `LLM_PROVIDER` | `gemini` | Proveedor (Strategy): `gemini`, `xai` o `fake` (tests) (ADR-012) |
@@ -233,6 +234,7 @@ El caso pide mínimo 3. Se implementan 6 para tener margen, pero el README desta
 | `XAI_API_KEY` | — (**obligatoria con `xai`, secreta**) | Clave de la API de xAI; solo en `.env`, nunca en git |
 | `XAI_BASE_URL` | `https://api.x.ai/v1` | Endpoint de xAI compatible con OpenAI |
 | `LLM_MODEL` | `gemini-2.5-flash` | Modelo; se verifica con `llm-check` |
+| `LLM_FALLBACK_MODEL` | `gemini-3.1-flash-lite` | Respaldo solo ante 429 (cupo agotado) del modelo principal; vacío lo desactiva (M9, ADR-017) |
 | `LLM_REASONING_EFFORT` | `none` | Solo Gemini: `none` apaga el razonamiento interno (menos latencia y tokens) |
 | `LLM_TEMPERATURE` | `0.1` | Temperatura |
 | `LLM_MAX_TOKENS` | `800` | Tope de tokens de salida (controla costo) |

@@ -12,13 +12,17 @@ import logging
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import date, datetime
 from typing import Annotated
+from zoneinfo import ZoneInfo
 
 from fastapi import Depends, FastAPI, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from rag_bbva import __version__
+from rag_bbva.analytics.metrics import AnalyticsSummary
+from rag_bbva.analytics.service import AnalyticsService
 from rag_bbva.api.errors import register_error_handlers
 from rag_bbva.api.schemas import (
     ChatRequest,
@@ -58,9 +62,15 @@ def get_health_checker(request: Request) -> HealthChecker:
     return request.app.state.health_checker  # type: ignore[no-any-return]
 
 
+def get_analytics_service(request: Request) -> AnalyticsService:
+    """Analítica del historial de la app (M11)."""
+    return request.app.state.analytics_service  # type: ignore[no-any-return]
+
+
 SettingsDep = Annotated[Settings, Depends(get_app_settings)]
 ServiceDep = Annotated[RAGService, Depends(get_rag_service)]
 HealthDep = Annotated[HealthChecker, Depends(get_health_checker)]
+AnalyticsDep = Annotated[AnalyticsService, Depends(get_analytics_service)]
 
 
 def create_app(
@@ -68,6 +78,7 @@ def create_app(
     *,
     service: RAGService | None = None,
     health_checker: HealthChecker | None = None,
+    analytics_service: AnalyticsService | None = None,
     warm_up: bool = True,
 ) -> FastAPI:
     """Crea la app. Lo que no se pase se construye al arrancar desde `settings`."""
@@ -80,6 +91,12 @@ def create_app(
             app.state.rag_service = fabrica.create_rag_service(tolerate_missing_llm=True)
         if app.state.health_checker is None:
             app.state.health_checker = fabrica.create_health_checker(app.state.rag_service)
+        if app.state.analytics_service is None:
+            # Mismo historial y mismo embedder (ya cargado) que el servicio RAG.
+            app.state.analytics_service = fabrica.create_analytics_service(
+                repository=app.state.rag_service.repository,
+                embedder=app.state.rag_service.retriever.embedder,
+            )
         if warm_up:
             inicio = time.perf_counter()
             app.state.rag_service.warm_up()
@@ -101,6 +118,7 @@ def create_app(
     app.state.settings = ajustes
     app.state.rag_service = service
     app.state.health_checker = health_checker
+    app.state.analytics_service = analytics_service
     register_error_handlers(app)
 
     @app.post("/chat", response_model=ChatResult, responses=_ERRORES, tags=["chat"])
@@ -151,6 +169,28 @@ def create_app(
         """Valoración 👍 (`up`) o 👎 (`down`) de una respuesta del asistente."""
         mensaje = servicio.set_feedback(message_id, body.value)
         return FeedbackResponse(message_id=mensaje.id, feedback=mensaje.feedback)
+
+    @app.get(
+        "/analytics/summary",
+        response_model=AnalyticsSummary,
+        responses=_ERRORES,
+        tags=["analítica"],
+    )
+    def analytics_summary(
+        analitica: AnalyticsDep,
+        config: SettingsDep,
+        since: Annotated[
+            date | None, Query(description="Desde esta fecha (AAAA-MM-DD, ANALYTICS_TIMEZONE).")
+        ] = None,
+    ) -> AnalyticsSummary:
+        """Métricas del historial: operativas, calidad, contenido, memoria, costo e impacto
+        estimado. `meta.demo` indica si la base es de demostración."""
+        desde = (
+            datetime(since.year, since.month, since.day, tzinfo=ZoneInfo(config.analytics_timezone))
+            if since
+            else None
+        )
+        return analitica.summary(desde)
 
     @app.get(
         "/health",

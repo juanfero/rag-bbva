@@ -127,12 +127,13 @@ Corridas reales de referencia: 50 páginas en [M02](docs/modulos/M02.md#6-eviden
 ```bash
 python -m rag_bbva.cli clean
 ```
-- `documents.jsonl`: un documento por página, con `doc_id`, `url`, `title`, `section`, `breadcrumbs`, `text` (markdown: títulos `#`, listas y tablas simples), `html_lang` (lo que declara la página), `lang` (idioma detectado en el texto), `lang_source`, `lastmod`, `published_at` (solo si la página lo trae en metadatos), `scraped_at`, `content_hash`, `n_chars`, `template` y `extraction`.
-- `clean_report.json`: procesados, conservados, descartados por motivo (con la lista de URLs), distribución de longitudes, documentos por sección, plantilla, método de extracción e idioma, y el chequeo de **fugas de boilerplate**.
+- `documents.jsonl`: un documento por página, con `doc_id`, `url`, `title`, `section`, `breadcrumbs`, `text` (markdown: títulos `#`, listas y tablas como filas `| a | b |`), `html_lang` (lo que declara la página), `lang` (idioma detectado en el texto), `lang_source`, `lastmod`, `published_at` (solo si la página lo trae en metadatos), `scraped_at`, `content_hash`, `n_chars`, `template` y `extraction`.
+- `clean_report.json`: procesados, conservados, descartados por motivo (con la lista de URLs), distribución de longitudes, documentos por sección, plantilla, método de extracción e idioma, el chequeo de **fugas de boilerplate** y el de **tablas** (filas con un número de celdas distinto al del encabezado y filas mal formadas; meta 0, M10).
 
 Cómo limpia (pasos en [`processing/steps.py`](src/rag_bbva/processing/steps.py)):
 1. Quita del HTML la navegación, la cabecera y el pie, los menús de portlet con `${…}`, las cajas de error `.lrpError`, los iconos, el banner de cookies, el bloque rotativo de contenido relacionado (L-08), los bloques repetidos de venta cruzada ("Descubre otros canales…", "Si te gustó este producto…") y rótulos de interfaz como "Link copiado en porta papeles".
 2. Toma el contenedor de cada plantilla del sitio (`main` → `#main-content` → `[role=main]`). Usa trafilatura si conserva al menos el 90 % del vocabulario del contenedor y el orden de sus bloques; si no, convierte el contenedor a markdown por selector.
+   - **Tablas (M10):** si el contenedor tiene tablas, se usa siempre el selector (`selector_tablas`). Cada tabla de datos sale como filas markdown que conservan **todas** las celdas, incluidas las vecinas con el mismo valor ("8,75% | 8,75%"). Las celdas con `rowspan`/`colspan` se repiten en cada fila y columna que ocupan, así ningún precio queda bajo el plan vecino. Antes, la tabla de tasas del CDT perdía un valor y el tarifario de cuentas corría columnas.
 3. Normaliza Unicode y espacios, y detecta el idioma.
 4. Descarta los textos de menos de 200 caracteres y los duplicados (soft-404), registrando el motivo.
 
@@ -145,7 +146,7 @@ python -m rag_bbva.cli chunk --strategy fixed_size    # línea base
 ```
 - **`heading_aware`** (por defecto):
   - Divide por los títulos markdown de la limpieza y agrupa secciones pequeñas consecutivas hasta `CHUNK_SIZE`=800 caracteres.
-  - Parte por tamaño, con `CHUNK_OVERLAP`=120 y sin cortar palabras, solo las secciones que no caben.
+  - Parte por tamaño, con `CHUNK_OVERLAP`=120 y sin cortar palabras, solo las secciones que no caben. Las tablas se parten **solo entre filas** y cada parte repite la fila de encabezado (M10).
   - Cada chunk lleva su `heading_path` ("Título > Sección > Subsección").
 - **`fixed_size`:** parte el texto completo por tamaño.
 - **Qué guarda cada chunk:** `chunk_id` determinista, `doc_id`, `url`, `title`, `section`, `heading_path`, `lang`, `position`, `n_chars`, `text` (para citar) y `embedding_text` (encabezado con título, sección y ruta + texto: lo que se embebe).
@@ -190,8 +191,9 @@ Cómo funciona la búsqueda:
 **Umbral de "sin información suficiente"** (`RERANK_MIN_SCORE=1.6`). Si el #1 no lo alcanza, el asistente debe decir que no tiene información en vez de inventar. Desde M9 es un **umbral doble** ([ADR-016](docs/02_DECISIONES.md)):
 - Por debajo de `RERANK_HARD_MIN_SCORE=-3.0` responde "sin información" **sin llamar al LLM** (fuera de dominio claro).
 - Entre −3,0 y 1,6 (**zona gris**) el LLM recibe el contexto y responde o se abstiene. Si se abstiene, empieza con la marca `[SIN_INFO]`, que el sistema quita y registra como `no_answer`. Lo mismo vale por encima del umbral, p. ej. si preguntan por otro banco.
-- Sobre las 30 preguntas de calibración: 8 caen en la zona gris (8 llamadas extra al LLM) y las decisiones correctas son **29/30** con las etiquetas corregidas en M10 (27/30 con las originales; [bitácora M09](docs/modulos/M09.md#10-revisión-ajustes-y-cierre), [M10](docs/modulos/M10.md#10-ajustes-derivados-de-m9)).
-- Se calibró con `eval/calibration.jsonl`: 15 preguntas que el sitio responde y 15 que no (fuera de dominio, otros bancos, prensa, simuladores). Acertaba 27 de 30, **medido en la misma muestra con la que se eligió el umbral**. En M10 se corrigieron 2 etiquetas (n10 y n13: sus datos sí están en el sitio, verificados literalmente); con ellas el umbral único acierta 25/30 y no se cambió el umbral: es un resultado dentro de la muestra y probablemente optimista. M13 lo valida con un golden set separado.
+- Sobre las 30 preguntas de calibración, con los datos y el prompt finales de M10: 8 caen en la zona gris (8 llamadas extra al LLM) y las decisiones correctas son **29/30** (27/30 en M9 con las etiquetas originales; [bitácora M09](docs/modulos/M09.md#10-revisión-ajustes-y-cierre), [M10](docs/modulos/M10.md#10-ajustes-derivados-de-m9)).
+- ⚠️ **Ese 29/30 es optimista:** las etiquetas de n10 y n13 se corrigieron **después de ver los resultados**. El motivo está documentado (sus datos aparecen literalmente en el sitio), pero igual es un ajuste a posteriori sobre la misma muestra. La validación independiente es el golden set de M13.
+- Se calibró con `eval/calibration.jsonl`: 15 preguntas que el sitio responde y 15 que no (fuera de dominio, otros bancos, prensa, simuladores). Acertaba 27 de 30, **medido en la misma muestra con la que se eligió el umbral**: es un resultado dentro de la muestra y probablemente optimista. En M10, después de ver los resultados, se corrigieron 2 etiquetas (n10 y n13: sus datos sí están en el sitio, verificados literalmente); con ellas el umbral único acierta 25/30 y no se cambió el umbral. M13 lo valida con un golden set separado.
 - Va sobre el score del reranker y **no sobre el coseno**: los cosenos de e5 están comprimidos (≈ 0,79–0,92 para todo). El mejor umbral posible sobre el coseno acierta 24 de 30 y queda pegado a los datos (margen 0,001).
 - Sin reranker (`--no-rerank` o `RERANKER_ENABLED=false`) no se aplica umbral.
 - **Latencia en CPU:** retrieval ~19 ms; rerank ~0,9 s (p50).

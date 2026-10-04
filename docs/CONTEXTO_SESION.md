@@ -31,7 +31,8 @@
 - Comandos: `serve --port 8010` y `ui --api-url http://127.0.0.1:8010` (el 8000 lo ocupa un contenedor ajeno, `fabrix-startup-backend-1`); `chat` de respaldo.
 - **Falta:** las 7 capturas de `M10.md §6.4` (Juan Felipe ya las tiene; van en `docs/img/`, ya enlazadas en el README) y la aprobación.
 - Ajustes derivados de M9 hechos en la rama (`M10.md §10`): latencia (timeout de 20 s con tope de reloj, respaldo ante timeout/5xx, presupuesto de 45 s), marca de abstención solo al inicio y etiquetas n10/n13 corregidas.
-- **Decisión pendiente de Juan Felipe:** la limpieza de M3 pierde celdas repetidas en tablas (189 filas en 10 páginas, sobre todo el tarifario de cuentas; `M10.md §10.4`). Propuesta: tablas como filas Markdown y re-indexar.
+- **Tablas corregidas** (`M10.md §10.4`, pedido de Juan Felipe): filas markdown con `rowspan`/`colspan` expandidos y celdas repetidas; el chunker repite el encabezado. Datos regenerados: 597 documentos, **3546 chunks** (antes 3506), Qdrant con 3546 puntos, 0 fugas y 0 filas desalineadas. Prompt 2026-10-03.3 (segmento y fechas). Calibración: 29/30, optimista por las etiquetas corregidas a posteriori.
+- **Siguiente:** Juan Felipe toma las capturas sobre los datos finales; después, la aprobación y el cierre de M10.
 - `.env` local: se cambió solo `LLM_TIMEOUT_SECONDS` a 20 (no secreta).
 - Historial real: la conversación C (`6c0b76f6-…`, Banco de Bogotá) tiene un turno de más por un error del guion (`M10.md §7`).
 - **Sin merge** sin aprobación.
@@ -165,7 +166,7 @@ Comandos de verificación:
 cd /home/pipe/Inetum/rag-bbva-docs/rag-bbva
 source .venv/bin/activate
 git status && git branch -vv && git log --oneline --graph --decorate -15 && git tag
-pytest                                   # al cerrar M9: 554 passed sin integración (550 sin slow); 556 con integración (slow: requieren el modelo en models/; integration: Qdrant levantado; si no, se saltan)
+pytest                                   # en M10 (sin cerrar): 628 sin integración ni slow; 634 con integración (slow: requieren el modelo en models/; integration: Qdrant levantado; si no, se saltan)
 pytest -m "not integration and not slow"
 ruff check . && ruff format --check .
 python -m rag_bbva.cli version

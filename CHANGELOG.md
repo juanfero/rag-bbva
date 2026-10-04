@@ -24,10 +24,12 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
   - presupuesto por turno (`LLM_TURN_BUDGET_SECONDS=45`), con 503 "el servicio está lento" sin guardar el turno.
   - ADR-017 ampliada.
 ### Corregido
+- **Tablas:** se extraen como filas markdown con todas sus celdas (antes la tabla de tasas del CDT perdía un valor repetido) y con `rowspan`/`colspan` expandidos (antes el tarifario de cuentas corría precios de columna). Si el contenedor tiene tablas, se extrae siempre por selector (`selector_tablas`). `clean_report.json` cuenta filas desalineadas y mal formadas (0 y 0). El chunker parte las tablas entre filas y repite el encabezado. Datos regenerados: 597 documentos, 3506 → 3546 chunks.
 - La marca `[SIN_INFO]` solo cuenta como abstención al inicio de la respuesta: una respuesta parcial con citas ya no queda como `no_answer`.
 - `eval/calibration.jsonl`: n10 y n13 reetiquetadas como respondibles tras verificar literalmente sus datos en el sitio (campo `note`). M6 25/30, M9 29/30 con los mismos umbrales.
 ### Cambiado
 - `UI_REQUEST_TIMEOUT_SECONDS` por defecto 60 s (antes 180).
+- Prompt: aclarar el segmento (personas, negocios o empresas) al dar condiciones de un producto y no decir "reciente" sin fecha. `PROMPT_VERSION` 2026-10-03.3.
 - L-06 (las noticias de `/acerca-de` se pueden citar, sin fecha), L-11 y L-15.
 
 ## [m09] - 2026-10-03 — Servicio RAG + API

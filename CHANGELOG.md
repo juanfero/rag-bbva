@@ -4,7 +4,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Sin publicar]
 
-## [m12] - en revisión — Dockerización completa
+## [m12] - 2026-10-04 — Dockerización completa
 ### Añadido
 - `docker compose up -d --build` levanta todo en un comando: `qdrant` → `init` (`bootstrap`) → `api` → `ui`, con healthchecks, `depends_on` por condición, volúmenes con nombre y puertos solo en 127.0.0.1, configurables con `API_PUBLISHED_PORT` y `UI_PUBLISHED_PORT`.
 - Dockerfile multi-stage: torch CPU, usuario no root (uid 1000), snapshot incluido y `HF_HOME` en el volumen de modelos.

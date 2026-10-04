@@ -1,6 +1,6 @@
 # Contexto de sesión — traspaso
 
-> Escrito el 2026-10-02 y actualizado al cerrar cada módulo (último: M11, 2026-10-04) para retomar el proyecto en una sesión nueva de Claude Code sin el historial de la conversación anterior. Solo contiene hechos verificables en el repo; no incluye secretos.
+> Escrito el 2026-10-02 y actualizado al cerrar cada módulo (último: M12, 2026-10-04) para retomar el proyecto en una sesión nueva de Claude Code sin el historial de la conversación anterior. Solo contiene hechos verificables en el repo; no incluye secretos.
 > Si este archivo contradice al código o a `git log`, manda el repo: verifica con los comandos de §5.
 
 ---
@@ -21,26 +21,23 @@
 | M8 — Memoria conversacional | `m08` | `b27a49a` | `docs/modulos/M08.md` |
 | M9 — Servicio RAG + API | `m09` | `4b63953` | `docs/modulos/M09.md` |
 | M10 — Interfaz conversacional | `m10` | `76797be` | `docs/modulos/M10.md` |
-| M11 — Analítica del historial | `m11` | merge `--no-ff` de `feat/m11-analytics` en `main` (2026-10-04); el hash se ve con `git rev-parse --short m11^{commit}` | `docs/modulos/M11.md` |
+| M11 — Analítica del historial | `m11` | `aeff2e2` | `docs/modulos/M11.md` |
+| M12 — Dockerización completa | `m12` | merge `--no-ff` de `feat/m12-docker` en `main` (2026-10-04); el hash se ve con `git rev-parse --short m12^{commit}` | `docs/modulos/M12.md` |
 
 - Commits `docs` directos en `main`, pedidos de forma explícita por Juan Felipe:
   - `5edf0dd`, entre `m00` y `m01`.
   - `c38abdc` y `9a6e3ce`, entre `m01` y `m02`.
 - Cada merge incluye las correcciones de su revisión (§10 de cada bitácora).
 
-### Siguiente módulo: M12 — Dockerización completa
-- Juan Felipe aprobó M11 (y el README reorganizado para la presentación) el 2026-10-04 y pidió seguir con M12 en la rama `feat/m12-docker`.
-- **Implementado, en revisión** (`M12.md`): `docker compose up -d --build` levanta Qdrant, `init` (bootstrap desde el snapshot versionado), la API y la UI. Verificado en un clon limpio: ~10 min la primera vez, 4 min con la imagen ya construida, 35 s al reiniciar, y el historial persiste. Smoke test OK.
-- En esta máquina el 8010 y el 8501 los usa Juan Felipe para su API y su UI locales; las pruebas de Docker usaron 8020 y 8521 (`API_PUBLISHED_PORT`, `UI_PUBLISHED_PORT` en `.env`).
-- Estado de los datos: 597 documentos, 3546 chunks, Qdrant con 3546 puntos; prompt `2026-10-03.3`; `eval/calibration.jsonl` congelado.
-- `scripts/check_keys.py`: correr antes de cada commit.
-- **Sin merge** sin aprobación.
+### Estado tras M12
+- M12 cerrado el 2026-10-04 (merge, tag `m12`, push). `docker compose up -d --build` levanta todo (ADR-019).
+- **M13 (evaluación con golden set) y M14 (verificación desde cero, capturas, `v1.0.0`) no están implementados.** Juan Felipe los dio por aprobados el 2026-10-04 tras sus pruebas, pero en el repositorio no hay trabajo de esos módulos; queda pendiente su decisión de hacerlos o de entregar declarándolos pendientes (el README ya los marca así).
 
 ### Pendientes anotados para M14
 - **Retomar las capturas sobre la versión Docker final:** en las 1 y 2 de M10 aparece texto de instrucciones en el chat; faltan modo detalle y API caída (también en `01_PLAN_DE_MODULOS.md`, M14).
 
-### Estado del árbol (al cerrar M11)
-- `main` con el merge de M11 y el tag `m11`, publicados en `origin`. Las ramas `feat/m00…m11` siguen a sus pares en `origin`.
+### Estado del árbol (al cerrar M12)
+- `main` con el merge de M12 y el tag `m12`, publicados en `origin`. Las ramas `feat/m00…m12` siguen a sus pares en `origin`.
 - **Qdrant del compose levantado** (`docker compose up -d qdrant`), volumen `qdrant_data`, colección `bancolombia_docs` con 3506 puntos.
 - Solo en local, ignorado por git: `.venv/`, `.env`, `models/` (e5-small y cross-encoder, 936 MB) y `data/`.
   - `.env`: lo creó Juan Felipe. Tiene `GEMINI_API_KEY` (clave gratuita de AI Studio) y `XAI_API_KEY` (sin créditos), y `LLM_PROVIDER=gemini`, `LLM_MODEL=gemini-2.5-flash`. **No leer ni imprimir las claves.**
@@ -208,7 +205,7 @@ Fuentes: `docs/01_PLAN_DE_MODULOS.md`, las bitácoras §8 y el README.
 
 ## 7. Lo que la próxima sesión NO debe romper
 
-- **Los tags publicados no se mueven ni se reescriben:** `m00` → `bc14425`, `m01` → `f48a0d3`, `m02` → `4a31943`, `m03` → `731c389`, `m04` → `777402b`, `m05` → `a47323a`, `m06` → `5ba0a69`, `m07` → `138a56a`, `m08` → `b27a49a`, `m09` → `4b63953`, `m10` → `76797be`, `m11` → merge de M11. Tampoco se reescribe historial ya publicado en `origin`: nada de `push --force` ni rebase de ramas publicadas.
+- **Los tags publicados no se mueven ni se reescriben:** `m00` → `bc14425`, `m01` → `f48a0d3`, `m02` → `4a31943`, `m03` → `731c389`, `m04` → `777402b`, `m05` → `a47323a`, `m06` → `5ba0a69`, `m07` → `138a56a`, `m08` → `b27a49a`, `m09` → `4b63953`, `m10` → `76797be`, `m11` → `aeff2e2`, `m12` → merge de M12. Tampoco se reescribe historial ya publicado en `origin`: nada de `push --force` ni rebase de ramas publicadas.
 - **Nunca escribir `GEMINI_API_KEY` ni `XAI_API_KEY`** en código, docs, tests ni commits; solo en `.env`, que está en `.gitignore`. `tests/unit/test_secrets.py` lo vigila.
 - **Bancolombia en todo texto visible al usuario** (prompts, UI, respuestas, README, ayuda de la CLI). El código conserva `rag_bbva`. Un test de `tests/unit/test_cli.py` verifica que la ayuda de la CLI diga Bancolombia y no BBVA.
 - **Ningún módulo se mergea sin la aprobación explícita** de Juan Felipe; M12 tampoco.

@@ -315,4 +315,4 @@ Salida: comando CLI `metrics`, endpoint `GET /analytics/summary`, página "Métr
 
 ## 12. Limitaciones conocidas
 
-La tabla de limitaciones (L-01, L-02, …) **vive en el README**: [Limitaciones conocidas](../README.md#limitaciones-conocidas). Cada módulo agrega allí las suyas (Definition of Done, punto 7).
+La tabla de limitaciones (L-01, L-02, …) **vive en el README**: [Limitaciones conocidas](../README.md#13-limitaciones-conocidas). Cada módulo agrega allí las suyas (Definition of Done, punto 7).

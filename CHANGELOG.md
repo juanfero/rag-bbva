@@ -18,6 +18,13 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 - `scripts/check_keys.py`: verificación de claves versionada.
 - Configuración `ANALYTICS_TIMEZONE`, `ANALYTICS_FAQ_SIMILARITY`, `ANALYTICS_TOP_N`. Dependencia declarada: `pandas`.
 - README: sección "Análisis de datos del histórico" y L-16. `.gitignore`: `Captura desde*`, `Screenshot*`.
+### Cambiado
+- **README reorganizado para la presentación del caso:**
+  - resumen para evaluadores (requisitos del caso → cómo se cumplen → estado) y resultados medidos;
+  - puesta en marcha paso a paso;
+  - uso, API, pipeline, analítica (con capturas), calidad, patrones, stack, decisiones, limitaciones y mejoras;
+  - estado del proyecto y trabajo pendiente.
+  - El detalle de implementación quedó en las bitácoras enlazadas. Las limitaciones conservan sus IDs (L-01…L-16) y suman L-17 (calidad medida dentro de la muestra) y L-18 (Docker incompleto).
 
 ## [m10] - 2026-10-03 — Interfaz conversacional
 ### Añadido

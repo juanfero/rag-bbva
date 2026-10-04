@@ -41,6 +41,8 @@ dependencies = [
 dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
+    # Lee docker-compose.yml en las pruebas de estructura del despliegue (M12).
+    "pyyaml>=6",
     "respx>=0.21",
     "ruff>=0.5",
 ]

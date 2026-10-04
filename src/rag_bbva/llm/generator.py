@@ -41,12 +41,18 @@ class Answer(BaseModel):
 
 
 def strip_abstention(texto: str) -> tuple[str, bool]:
-    """Quita la marca de abstención y dice si estaba. Si no queda texto, usa el mensaje
-    fijo de "sin información"."""
+    """Quita la marca de abstención y dice si la respuesta se abstiene.
+
+    Solo es abstención si la respuesta **empieza** con la marca (lo que pide el prompt).
+    Una marca a mitad de texto (p. ej. tras una respuesta parcial con citas, como pasó
+    en M10) se borra sin marcar `no_answer`: la respuesta sí respondió. Si no queda
+    texto, se usa el mensaje fijo de "sin información".
+    """
     if ABSTENTION_MARKER not in texto:
         return texto, False
+    abstenida = texto.lstrip().startswith(ABSTENTION_MARKER)
     limpio = texto.replace(ABSTENTION_MARKER, "").strip()
-    return (limpio or NO_ANSWER_MESSAGE), True
+    return (limpio or NO_ANSWER_MESSAGE), abstenida or not limpio
 
 
 def _filtrar_marca(fragmentos: Iterator[str]) -> Iterator[str]:

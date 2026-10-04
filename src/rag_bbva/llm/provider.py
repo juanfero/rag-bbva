@@ -15,6 +15,8 @@ import re
 import time
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterator, Sequence
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FuturesTimeoutError
 from typing import Any, TypeVar
 
 import openai
@@ -43,6 +45,16 @@ _TRANSITORIOS = (
 )
 _BACKOFF_MAXIMO = 30.0
 
+# Hilos donde corren las llamadas al SDK, para cortarlas por reloj (M10). El timeout de
+# httpx es por operación de lectura, no total: en M10 una petición a Gemini tardó 39 s
+# en devolver un 503 con timeout=20. Una llamada vencida se abandona (su hilo termina
+# cuando httpx la corta) y se trata como timeout.
+_EJECUTOR = ThreadPoolExecutor(max_workers=16, thread_name_prefix="llm")
+
+
+class _TopeDeTiempoError(Exception):
+    """La llamada no terminó dentro de su tope de reloj."""
+
 
 def is_daily_quota_exhausted(exc: BaseException) -> bool:
     """429 por cupo **diario** agotado (p. ej. el nivel gratuito de Gemini, con quotaId
@@ -53,6 +65,8 @@ def is_daily_quota_exhausted(exc: BaseException) -> bool:
 
 
 def _es_transitorio(exc: BaseException) -> bool:
+    if isinstance(exc, _TopeDeTiempoError):
+        return True
     return isinstance(exc, _TRANSITORIOS) and not is_daily_quota_exhausted(exc)
 
 
@@ -189,7 +203,20 @@ class OpenAICompatibleProvider(LLMProvider):
             return "El modelo configurado (LLM_MODEL) no existe. Ejecute `llm-check`."
         return "El servicio de respuestas no está disponible en este momento. Intenta más tarde."
 
-    def _llamar(self, operacion: str, funcion: Callable[[], T]) -> T:
+    def _con_tope(self, funcion: Callable[[float], T]) -> T:
+        """Ejecuta `funcion(timeout)` con un tope de reloj de `min(LLM_TIMEOUT_SECONDS,
+        plazo restante del turno)` segundos."""
+        tope = budget.call_timeout(self.timeout)
+        futuro = _EJECUTOR.submit(funcion, tope)
+        try:
+            return futuro.result(timeout=tope)
+        except FuturesTimeoutError as exc:
+            futuro.cancel()
+            raise _TopeDeTiempoError(f"sin respuesta en {tope:.1f} s") from exc
+
+    def _llamar(self, operacion: str, funcion: Callable[[float], T]) -> T:
+        """Llama a la API con tope de reloj por intento, reintentos propios y errores
+        traducidos. `funcion` recibe el timeout (s) que debe pasar al SDK."""
         espera_exponencial = wait_exponential(multiplier=self.backoff_seconds, max=_BACKOFF_MAXIMO)
 
         def esperar(estado: Any) -> float:
@@ -210,7 +237,12 @@ class OpenAICompatibleProvider(LLMProvider):
             ),
         )
         try:
-            return reintentador(funcion)
+            return reintentador(self._con_tope, funcion)
+        except _TopeDeTiempoError as exc:
+            raise LLMUnavailableError(
+                "El servicio de respuestas tardó demasiado en contestar. Intenta de nuevo.",
+                detail=f"{operacion}: {exc}",
+            ) from exc
         except openai.OpenAIError as exc:
             raise self._error(exc, operacion) from exc
 
@@ -241,9 +273,8 @@ class OpenAICompatibleProvider(LLMProvider):
         inicio = time.perf_counter()
         respuesta = self._llamar(
             "completar",
-            lambda: self.client.chat.completions.create(
-                **self._parametros(messages, max_tokens),
-                timeout=budget.call_timeout(self.timeout),
+            lambda tope: self.client.chat.completions.create(
+                **self._parametros(messages, max_tokens), timeout=tope
             ),
         )
         uso = respuesta.usage
@@ -262,9 +293,9 @@ class OpenAICompatibleProvider(LLMProvider):
         # Solo se reintenta abrir el stream; una vez que llegan tokens no se repite.
         flujo = self._llamar(
             "streaming",
-            lambda: self.client.chat.completions.create(
+            lambda tope: self.client.chat.completions.create(
                 **self._parametros(messages, max_tokens),
-                timeout=budget.call_timeout(self.timeout),
+                timeout=tope,
                 stream=True,
                 stream_options={"include_usage": True},
             ),
@@ -299,7 +330,9 @@ class OpenAICompatibleProvider(LLMProvider):
         return LLMStream(fragmentos(), cierre)
 
     def list_models(self) -> list[str]:
-        modelos = self._llamar("listar modelos", lambda: list(self.client.models.list()))
+        modelos = self._llamar(
+            "listar modelos", lambda tope: list(self.client.models.list(timeout=tope))
+        )
         # Gemini antepone "models/" a los ids; se quita para compararlos con LLM_MODEL.
         return sorted(m.id.removeprefix("models/") for m in modelos)
 

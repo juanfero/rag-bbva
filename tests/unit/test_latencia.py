@@ -272,3 +272,64 @@ def test_fabrica_da_un_reintento_al_principal_con_respaldo(clean_env: pytest.Mon
         repository=InMemoryConversationRepository(), retriever=RetrieverFalso()
     )
     assert rag.turn_budget_seconds == 45
+
+
+# --- Tope de reloj por llamada (M10): el timeout de httpx es por lectura, no total --------
+
+
+def _lento_sin_cortar(segundos: float) -> Callable[[httpx2.Request], httpx2.Response]:
+    """Servidor que contesta tarde sin que httpx lo corte (como el 503 de 39 s de M10)."""
+
+    def responder(_peticion: httpx2.Request) -> httpx2.Response:
+        time.sleep(segundos)
+        return httpx2.Response(503, json={"error": {"message": "high demand"}})
+
+    return responder
+
+
+def _gemini_rapido(api: Api, modelo: str, max_retries: int, timeout: float) -> GeminiProvider:
+    return GeminiProvider(
+        api_key="clave-de-prueba",
+        base_url="http://gemini-falso/v1",
+        model=modelo,
+        max_retries=max_retries,
+        backoff_seconds=0.01,
+        timeout=timeout,
+        http_client=httpx2.Client(transport=httpx2.MockTransport(api)),
+        sleep=lambda _s: None,
+    )
+
+
+def test_tope_de_reloj_corta_la_llamada_lenta_y_pasa_al_respaldo() -> None:
+    api = Api(_lento_sin_cortar(2.0))
+    llm = FallbackLLMProvider(
+        _gemini_rapido(api, PRINCIPAL, 1, timeout=0.2),
+        _gemini_rapido(api, RESPALDO, 1, timeout=0.2),
+    )
+
+    inicio = time.perf_counter()
+    respuesta = llm.complete(MENSAJES)
+    duracion = time.perf_counter() - inicio
+
+    assert respuesta.model == RESPALDO
+    assert duracion < 1.0  # 2 intentos de 0,2 s + respaldo, no dos esperas de 2 s
+    assert api.modelos()[:2] == [PRINCIPAL, PRINCIPAL]
+
+
+def test_tope_de_reloj_sin_respaldo_da_error_de_timeout() -> None:
+    api = Api(_lento_sin_cortar(2.0))
+    inicio = time.perf_counter()
+    with pytest.raises(LLMUnavailableError, match="tardó demasiado"):
+        _gemini_rapido(api, PRINCIPAL, 0, timeout=0.2).complete(MENSAJES)
+    assert time.perf_counter() - inicio < 1.0
+
+
+def test_tope_de_reloj_respeta_el_plazo_del_turno() -> None:
+    api = Api(_lento_sin_cortar(2.0))
+    llm = FallbackLLMProvider(
+        _gemini_rapido(api, PRINCIPAL, 1, timeout=20), _gemini_rapido(api, RESPALDO, 1, timeout=20)
+    )
+    inicio = time.perf_counter()
+    with budget.turn_budget(0.3), pytest.raises(LLMBudgetExceededError):
+        llm.complete(MENSAJES)
+    assert time.perf_counter() - inicio < 1.0  # el plazo de 0,3 s manda sobre el timeout de 20 s

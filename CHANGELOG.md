@@ -18,6 +18,17 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 - Configuración: `API_BASE_URL`, `UI_HOST`, `UI_PORT`, `UI_REQUEST_TIMEOUT_SECONDS`. Dependencia: `streamlit`.
 - `scripts/ui_guion.py`: guion de la interfaz contra la API real con `AppTest`.
 - README: sección "Uso de la interfaz conversacional" con capturas, Streamlit ✅, L-15.
+- Ajustes derivados de M9:
+  - respaldo del LLM también ante timeout y 5xx tras un reintento (`LLMUnavailableError`);
+  - tope de reloj por llamada (`LLM_TIMEOUT_SECONDS=20`);
+  - presupuesto por turno (`LLM_TURN_BUDGET_SECONDS=45`), con 503 "el servicio está lento" sin guardar el turno.
+  - ADR-017 ampliada.
+### Corregido
+- La marca `[SIN_INFO]` solo cuenta como abstención al inicio de la respuesta: una respuesta parcial con citas ya no queda como `no_answer`.
+- `eval/calibration.jsonl`: n10 y n13 reetiquetadas como respondibles tras verificar literalmente sus datos en el sitio (campo `note`). M6 25/30, M9 29/30 con los mismos umbrales.
+### Cambiado
+- `UI_REQUEST_TIMEOUT_SECONDS` por defecto 60 s (antes 180).
+- L-06 (las noticias de `/acerca-de` se pueden citar, sin fecha), L-11 y L-15.
 
 ## [m09] - 2026-10-03 — Servicio RAG + API
 ### Añadido

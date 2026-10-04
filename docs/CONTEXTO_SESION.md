@@ -29,7 +29,10 @@
 ### Módulo en curso: M10 — Interfaz conversacional (implementado, **en revisión**)
 - Rama `feat/m10-ui`. Detalle, guion ejecutado y lista de capturas en `docs/modulos/M10.md`.
 - Comandos: `serve --port 8010` y `ui --api-url http://127.0.0.1:8010` (el 8000 lo ocupa un contenedor ajeno, `fabrix-startup-backend-1`); `chat` de respaldo.
-- **Falta:** las 7 capturas de `M10.md §6.4` (las toma Juan Felipe en `docs/img/`, ya enlazadas en el README) y la aprobación.
+- **Falta:** las 7 capturas de `M10.md §6.4` (Juan Felipe ya las tiene; van en `docs/img/`, ya enlazadas en el README) y la aprobación.
+- Ajustes derivados de M9 hechos en la rama (`M10.md §10`): latencia (timeout de 20 s con tope de reloj, respaldo ante timeout/5xx, presupuesto de 45 s), marca de abstención solo al inicio y etiquetas n10/n13 corregidas.
+- **Decisión pendiente de Juan Felipe:** la limpieza de M3 pierde celdas repetidas en tablas (189 filas en 10 páginas, sobre todo el tarifario de cuentas; `M10.md §10.4`). Propuesta: tablas como filas Markdown y re-indexar.
+- `.env` local: se cambió solo `LLM_TIMEOUT_SECONDS` a 20 (no secreta).
 - Historial real: la conversación C (`6c0b76f6-…`, Banco de Bogotá) tiene un turno de más por un error del guion (`M10.md §7`).
 - **Sin merge** sin aprobación.
 

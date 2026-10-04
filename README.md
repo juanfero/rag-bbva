@@ -66,7 +66,7 @@ Incluye analítica del historial con métricas operativas, de calidad y de impac
 | Decisión "responder / sin información" | **29/30** en el set de calibración ([§9](#9-calidad-y-pruebas): resultado optimista, ver por qué) |
 | Latencia por pregunta (CPU) | Búsqueda ~20–50 ms, reranking ~0,7–1,1 s, LLM ~1–2 s con cupo normal. Cada turno está **acotado a 45 s**: o responde o devuelve un aviso claro |
 | Costo | **$0 real** (clave gratuita). Estimado con precios pagos: ~US$ 0,001 por respuesta |
-| Pruebas | **691 pruebas** en verde (685 sin red ni modelos), `ruff` limpio |
+| Pruebas | **692 pruebas** en verde (686 sin red ni modelos), `ruff` limpio |
 
 **Para la revisión, lo más relevante:**
 - Las [decisiones](#12-decisiones-de-diseño) razonadas, con sus ADR.
@@ -296,8 +296,8 @@ Definiciones exactas de cada métrica: [bitácora M11](docs/modulos/M11.md#3-dis
 
 ## 9. Calidad y pruebas
 
-- **691 pruebas** (`pytest`):
-  - 685 corren sin red, sin modelos y sin gastar cupo del LLM, con dobles: LLM falso, transporte HTTP simulado y Qdrant en memoria;
+- **692 pruebas** (`pytest`):
+  - 686 corren sin red, sin modelos y sin gastar cupo del LLM, con dobles: LLM falso, transporte HTTP simulado y Qdrant en memoria;
   - las de integración usan Qdrant y el LLM reales.
   - `ruff` limpio.
 - **Fixtures reales:** páginas recortadas de las tres plantillas del sitio y tablas reales del CDT y del tarifario.

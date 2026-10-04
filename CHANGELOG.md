@@ -4,6 +4,17 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Sin publicar]
 
+## [v1.0.0] - 2026-10-04 — Primera versión de entrega
+Incluye M0–M12 y M14. M13 (evaluación con golden set) no se realizó y queda como mejora futura.
+
+## [m14] - 2026-10-04 — Cierre
+### Añadido
+- `ui/streamlit_app.py`: navegación con nombres propios, páginas **Chat** y **Métricas** (antes la primera se llamaba "app"). `rag-bbva ui` y el contenedor `ui` lo usan.
+### Cambiado
+- README final: estado de módulos (M14 ✅, M13 no realizado), tags `m00`…`m14` y `v1.0.0`, 692 pruebas.
+### Verificado
+- Desde cero con Docker en una carpeta limpia y con un proyecto propio: todos los servicios *healthy* y `scripts/smoke_test.sh` OK (M14.md §6).
+
 ## [m12] - 2026-10-04 — Dockerización completa
 ### Añadido
 - `docker compose up -d --build` levanta todo en un comando: `qdrant` → `init` (`bootstrap`) → `api` → `ui`, con healthchecks, `depends_on` por condición, volúmenes con nombre y puertos solo en 127.0.0.1, configurables con `API_PUBLISHED_PORT` y `UI_PUBLISHED_PORT`.

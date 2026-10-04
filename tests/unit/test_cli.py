@@ -119,10 +119,15 @@ def test_cli_clean_escribe_documentos_y_reporte(
     (raw / "pages").mkdir(parents=True)
     (raw / "pages" / "a.html").write_bytes(FIXTURE_HTML.read_bytes())
     entrada = {
-        "url": f"{B}/acerca-de/gmf-iva", "final_url": f"{B}/acerca-de/gmf-iva", "status": 200,
-        "outcome": "guardada", "fetched_at": "2026-10-02T00:00:00+00:00", "depth": 0,
-        "source": "sitemap", "path": "pages/a.html",
-    }  # fmt: skip
+        "url": f"{B}/acerca-de/gmf-iva",
+        "final_url": f"{B}/acerca-de/gmf-iva",
+        "status": 200,
+        "outcome": "guardada",
+        "fetched_at": "2026-10-02T00:00:00+00:00",
+        "depth": 0,
+        "source": "sitemap",
+        "path": "pages/a.html",
+    }
     (raw / "manifest.jsonl").write_text(json.dumps(entrada) + "\n", encoding="utf-8")
     clean_env.setenv("RAW_DATA_DIR", str(raw))
     clean_env.setenv("CLEAN_DATA_DIR", str(limpio))
@@ -263,11 +268,18 @@ def test_cli_search_muestra_scores_y_umbral(
             VectorPoint(
                 point_id("cdt"),
                 np.asarray(embedder.embed_documents([texto])[0]),
-                {"chunk_id": "cdt", "doc_id": "d", "url": f"{B}/glosario", "title": "Glosario",
-                 "heading_path": "Glosario > C > CDT", "text": texto, "section": "acerca-de"},
+                {
+                    "chunk_id": "cdt",
+                    "doc_id": "d",
+                    "url": f"{B}/glosario",
+                    "title": "Glosario",
+                    "heading_path": "Glosario > C > CDT",
+                    "text": texto,
+                    "section": "acerca-de",
+                },
             )
         ]
-    )  # fmt: skip
+    )
     capturados: dict[str, object] = {}
 
     def falso(
@@ -493,3 +505,91 @@ def test_cli_ui_lanza_streamlit_con_host_puerto_y_api(
     assert llamadas[0]["api"] == "http://127.0.0.1:8000"
     assert llamadas[1]["api"] == "http://127.0.0.1:8010"
     assert "http://127.0.0.1:8600" in por_defecto.stdout
+
+
+def _base_historial(ruta: Path) -> None:
+    from rag_bbva.memory import MessageMetrics, SqlAlchemyConversationRepository
+
+    repo = SqlAlchemyConversationRepository.from_path(ruta)
+    t = repo.add_turn(
+        None,
+        "¿Qué es un CDT?",
+        "Un CDT es… [1]",
+        sources=[{"n": 1, "url": "https://www.bancolombia.com/personas/cdt"}],
+        metrics=MessageMetrics(
+            total_ms=2000,
+            retrieval_ms=20,
+            rerank_ms=800,
+            llm_ms=1000,
+            top_score=7.0,
+            no_answer=False,
+            prompt_tokens=1000,
+            completion_tokens=100,
+            model="m",
+            rewrite_ms=0.0,
+        ),
+    )
+    repo.set_feedback(t.answer.id, "up")
+    repo.add_turn(
+        None,
+        "receta de arepas, mi cédula 1020345678",
+        "No encontré…",
+        metrics=MessageMetrics(total_ms=900, top_score=-6.0, no_answer=True, rewrite_ms=0.0),
+    )
+    repo.close()
+
+
+@pytest.mark.parametrize("nombre", ["history.db", "demo.db"])
+def test_cli_metrics_muestra_todas_las_secciones_y_exporta(
+    clean_env: pytest.MonkeyPatch, tmp_path: Path, nombre: str
+) -> None:
+    ruta = tmp_path / nombre
+    _base_historial(ruta)
+    salida = tmp_path / "export"
+
+    result = runner.invoke(
+        app,
+        ["metrics", "--db", str(ruta), "--sin-embeddings", "--export", "csv", "--out", str(salida)],
+    )
+
+    assert result.exit_code == 0, result.output
+    for seccion in (
+        "== Operativas",
+        "== Calidad",
+        "== Contenido",
+        "== Memoria",
+        "== Costo (estimación)",
+        "== Impacto (estimación)",
+    ):
+        assert seccion in result.stdout
+    assert "Conversaciones: 2 · mensajes: 4 · turnos: 2" in result.stdout
+    assert "corte duro (score < -3.0, sin LLM) 1 (50.0 %)" in result.stdout
+    assert (
+        "receta de arepas, mi cédula [número]" in result.stdout
+        and "1020345678" not in result.stdout
+    )
+    assert (
+        "Horas de búsqueda manual ahorradas: 0.08 (= 1 consultas · 5.0 min / 60)" in result.stdout
+    )
+    assert ("DATOS DE DEMOSTRACIÓN" in result.stdout) is (nombre == "demo.db")
+    assert sorted(p.name for p in salida.iterdir()) == [
+        "brechas_de_contenido.csv",
+        "preguntas_frecuentes.csv",
+        "secciones_citadas.csv",
+        "turnos.csv",
+        "urls_citadas.csv",
+    ]
+
+
+def test_cli_metrics_errores(clean_env: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    ruta = tmp_path / "history.db"
+    _base_historial(ruta)
+    assert runner.invoke(app, ["metrics", "--db", str(tmp_path / "no.db")]).exit_code == 1
+    assert (
+        runner.invoke(app, ["metrics", "--db", str(ruta), "--since", "04/10/2026"]).exit_code == 2
+    )
+    assert runner.invoke(app, ["metrics", "--db", str(ruta), "--export", "xml"]).exit_code == 2
+    desde = runner.invoke(
+        app, ["metrics", "--db", str(ruta), "--sin-embeddings", "--since", "2030-01-01"]
+    )
+    assert desde.exit_code == 0 and "turnos: 0" in desde.stdout

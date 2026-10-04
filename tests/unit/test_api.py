@@ -133,8 +133,8 @@ def test_conversacion_inexistente_404_sin_gastar_tokens(
     assert client.get("/conversations").json() == []
 
 
-def test_ruta_inexistente_y_sin_analytics(client: TestClient) -> None:
-    r = client.get("/analytics/summary")  # llega en M11
+def test_ruta_inexistente(client: TestClient) -> None:
+    r = client.get("/no-existe")
     assert r.status_code == 404
     assert r.json() == {"error": "Recurso no encontrado", "detail": None}
 
@@ -330,6 +330,50 @@ def test_lifespan_construye_los_componentes_desde_la_configuracion(tmp_path: Pat
     assert docs.status_code == 200
     assert set(openapi["paths"]) == {
         "/chat", "/conversations", "/conversations/{conversation_id}/messages",
-        "/messages/{message_id}/feedback", "/health",
+        "/messages/{message_id}/feedback", "/health", "/analytics/summary",
     }  # fmt: skip
     assert openapi["info"]["title"] == "Asistente Bancolombia (RAG)"
+
+
+# --- /analytics/summary (M11) ---------------------------------------------------------------
+
+
+def _app_con_analitica(fuente: str) -> TestClient:
+    from rag_bbva.analytics.service import AnalyticsService
+
+    from .test_analytics import _config, _historial
+
+    config = _config()
+    repo = _historial()
+    entorno = Entorno(config, repo=repo)
+    analitica = AnalyticsService(repository=repo, settings=config, source=fuente)
+    app = create_app(
+        config, service=entorno.servicio, health_checker=entorno.health, analytics_service=analitica
+    )
+    return TestClient(app)
+
+
+def test_analytics_summary_con_historial_y_since() -> None:
+    with _app_con_analitica("history.db") as cliente:
+        todo = cliente.get("/analytics/summary")
+        desde = cliente.get("/analytics/summary", params={"since": "2026-10-04"})
+        mala = cliente.get("/analytics/summary", params={"since": "04/10/2026"})
+
+    assert todo.status_code == 200
+    datos = todo.json()
+    assert set(datos) == {"meta", "operational", "quality", "content", "memory", "cost", "impact"}
+    assert datos["operational"]["turns"] == 5 and datos["quality"]["hard_cut"]["count"] == 1
+    assert datos["impact"]["hours_saved"] == 0.08 and datos["meta"]["demo"] is False
+    assert desde.json()["operational"]["turns"] == 2  # 2026-10-04 desde medianoche de Bogotá
+    assert mala.status_code == 422 and set(mala.json()) == {"error", "detail"}
+
+
+def test_analytics_summary_marca_la_base_de_demostracion() -> None:
+    with _app_con_analitica("demo.db") as cliente:
+        assert cliente.get("/analytics/summary").json()["meta"]["demo"] is True
+
+
+def test_analytics_summary_con_historial_vacio(client: TestClient) -> None:
+    r = client.get("/analytics/summary")
+    assert r.status_code == 200
+    assert r.json()["operational"]["turns"] == 0 and r.json()["impact"]["resolved_turns"] == 0

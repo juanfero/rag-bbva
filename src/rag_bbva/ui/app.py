@@ -16,7 +16,6 @@ from typing import Any
 
 import streamlit as st
 
-from rag_bbva.config import get_settings
 from rag_bbva.exceptions import ApiClientError
 from rag_bbva.ui.api_client import ApiClient, ChatReply, ConversationDetail
 from rag_bbva.ui.render import (
@@ -29,15 +28,11 @@ from rag_bbva.ui.render import (
     shorten,
     source_lines,
 )
+from rag_bbva.ui.state import api_client
 
 
 def _cliente() -> ApiClient:
-    if "api_client" not in st.session_state:
-        ajustes = get_settings()
-        st.session_state.api_client = ApiClient(
-            ajustes.api_base_url, timeout=ajustes.ui_request_timeout_seconds
-        )
-    return st.session_state.api_client  # type: ignore[no-any-return]
+    return api_client()
 
 
 def _iniciar_estado() -> None:

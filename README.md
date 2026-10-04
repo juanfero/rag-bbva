@@ -22,7 +22,7 @@ Prueba técnica de ML/AI Engineer: un sistema RAG (*Retrieval-Augmented Generati
 | M7 | Generación con LLM: Gemini 2.5 Flash (Grok como alternativa), prompts versionados, citas, reformulación | ✅ | `m07` |
 | M8 | Memoria conversacional: historial en SQLite (Repository), últimos N mensajes, métricas por mensaje | ✅ | `m08` |
 | M9 | Servicio RAG + API: fachada `RAGService`, FastAPI, turno atómico, umbral doble, LLM de respaldo, `/health` | ✅ | `m09` |
-| M10 | Interfaz conversacional: Streamlit sobre la API, fuentes, 👍/👎, modo detalle, CLI `chat` | 🟡 en revisión | — |
+| M10 | Interfaz conversacional: Streamlit sobre la API, fuentes, 👍/👎, modo detalle, CLI `chat`; tablas corregidas y latencia acotada | ✅ | `m10` |
 | M11 | Analítica del historial | ⏳ | — |
 | M12 | Dockerización completa | ⏳ | — |
 | M13 | Evaluación de calidad | ⏳ | — |
@@ -192,7 +192,7 @@ Cómo funciona la búsqueda:
 - Por debajo de `RERANK_HARD_MIN_SCORE=-3.0` responde "sin información" **sin llamar al LLM** (fuera de dominio claro).
 - Entre −3,0 y 1,6 (**zona gris**) el LLM recibe el contexto y responde o se abstiene. Si se abstiene, empieza con la marca `[SIN_INFO]`, que el sistema quita y registra como `no_answer`. Lo mismo vale por encima del umbral, p. ej. si preguntan por otro banco.
 - Sobre las 30 preguntas de calibración, con los datos y el prompt finales de M10: 8 caen en la zona gris (8 llamadas extra al LLM) y las decisiones correctas son **29/30** (27/30 en M9 con las etiquetas originales; [bitácora M09](docs/modulos/M09.md#10-revisión-ajustes-y-cierre), [M10](docs/modulos/M10.md#10-ajustes-derivados-de-m9)).
-- ⚠️ **Ese 29/30 es optimista:** las etiquetas de n10 y n13 se corrigieron **después de ver los resultados**. El motivo está documentado (sus datos aparecen literalmente en el sitio), pero igual es un ajuste a posteriori sobre la misma muestra. La validación independiente es el golden set de M13.
+- ⚠️ **Ese 29/30 es optimista:** las etiquetas de n10 y n13 se corrigieron **después de ver los resultados**. El motivo está documentado (sus datos aparecen literalmente en el sitio), pero igual es un ajuste a posteriori sobre la misma muestra. La validación independiente es el golden set de M13. Las etiquetas quedaron **congeladas** al cerrar M10 (una prueba fija su huella).
 - Se calibró con `eval/calibration.jsonl`: 15 preguntas que el sitio responde y 15 que no (fuera de dominio, otros bancos, prensa, simuladores). Acertaba 27 de 30, **medido en la misma muestra con la que se eligió el umbral**: es un resultado dentro de la muestra y probablemente optimista. En M10, después de ver los resultados, se corrigieron 2 etiquetas (n10 y n13: sus datos sí están en el sitio, verificados literalmente); con ellas el umbral único acierta 25/30 y no se cambió el umbral. M13 lo valida con un golden set separado.
 - Va sobre el score del reranker y **no sobre el coseno**: los cosenos de e5 están comprimidos (≈ 0,79–0,92 para todo). El mejor umbral posible sobre el coseno acierta 24 de 30 y queda pegado a los datos (margen 0,001).
 - Sin reranker (`--no-rerank` o `RERANKER_ENABLED=false`) no se aplica umbral.
@@ -309,14 +309,16 @@ python -m rag_bbva.cli ui --api-url http://127.0.0.1:8010
 - **Errores amigables:** 503 (LLM sin cupo o lento, Qdrant caído), 422 (pregunta vacía o de más de 1000 caracteres), 404 (ID inexistente: la siguiente pregunta abre una conversación nueva), timeout y API caída, que indica cómo levantarla. Una pregunta que falla no se guarda (turno atómico) y se cita en el error para reintentarla.
 - **Aviso visible:** *"Prototipo de prueba técnica. No es un canal oficial de Bancolombia."* Sin logos ni marca: Bancolombia aparece solo como fuente.
 
-**Capturas** (guion completo en la [bitácora M10](docs/modulos/M10.md#6-evidencia-manual)):
+**Capturas** (tomadas por Juan Felipe el 2026-10-03 sobre los datos finales de M10; guion en la [bitácora M10](docs/modulos/M10.md#6-evidencia-manual)):
 
 | | |
 |---|---|
-| ![Pantalla inicial](docs/img/m10_01_inicio.png) Pantalla inicial: aviso, estado del servicio y conversaciones para retomar | ![Respuesta con citas](docs/img/m10_02_citas_y_fuentes.png) Seguimiento "¿y cuáles son los requisitos?" con citas enlazadas y fuentes |
-| ![Modo detalle](docs/img/m10_03_modo_detalle.png) Modo detalle en la zona gris, con 👍 ya votado | ![Sin información](docs/img/m10_04_sin_informacion.png) Pregunta fuera de dominio: "sin información suficiente" |
-| ![Otra entidad](docs/img/m10_05_otra_entidad.png) Pregunta sobre otro banco: el asistente se abstiene | ![Retomar por ID](docs/img/m10_06_retomar_por_id.png) Conversación retomada por ID después de reiniciar la API |
-| ![API caída](docs/img/m10_07_api_caida.png) API detenida: estado en rojo y error amigable | |
+| ![Conversación con citas](docs/img/m10_01_conversacion_citas.png) Conversación de vivienda: citas [n] enlazadas, fuentes, 👍/👎, estado del servicio y lista para retomar | ![Segmento y tarifario](docs/img/m10_02_segmento_y_tarifario.png) El CDT se aclara "dirigido a pymes, empresas o corporaciones"; el retiro en sucursal con Plan Cero ($11.490) sale de la tabla corregida del tarifario |
+| ![Sin información](docs/img/m10_03_sin_informacion.png) "4 por mil" respondido y "receta de arepas" con el aviso de "sin información suficiente" | ![Otra entidad](docs/img/m10_04_otra_entidad.png) Pregunta sobre el Banco de Bogotá: el asistente se abstiene y ofrece el equivalente de Bancolombia |
+| ![API caída](docs/img/m10_05_api_caida.png) API detenida: estado en rojo y lista sin cargar, con la instrucción para levantarla | ![ID pegado](docs/img/m10_06_retomar_id_pegado.png) ID de la conversación pegado en "Retomar por ID" |
+| ![Conversación retomada](docs/img/m10_07_conversacion_retomada.png) Conversación retomada por ID, con su historial completo | ![Valoración](docs/img/m10_08_feedback_y_nueva_pregunta.png) Botón 👍 ("Respuesta útil") y una pregunta nueva en la conversación retomada |
+
+No hay captura del **modo detalle activo**: está verificado por las pruebas de la interfaz (`test_modo_detalle`) y por el guion de la bitácora (paso A3).
 
 **CLI de respaldo**, sin API ni navegador, directo sobre `RAGService`:
 ```bash

@@ -4,7 +4,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Sin publicar]
 
-## [m10] - en revisión — Interfaz conversacional
+## [m10] - 2026-10-03 — Interfaz conversacional
 ### Añadido
 - Interfaz Streamlit (`src/rag_bbva/ui/app.py`) que consume la API por HTTP con `ApiClient` (sin importar el núcleo; lo verifica una prueba):
   - chat con indicador de espera;
@@ -17,6 +17,8 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 - Comandos `ui` (Streamlit con `--host`, `--port`, `--api-url`) y `chat` (CLI de respaldo sobre `RAGService`, con `--conversation-id`).
 - Configuración: `API_BASE_URL`, `UI_HOST`, `UI_PORT`, `UI_REQUEST_TIMEOUT_SECONDS`. Dependencia: `streamlit`.
 - `scripts/ui_guion.py`: guion de la interfaz contra la API real con `AppTest`.
+- 8 capturas de la interfaz en `docs/img/`, enlazadas en el README.
+- Etiquetas de `eval/calibration.jsonl` congeladas: una prueba fija su huella.
 - README: sección "Uso de la interfaz conversacional" con capturas, Streamlit ✅, L-15.
 - Ajustes derivados de M9:
   - respaldo del LLM también ante timeout y 5xx tras un reintento (`LLMUnavailableError`);

@@ -331,6 +331,11 @@ def test_crea_las_tablas_del_plan(tmp_path: Path) -> None:
         "prompt_tokens",
         "completion_tokens",
         "feedback",
+        # M11 (ADR-018)
+        "rewrite_ms",
+        "rewritten_query",
+        "model",
+        "gray_zone",
     ]
 
 
@@ -454,3 +459,63 @@ def test_turnos_concurrentes_desde_varios_hilos(tmp_path: Path) -> None:
         assert pregunta.content.split()[-1] == respuesta.content.split()[-1]
     assert len(repo.list_conversations(limit=100)) == 21
     repo.close()
+
+
+# --- M11: columnas nuevas, migración y lectura masiva --------------------------------------
+
+
+ESQUEMA_M8 = """
+CREATE TABLE conversations (id VARCHAR(36) PRIMARY KEY, created_at DATETIME, updated_at DATETIME,
+    title VARCHAR(200));
+CREATE TABLE messages (id INTEGER PRIMARY KEY AUTOINCREMENT, conversation_id VARCHAR(36)
+    REFERENCES conversations(id) ON DELETE CASCADE, role VARCHAR(16), content TEXT,
+    created_at DATETIME, sources_json TEXT, retrieval_ms FLOAT, rerank_ms FLOAT, llm_ms FLOAT,
+    total_ms FLOAT, top_score FLOAT, no_answer BOOLEAN, prompt_tokens INTEGER,
+    completion_tokens INTEGER, feedback VARCHAR(8));
+INSERT INTO conversations VALUES ('c-vieja', '2026-10-03 10:00:00', '2026-10-03 10:00:05', 'Vieja');
+INSERT INTO messages (conversation_id, role, content, created_at, sources_json, top_score,
+    no_answer) VALUES ('c-vieja', 'user', 'pregunta', '2026-10-03 10:00:00', '[]', NULL, NULL),
+    ('c-vieja', 'assistant', 'respuesta', '2026-10-03 10:00:05', '[]', 4.2, 0);
+"""
+
+
+def test_migra_una_base_de_m8_sin_perder_datos(tmp_path: Path) -> None:
+    import sqlite3
+
+    ruta = tmp_path / "history.db"
+    with sqlite3.connect(ruta) as conexion:
+        conexion.executescript(ESQUEMA_M8)
+
+    repo = SqlAlchemyConversationRepository.from_path(ruta)
+
+    with sqlite3.connect(ruta) as conexion:
+        columnas = [f[1] for f in conexion.execute("PRAGMA table_info(messages)")]
+    assert columnas[-4:] == ["rewrite_ms", "rewritten_query", "model", "gray_zone"]
+    viejos = repo.get_messages("c-vieja")
+    assert [m.content for m in viejos] == ["pregunta", "respuesta"]
+    assert viejos[1].metrics.top_score == 4.2 and viejos[1].metrics.model is None
+    nuevo = repo.add_turn(
+        "c-vieja", "otra", "resp", metrics=MessageMetrics(model="m", rewrite_ms=5.0, gray_zone=True)
+    )
+    assert nuevo.answer.metrics.model == "m" and nuevo.answer.metrics.gray_zone is True
+    repo.close()
+    SqlAlchemyConversationRepository.from_path(ruta).close()  # reabrir no vuelve a migrar
+
+
+def test_all_messages_lee_todo_y_filtra_por_fecha(repo: ConversationRepository) -> None:
+    a = repo.add_turn(None, "pregunta 1", "respuesta 1")
+    repo.add_turn(None, "pregunta 2", "respuesta 2")
+    repo.add_turn(a.conversation.id, "pregunta 3", "respuesta 3")
+
+    todos = repo.all_messages()
+    assert [m.content for m in todos] == [
+        "pregunta 1",
+        "respuesta 1",
+        "pregunta 2",
+        "respuesta 2",
+        "pregunta 3",
+        "respuesta 3",
+    ]
+    corte = todos[4].created_at
+    assert [m.content for m in repo.all_messages(since=corte)] == ["pregunta 3", "respuesta 3"]
+    assert len(repo.list_conversations(limit=None)) == 2

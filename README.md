@@ -407,7 +407,7 @@ El proyecto se construyó por módulos, cada uno con su rama, sus pruebas, su bi
 | M6–M7 | Recuperación con reranker y generación con LLM | ✅ `m06`, `m07` |
 | M8–M9 | Memoria conversacional, servicio RAG y API | ✅ `m08`, `m09` |
 | M10 | Interfaz conversacional | ✅ `m10` |
-| M11 | Analítica del historial | 🟡 implementado, en revisión |
+| M11 | Analítica del historial | ✅ `m11` |
 | M12 | Dockerización completa (`docker compose up` en un comando) | ⏳ pendiente |
 | M13 | Evaluación de calidad con golden set | ⏳ pendiente |
 | M14 | Verificación desde cero en una carpeta limpia y versión `v1.0.0` | ⏳ pendiente |

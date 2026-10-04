@@ -1,6 +1,6 @@
 # Contexto de sesión — traspaso
 
-> Escrito el 2026-10-02 y actualizado al cerrar cada módulo (último: M10, 2026-10-03) para retomar el proyecto en una sesión nueva de Claude Code sin el historial de la conversación anterior. Solo contiene hechos verificables en el repo; no incluye secretos.
+> Escrito el 2026-10-02 y actualizado al cerrar cada módulo (último: M11, 2026-10-04) para retomar el proyecto en una sesión nueva de Claude Code sin el historial de la conversación anterior. Solo contiene hechos verificables en el repo; no incluye secretos.
 > Si este archivo contradice al código o a `git log`, manda el repo: verifica con los comandos de §5.
 
 ---
@@ -20,29 +20,26 @@
 | M7 — Generación con LLM | `m07` | `138a56a` | `docs/modulos/M07.md` |
 | M8 — Memoria conversacional | `m08` | `b27a49a` | `docs/modulos/M08.md` |
 | M9 — Servicio RAG + API | `m09` | `4b63953` | `docs/modulos/M09.md` |
-| M10 — Interfaz conversacional | `m10` | merge `--no-ff` de `feat/m10-ui` en `main` (2026-10-03); el hash se ve con `git rev-parse --short m10^{commit}` | `docs/modulos/M10.md` |
+| M10 — Interfaz conversacional | `m10` | `76797be` | `docs/modulos/M10.md` |
+| M11 — Analítica del historial | `m11` | merge `--no-ff` de `feat/m11-analytics` en `main` (2026-10-04); el hash se ve con `git rev-parse --short m11^{commit}` | `docs/modulos/M11.md` |
 
 - Commits `docs` directos en `main`, pedidos de forma explícita por Juan Felipe:
   - `5edf0dd`, entre `m00` y `m01`.
   - `c38abdc` y `9a6e3ce`, entre `m01` y `m02`.
 - Cada merge incluye las correcciones de su revisión (§10 de cada bitácora).
 
-### Módulo en curso: M11 — Analítica del historial
-- Juan Felipe cerró M10 y pidió M11 en la rama `feat/m11-analytics`:
-  - métricas operativas, de calidad, de contenido, de memoria, de costo e impacto;
-  - salidas: CLI `metrics`, `GET /analytics/summary`, página "Métricas" y export CSV;
-  - `scripts/seed_conversations.py` sobre `data/history/demo.db`;
-  - enmascarado de números largos.
-- **Implementado, en revisión** (`M11.md`). Evidencia sobre `data/history/demo.db` (12 conversaciones, 18 turnos, 26 peticiones al LLM). Falta la captura de la página Métricas (`M11.md §6.5`) y la aprobación.
-- Columnas nuevas en `messages`, con migración aditiva al abrir la base (ADR-018). `scripts/check_keys.py` reemplaza al verificador del scratchpad: correr antes de cada commit.
+### Siguiente módulo: M12 — Dockerización completa
+- Juan Felipe aprobó M11 (y el README reorganizado para la presentación) el 2026-10-04 y pidió seguir con M12 en la rama `feat/m12-docker`.
+- M12 es el requisito **obligatorio** pendiente (R2, L-18): `docker compose up -d --build` debe levantar Qdrant, la ingesta inicial desde un snapshot de datos limpios, la API y la UI, en un solo comando.
+- Estado de los datos: 597 documentos, 3546 chunks, Qdrant con 3546 puntos; prompt `2026-10-03.3`; `eval/calibration.jsonl` congelado.
+- `scripts/check_keys.py`: correr antes de cada commit.
 - **Sin merge** sin aprobación.
-- Estado de los datos (desde M10): 597 documentos, 3546 chunks, Qdrant con 3546 puntos; prompt `2026-10-03.3`; `eval/calibration.jsonl` congelado.
 
 ### Pendientes anotados para M14
 - **Retomar las capturas sobre la versión Docker final:** en las 1 y 2 de M10 aparece texto de instrucciones en el chat; faltan modo detalle y API caída (también en `01_PLAN_DE_MODULOS.md`, M14).
 
-### Estado del árbol (al cerrar M10)
-- `main` con el merge de M10 y el tag `m10`, publicados en `origin`. Las ramas `feat/m00…m10` siguen a sus pares en `origin`.
+### Estado del árbol (al cerrar M11)
+- `main` con el merge de M11 y el tag `m11`, publicados en `origin`. Las ramas `feat/m00…m11` siguen a sus pares en `origin`.
 - **Qdrant del compose levantado** (`docker compose up -d qdrant`), volumen `qdrant_data`, colección `bancolombia_docs` con 3506 puntos.
 - Solo en local, ignorado por git: `.venv/`, `.env`, `models/` (e5-small y cross-encoder, 936 MB) y `data/`.
   - `.env`: lo creó Juan Felipe. Tiene `GEMINI_API_KEY` (clave gratuita de AI Studio) y `XAI_API_KEY` (sin créditos), y `LLM_PROVIDER=gemini`, `LLM_MODEL=gemini-2.5-flash`. **No leer ni imprimir las claves.**
@@ -56,14 +53,7 @@
 
 ## 2. Último pedido de Juan Felipe y hasta dónde se llegó
 
-M10 **aprobado y cerrado** el 2026-10-03, después de tres rondas de ajustes (`M10.md §10` y §11):
-- latencia: tope de reloj de 20 s, respaldo ante timeout/5xx y presupuesto de 45 s por turno;
-- verificación anti-alucinación de n10 y n13 y su reetiquetado, declarado optimista;
-- tablas corregidas (rowspan, celdas repetidas) y datos regenerados;
-- prompt con segmento y fechas;
-- 8 capturas en `docs/img/` y etiquetas de calibración congeladas.
-
-**No empezar M11 hasta la revisión de Juan Felipe.**
+M11 **aprobado y cerrado** el 2026-10-04: analítica del historial (CLI `metrics`, `/analytics/summary`, página Métricas, export CSV), seed de demostración sobre `data/history/demo.db`, columnas nuevas con migración mínima (ADR-018) y README reorganizado para la presentación del caso. A continuación se empieza M12 (§1).
 
 ---
 
@@ -171,7 +161,7 @@ Comandos de verificación:
 cd /home/pipe/Inetum/rag-bbva-docs/rag-bbva
 source .venv/bin/activate
 git status && git branch -vv && git log --oneline --graph --decorate -15 && git tag
-pytest                                   # al cerrar M10: 629 sin integración ni slow; 635 con integración (slow: requieren el modelo en models/; integration: Qdrant levantado; si no, se saltan)
+pytest                                   # al cerrar M11: 672 sin integración ni slow; 678 con integración (slow: requieren el modelo en models/; integration: Qdrant levantado; si no, se saltan)
 pytest -m "not integration and not slow"
 ruff check . && ruff format --check .
 python -m rag_bbva.cli version
@@ -217,10 +207,10 @@ Fuentes: `docs/01_PLAN_DE_MODULOS.md`, las bitácoras §8 y el README.
 
 ## 7. Lo que la próxima sesión NO debe romper
 
-- **Los tags publicados no se mueven ni se reescriben:** `m00` → `bc14425`, `m01` → `f48a0d3`, `m02` → `4a31943`, `m03` → `731c389`, `m04` → `777402b`, `m05` → `a47323a`, `m06` → `5ba0a69`, `m07` → `138a56a`, `m08` → `b27a49a`, `m09` → `4b63953`, `m10` → merge de M10. Tampoco se reescribe historial ya publicado en `origin`: nada de `push --force` ni rebase de ramas publicadas.
+- **Los tags publicados no se mueven ni se reescriben:** `m00` → `bc14425`, `m01` → `f48a0d3`, `m02` → `4a31943`, `m03` → `731c389`, `m04` → `777402b`, `m05` → `a47323a`, `m06` → `5ba0a69`, `m07` → `138a56a`, `m08` → `b27a49a`, `m09` → `4b63953`, `m10` → `76797be`, `m11` → merge de M11. Tampoco se reescribe historial ya publicado en `origin`: nada de `push --force` ni rebase de ramas publicadas.
 - **Nunca escribir `GEMINI_API_KEY` ni `XAI_API_KEY`** en código, docs, tests ni commits; solo en `.env`, que está en `.gitignore`. `tests/unit/test_secrets.py` lo vigila.
 - **Bancolombia en todo texto visible al usuario** (prompts, UI, respuestas, README, ayuda de la CLI). El código conserva `rag_bbva`. Un test de `tests/unit/test_cli.py` verifica que la ayuda de la CLI diga Bancolombia y no BBVA.
-- **Ningún módulo se mergea sin la aprobación explícita** de Juan Felipe; M11 tampoco, y M11 no empieza hasta su revisión.
+- **Ningún módulo se mergea sin la aprobación explícita** de Juan Felipe; M12 tampoco.
 - **Cortesía con el sitio:** respetar `robots.txt`, User-Agent `RAG-BBVA-TechTest/1.0`, pausa ≥ 1 s, sin seguir redirecciones a otros dominios y sin eludir el WAF o el bot-manager.
 - `data/`, `models/` y `.env` no se versionan.
 
@@ -234,6 +224,6 @@ Fuentes: `docs/01_PLAN_DE_MODULOS.md`, las bitácoras §8 y el README.
 4. `docs/00_VISION_GENERAL.md`: requisitos, arquitectura, configuración §7 y supuestos §9.
 5. `docs/01_PLAN_DE_MODULOS.md`: Definition of Done y el módulo en curso o siguiente.
 6. `docs/02_DECISIONES.md`: ADR-001 a ADR-018.
-7. `docs/modulos/M10.md` (último cerrado; §10 con latencia, tablas y calibración), `M09.md` (umbral doble y respaldo) y `M07.md` (reglas de claves); `M11.md` si existe; luego las bitácoras anteriores si hace falta.
+7. `docs/modulos/M11.md` (último cerrado), `M10.md` (§10: latencia, tablas y calibración), `M09.md` (umbral doble y respaldo) y `M07.md` (reglas de claves); `M12.md` si existe; luego las bitácoras anteriores si hace falta.
 8. `docs/exploracion_sitio.md`: hallazgos del sitio, selectores y riesgos.
 9. `CHANGELOG.md`.

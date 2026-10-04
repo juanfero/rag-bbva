@@ -4,7 +4,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Sin publicar]
 
-## [m11] - en revisión — Analítica del historial
+## [m11] - 2026-10-04 — Analítica del historial
 ### Añadido
 - `src/rag_bbva/analytics/`: métricas con pandas sobre el historial leído por el Repository (`all_messages`):
   - operativas: conversaciones, turnos, día y hora, latencia p50/p95 por etapa;

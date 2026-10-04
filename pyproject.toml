@@ -17,6 +17,8 @@ dependencies = [
     "numpy>=1.26",
     # SDK compatible con la API de xAI (Grok). Usa httpx2 como cliente HTTP.
     "openai>=3.24,<4",
+    # Analítica del historial (M11).
+    "pandas>=2.2,<4",
     "pydantic>=2.6",
     "pydantic-settings>=2.2",
     # Misma serie que la imagen qdrant/qdrant:v1.19.1 de docker-compose.yml.

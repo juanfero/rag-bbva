@@ -1,21 +1,30 @@
-# Compose de desarrollo.
-# - M0: servicio `api` con un comando placeholder.
-# - M5: servicio `qdrant` para indexar y probar en local (`docker compose up -d qdrant`).
-# init, API real, UI y volúmenes de data/ e historial se completan en M12.
-services:
-  api:
-    build: .
-    image: rag-bbva:latest
-    env_file:
-      - path: .env
-        required: false
-    command: ["python", "-m", "rag_bbva.cli", "version"]
+# Despliegue completo (M12): `docker compose up -d --build` levanta todo.
+#
+#   qdrant ─► init (bootstrap: snapshot → índice, modelos) ─► api ─► ui
+#
+# - El arranque NO scrapea el sitio: indexa el snapshot versionado (snapshot/).
+# - Los datos (historial, índice, modelos) viven en volúmenes con nombre y sobreviven a
+#   `docker compose down` (no a `down -v`).
+# - Los puertos se publican solo en 127.0.0.1. Si están ocupados, cambie
+#   API_PUBLISHED_PORT / UI_PUBLISHED_PORT en .env.
+# - La clave del LLM (GEMINI_API_KEY) entra solo por .env.
 
+x-app: &app
+  build: .
+  image: rag-bbva:latest
+  env_file:
+    - path: .env
+      required: false
+  volumes:
+    - app_data:/app/data
+    - model_cache:/app/models
+
+services:
   qdrant:
     # Versión fija, compatible con qdrant-client 1.19.x (pyproject.toml).
     image: qdrant/qdrant:v1.19.1
     ports:
-      - "127.0.0.1:6333:6333"   # API REST, solo en la máquina local
+      - "127.0.0.1:6333:6333"   # API REST, solo en la máquina local (desarrollo)
     volumes:
       - qdrant_data:/qdrant/storage
     healthcheck:
@@ -30,5 +39,61 @@ services:
       retries: 12
       start_period: 5s
 
+  init:
+    <<: *app
+    command: ["rag-bbva", "bootstrap"]
+    environment:
+      QDRANT_URL: http://qdrant:6333
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    <<: *app
+    command: ["rag-bbva", "serve", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      QDRANT_URL: http://qdrant:6333
+    ports:
+      - "127.0.0.1:${API_PUBLISHED_PORT:-8000}:8000"
+    depends_on:
+      init:
+        condition: service_completed_successfully
+    healthcheck:
+      # La API está viva si /health responde, aunque sea 503 (servicio degradado, p. ej.
+      # sin clave del LLM): la UI debe arrancar igual para mostrar ese estado.
+      test:
+        - "CMD"
+        - "python"
+        - "-c"
+        - "import urllib.request as u, urllib.error as e\ntry: u.urlopen('http://127.0.0.1:8000/health', timeout=5)\nexcept e.HTTPError: pass"
+      interval: 10s
+      timeout: 6s
+      retries: 12
+      start_period: 60s
+    restart: unless-stopped
+
+  ui:
+    <<: *app
+    command: ["rag-bbva", "ui", "--host", "0.0.0.0", "--port", "8501", "--api-url", "http://api:8000"]
+    ports:
+      - "127.0.0.1:${UI_PUBLISHED_PORT:-8501}:8501"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - "CMD"
+        - "python"
+        - "-c"
+        - "import urllib.request as u; u.urlopen('http://127.0.0.1:8501/_stcore/health', timeout=5)"
+      interval: 10s
+      timeout: 6s
+      retries: 12
+      start_period: 30s
+    restart: unless-stopped
+
 volumes:
   qdrant_data:
+  app_data:
+  model_cache:

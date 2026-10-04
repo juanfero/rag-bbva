@@ -55,7 +55,8 @@ def test_settings_defaults(clean_env: pytest.MonkeyPatch) -> None:
     assert settings.llm_reasoning_effort == "none"
     assert settings.llm_temperature == 0.1
     assert settings.llm_max_tokens == 800
-    assert settings.llm_timeout_seconds == 60
+    assert settings.llm_timeout_seconds == 20  # M10: bajo para pasar pronto al respaldo
+    assert settings.llm_turn_budget_seconds == 45
     assert settings.llm_max_retries == 2
     assert settings.llm_backoff_seconds == 1.0
     assert settings.llm_price_input_per_mtok == 0.30

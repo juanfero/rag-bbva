@@ -623,10 +623,11 @@ def test_sin_error_de_cupo_no_se_usa_el_respaldo() -> None:
     [
         LLMError("La clave GEMINI_API_KEY no es válida"),
         LLMError("El modelo configurado (LLM_MODEL) no existe"),
-        LLMError("El servicio de respuestas tardó demasiado"),
     ],
 )
-def test_errores_que_no_son_de_cupo_no_activan_el_respaldo(error: LLMError) -> None:
+def test_errores_de_clave_o_modelo_no_activan_el_respaldo(error: LLMError) -> None:
+    """M10: el timeout y los 5xx sí activan el respaldo (LLMUnavailableError, ver
+    test_latencia.py); la clave y el modelo inexistente no."""
     respaldo = _Proveedor("gemini-3.1-flash-lite")
     llm = FallbackLLMProvider(_Proveedor("gemini-2.5-flash", error), respaldo)
     with pytest.raises(LLMError) as capturado:

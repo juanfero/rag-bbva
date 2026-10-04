@@ -1,0 +1,23 @@
+{
+  "generado": "2026-10-04T14:01:01+00:00",
+  "fuente": "https://www.bancolombia.com/ (contenido público; crawl de M3, limpieza de M10)",
+  "documentos": 597,
+  "chunks": 3546,
+  "vectores_distintos": 3544,
+  "chunking": {
+    "estrategia": "heading_aware",
+    "chunk_size": 800,
+    "chunk_overlap": 120
+  },
+  "modelo_embeddings": "intfloat/multilingual-e5-small",
+  "archivos": {
+    "documents.jsonl": {
+      "bytes": 2450045,
+      "sha256": "e0122126a009ab2aee8c2c4890fc29f2890e9820a9874297a57e0a64a921fff3"
+    },
+    "embeddings/intfloat--multilingual-e5-small.npz": {
+      "bytes": 6351356,
+      "sha256": "abf5f722159dfa0f15ef5bdf846b9d5b85f1105906e474981b06f4d25f0680e8"
+    }
+  }
+}

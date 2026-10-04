@@ -68,6 +68,9 @@ class Settings(BaseSettings):
     qdrant_timeout_seconds: float = Field(default=10, gt=0)
     qdrant_batch_size: int = Field(default=128, gt=0)
     embeddings_cache_dir: Path = Path("data/embeddings")
+    # Snapshot versionado de datos limpios y embeddings que indexa el arranque con Docker
+    # (M12, `bootstrap`), para no scrapear el sitio en `docker compose up`.
+    snapshot_dir: Path = Path("snapshot")
 
     # Recuperación y reranking
     retrieval_top_k: int = Field(default=20, gt=0)

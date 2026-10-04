@@ -248,6 +248,8 @@ El caso pide mínimo 3. Se implementan 6 para tener margen, pero el README desta
 | `HISTORY_DB_PATH` | `data/history/history.db` | Ruta SQLite |
 | `HISTORY_WINDOW_N` | `6` | **N mensajes previos** usados como contexto |
 | `MANUAL_SEARCH_MINUTES` | `5` | Supuesto para estimar tiempo ahorrado (analítica) |
+| `SNAPSHOT_DIR` | `snapshot` | Snapshot versionado de datos limpios y embeddings que indexa el arranque con Docker (M12, ADR-019) |
+| `API_PUBLISHED_PORT` / `UI_PUBLISHED_PORT` | `8000` / `8501` | Puertos que publica `docker compose` en 127.0.0.1 (M12) |
 | `ANALYTICS_TIMEZONE` | `America/Bogota` | Zona horaria de la distribución por día y hora (M11) |
 | `ANALYTICS_FAQ_SIMILARITY` | `0.93` | Coseno mínimo para agrupar preguntas casi iguales; medido con e5 (M11.md §3) |
 | `ANALYTICS_TOP_N` | `10` | Tamaño de los rankings de la analítica (M11) |

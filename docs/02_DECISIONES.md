@@ -163,3 +163,23 @@ Formato: una entrada por decisión. Estado: Propuesta · Aceptada · Reemplazada
     - el corte duro, por `top_score < RERANK_HARD_MIN_SCORE`;
     - el "% de turnos reformulados" se calcula solo sobre los turnos con el dato e informa cuántos son.
 - **Consecuencias:** + métricas de memoria y de calidad exactas para los turnos nuevos; + bases de M8–M10 siguen abriendo (probado con una base creada con el esquema de M8); − un cambio de esquema no aditivo seguiría requiriendo una migración real.
+
+## ADR-019 — Despliegue con Docker: snapshot versionado, `init` idempotente y modelos en volumen
+- **Estado:** Aceptada (2026-10-04, M12)
+- **Contexto:** el caso exige levantar todo con un solo comando. Scrapear el sitio en cada arranque tomaría ~28 min, dependería del sitio y repetiría peticiones sin necesidad (decisión del checkpoint de M1, S-04). Embeber los ~3500 chunks en CPU toma ~2,5 min, y los modelos pesan ~1 GB.
+- **Decisión:**
+  - **Snapshot versionado** en `snapshot/` (8,5 MB):
+    - los 597 documentos limpios (con las tablas corregidas en M10);
+    - la caché de embeddings podada a los chunks actuales;
+    - un `MANIFEST.json` con conteos y SHA-256.
+    - Lo genera `scripts/make_snapshot.py` y una prueba verifica que coincida con su manifiesto.
+  - **`init` = `rag-bbva bootstrap`:** copia el snapshot si faltan datos, **indexa solo si la colección está vacía** (desde la caché: 3546 chunks en ~10 s, sin embeber) y descarga los modelos al volumen `model_cache`. Si Qdrant no responde, falla, y la API no arranca.
+  - **Los modelos no van dentro de la imagen:** se descargan una vez al volumen. La imagen pesa ~2 GB en vez de ~3 GB y se construye sin depender de Hugging Face; el costo es que el primer arranque necesita red.
+  - **Servicios:** `qdrant` (healthy) → `init` (completado con éxito) → `api` (healthy: `/health` responde, aunque sea 503) → `ui`. Puertos solo en `127.0.0.1` y configurables (`API_PUBLISHED_PORT`, `UI_PUBLISHED_PORT`); dentro del contenedor la API escucha en `0.0.0.0`.
+- **Consecuencias:**
+  - \+ Un comando; primer arranque ~10 min (imagen + modelos), siguientes ~35 s.
+  - \+ El historial persiste entre `down` y `up`.
+  - \+ El contenido es reproducible: la versión indexada es la del manifiesto.
+  - − El índice es una foto del sitio (L-05); actualizarlo requiere el entorno local y regenerar el snapshot.
+  - − El repositorio versiona el texto público extraído de www.bancolombia.com: se atribuye la fuente en el manifiesto y en el README.
+  - − Sin conexión a Hugging Face el primer arranque falla (L-18).

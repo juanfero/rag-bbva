@@ -46,7 +46,7 @@ Incluye analítica del historial con métricas operativas, de calidad y de impac
 | Interfaz conversacional | **Streamlit** (chat + página de métricas) sobre una **API FastAPI**, y una CLI de respaldo | ✅ |
 | Historial por ID usando los N mensajes anteriores (N configurable) | SQLite detrás de un Repository; `HISTORY_WINDOW_N=6` en `.env` | ✅ |
 | Python | Python 3.11 | ✅ |
-| **Docker + docker-compose, un solo comando** | Hoy: imagen base y servicio Qdrant. **El `docker compose up` completo (Qdrant, ingesta, API y UI) es el módulo M12, pendiente** | ⏳ parcial |
+| **Docker + docker-compose, un solo comando** | `docker compose up -d --build` levanta Qdrant, la ingesta inicial desde un snapshot versionado, la API y la UI ([§4](#4-instalación-y-puesta-en-marcha)) | ✅ |
 | Repositorio público con historial lógico | Conventional Commits en español, una rama y un tag por módulo (`m00`…`m10`) | ✅ |
 | Al menos 3 patrones de diseño | 10 patrones documentados con su ruta en el código ([§10](#10-patrones-de-diseño)) | ✅ |
 | Persistencia del historial | Sobrevive a reinicios de la API (verificado) | ✅ |
@@ -64,7 +64,7 @@ Incluye analítica del historial con métricas operativas, de calidad y de impac
 | Decisión "responder / sin información" | **29/30** en el set de calibración ([§9](#9-calidad-y-pruebas): resultado optimista, ver por qué) |
 | Latencia por pregunta (CPU) | Búsqueda ~20–50 ms, reranking ~0,7–1,1 s, LLM ~1–2 s con cupo normal. Cada turno está **acotado a 45 s**: o responde o devuelve un aviso claro |
 | Costo | **$0 real** (clave gratuita). Estimado con precios pagos: ~US$ 0,001 por respuesta |
-| Pruebas | **678 pruebas** en verde (672 sin red ni modelos), `ruff` limpio |
+| Pruebas | **691 pruebas** en verde (685 sin red ni modelos), `ruff` limpio |
 
 **Para la revisión, lo más relevante:**
 - Las [decisiones](#12-decisiones-de-diseño) razonadas, con sus ADR.
@@ -100,9 +100,8 @@ Historial (Repository) ─► pandas ─► CLI metrics · GET /analytics/summar
 
 ## 3. Requisitos previos
 
-- **Linux** con **Docker** (Engine + Compose v2).
-- **Python 3.11** y **[uv](https://docs.astral.sh/uv/)** para el entorno local (`uv python install 3.11` si hace falta), y **git**.
-- ~2 GB libres: modelos de embeddings y reranker (~470 MB cada uno, se descargan una vez a `models/`) y datos del crawl.
+- **Para el despliegue con Docker (recomendado):** Docker Engine con Compose v2, git, conexión a internet la primera vez (imagen y modelos) y ~5 GB libres de disco.
+- **Para el entorno local (desarrollo):** además, Python 3.11 y [uv](https://docs.astral.sh/uv/) (`uv python install 3.11` si hace falta).
 - **Variables de entorno:** copiar [`.env.example`](.env.example) a `.env`. Ese archivo está en `.gitignore` y **nunca se versiona**. La única obligatoria es:
   - `GEMINI_API_KEY`: clave **gratuita** de Google AI Studio (https://aistudio.google.com/api-keys).
   - Todo lo demás tiene valores por defecto documentados en `.env.example`: N mensajes de historial, modelos, top-k, umbrales, puertos, etc.
@@ -111,41 +110,57 @@ Historial (Repository) ─► pandas ─► CLI metrics · GET /analytics/summar
 
 ## 4. Instalación y puesta en marcha
 
-> **Estado del despliegue con Docker:** hoy Docker levanta **Qdrant**. El arranque completo con un solo comando (`docker compose up -d --build`, con Qdrant, ingesta inicial desde un snapshot de datos limpios, API y UI) es el **módulo M12, pendiente**. Mientras tanto, la puesta en marcha es local, con estos pasos.
+### Con Docker (recomendado): un solo comando
 
-**1. Clonar e instalar**
 ```bash
 git clone https://github.com/juanfero/rag-bbva.git
 cd rag-bbva
+cp .env.example .env          # y completar GEMINI_API_KEY=... (clave gratuita)
+docker compose up -d --build
+```
+Cuando los servicios estén `healthy` (`docker compose ps`):
+- **Interfaz:** http://127.0.0.1:8501
+- **API:** http://127.0.0.1:8000, con su documentación en http://127.0.0.1:8000/docs
+
+Qué hace el arranque:
+
+```
+qdrant ──► init ──► api ──► ui
+           │
+           ├─ copia el snapshot versionado (snapshot/: 597 documentos limpios y sus embeddings)
+           ├─ indexa en Qdrant solo si la colección está vacía (no scrapea el sitio)
+           └─ descarga los modelos de embeddings y reranker al volumen de modelos (una vez)
+```
+- **Primera vez:** ~10 min, sobre todo por construir la imagen (torch CPU) y descargar los modelos (~1 GB). Los siguientes arranques toman segundos ([evidencia](docs/modulos/M12.md#6-evidencia-manual)).
+- **Persistencia:** el historial, el índice y los modelos viven en volúmenes con nombre. Sobreviven a `docker compose down` (no a `down -v`).
+- **Puertos ocupados:** se publican solo en `127.0.0.1`. Si el 8000 o el 8501 están en uso, se cambian en `.env` con `API_PUBLISHED_PORT=8010` y `UI_PUBLISHED_PORT=8511`.
+- **Verificación automática:** `scripts/smoke_test.sh` revisa `/health`, una pregunta con fuentes, el historial y la interfaz.
+- **Sin clave del LLM:** la API y la interfaz arrancan igual y muestran el LLM como no configurado.
+
+Otros comandos:
+```bash
+docker compose ps                      # estado y salud de los servicios
+docker compose logs -f api             # logs de la API
+docker compose down                    # detiene todo (conserva datos)
+docker compose run --rm init rag-bbva metrics --sin-embeddings   # analítica del historial
+```
+
+**Datos actualizados desde el sitio (opcional).** El arranque usa el snapshot del repositorio. Para volver a scrapear y regenerarlo hace falta el entorno local (abajo): `scrape` (~28 min, 1 s entre páginas), `clean`, `chunk`, `ingest` y `python scripts/make_snapshot.py`.
+
+### Entorno local (desarrollo y pruebas)
+
+```bash
 uv venv --python 3.11 && source .venv/bin/activate
-uv pip install torch --index-url https://download.pytorch.org/whl/cpu   # torch solo CPU (evita bajar CUDA)
+uv pip install torch --index-url https://download.pytorch.org/whl/cpu   # torch solo CPU
 uv pip install -e ".[dev]"
-cp .env.example .env        # y completar GEMINI_API_KEY=...
-python -m rag_bbva.cli llm-check   # confirma la clave y el modelo (no gasta cupo)
+cp .env.example .env                    # y completar GEMINI_API_KEY=...
+docker compose up -d qdrant             # solo Qdrant en Docker
+python -m rag_bbva.cli bootstrap        # snapshot → índice (o scrape/clean/chunk/ingest)
+python -m rag_bbva.cli serve            # API en http://127.0.0.1:8000
+python -m rag_bbva.cli ui               # interfaz en http://127.0.0.1:8501
 ```
 
-**2. Levantar Qdrant**
-```bash
-docker compose up -d qdrant        # espera a "healthy": docker compose ps
-```
-
-**3. Construir el índice** (los datos no se versionan; la primera vez hay que scrapear)
-```bash
-python -m rag_bbva.cli scrape      # crawl completo, ~28 min (respeta 1 s entre páginas)
-python -m rag_bbva.cli clean       # ~1 min  → data/clean/
-python -m rag_bbva.cli chunk       # ~10 s   → data/chunks/
-python -m rag_bbva.cli ingest      # ~2,5 min la primera vez (embeddings en CPU) → Qdrant
-```
-Para una prueba rápida: `scrape --max-pages 50` (~1 min).
-
-**4. Levantar la API y la interfaz** (dos terminales)
-```bash
-python -m rag_bbva.cli serve       # API en http://127.0.0.1:8000 · documentación en /docs
-python -m rag_bbva.cli ui          # interfaz en http://127.0.0.1:8501
-```
-Si el puerto 8000 está ocupado: `serve --port 8010` y `ui --api-url http://127.0.0.1:8010`.
-
-**5. Pruebas**
+**Pruebas:**
 ```bash
 pytest -m "not integration and not slow"   # rápidas: sin red, sin modelos, sin cupo del LLM
 pytest                                     # todas (necesita Qdrant arriba y los modelos)
@@ -279,8 +294,8 @@ Definiciones exactas de cada métrica: [bitácora M11](docs/modulos/M11.md#3-dis
 
 ## 9. Calidad y pruebas
 
-- **678 pruebas** (`pytest`):
-  - 672 corren sin red, sin modelos y sin gastar cupo del LLM, con dobles: LLM falso, transporte HTTP simulado y Qdrant en memoria;
+- **691 pruebas** (`pytest`):
+  - 685 corren sin red, sin modelos y sin gastar cupo del LLM, con dobles: LLM falso, transporte HTTP simulado y Qdrant en memoria;
   - las de integración usan Qdrant y el LLM reales.
   - `ruff` limpio.
 - **Fixtures reales:** páginas recortadas de las tres plantillas del sitio y tablas reales del CDT y del tarifario.
@@ -330,13 +345,13 @@ Definiciones exactas de cada métrica: [bitácora M11](docs/modulos/M11.md#3-dis
 | Analítica | pandas | Agregaciones y percentiles simples y verificables |
 | Configuración | `pydantic-settings` + `.env` | Toda la configuración tipada y validada en un solo lugar |
 | Calidad | `pytest`, `respx`, `ruff` | Pruebas sin red y estilo uniforme |
-| Contenedores | Docker + Compose | Requisito del caso (despliegue completo: M12) |
+| Contenedores | Docker + Compose | Requisito del caso: un solo comando levanta Qdrant, la ingesta, la API y la UI; imagen multi-stage con torch CPU y usuario no root |
 
 ---
 
 ## 12. Decisiones de diseño
 
-Registro completo en [`docs/02_DECISIONES.md`](docs/02_DECISIONES.md) (ADR-001 a ADR-018) y supuestos en la [visión general §9](docs/00_VISION_GENERAL.md).
+Registro completo en [`docs/02_DECISIONES.md`](docs/02_DECISIONES.md) (ADR-001 a ADR-019) y supuestos en la [visión general §9](docs/00_VISION_GENERAL.md).
 
 | Decisión | Motivo |
 |---|---|
@@ -351,6 +366,7 @@ Registro completo en [`docs/02_DECISIONES.md`](docs/02_DECISIONES.md) (ADR-001 a
 | Un ID de conversación desconocido da 404 ([ADR-013](docs/02_DECISIONES.md)) | No continuar en silencio una conversación vacía |
 | Gemini con clave gratuita en vez de Grok ([ADR-012](docs/02_DECISIONES.md)) | Costo real $0; cambio de proveedor solo por configuración |
 | Orquestación propia ([ADR-001](docs/02_DECISIONES.md)) | Control y transparencia de cada etapa |
+| Docker sin scrapear: snapshot versionado y modelos en volumen ([ADR-019](docs/02_DECISIONES.md)) | Un comando reproducible en ~10 min la primera vez, sin depender del sitio ni recalcular embeddings |
 
 ---
 
@@ -364,7 +380,7 @@ Los IDs son estables: las bitácoras y las decisiones los citan.
 | L-02 | **Política de bots de IA:** el `robots.txt` de Bancolombia bloquea a los bots de *entrenamiento* de IA. Este proyecto no entrena: hace recuperación con un User-Agent identificable (`RAG-BBVA-TechTest/1.0`) que respeta las reglas generales y espera 1 s entre páginas |
 | L-03 | **Contenido dinámico no capturado:** sin renderizar JavaScript no se obtienen carruseles ni listas dinámicas; su contenido llega por las páginas enlazadas |
 | L-04 | **Sin PDFs:** fuera del alcance; además, `robots.txt` los prohíbe |
-| L-05 | **Foto del sitio:** el índice refleja el sitio en la fecha del scraping; no hay actualización periódica |
+| L-05 | **Foto del sitio:** el índice refleja el sitio en la fecha del scraping (el snapshot versionado, [ADR-019](docs/02_DECISIONES.md)); no hay actualización periódica |
 | L-06 | **Sin sala de prensa:** sus URLs redirigen a la portada de otro host ([ADR-010](docs/02_DECISIONES.md#adr-010--sala-de-prensa-fuera-del-alcance-del-scraping)). De las noticias solo conoce los resúmenes de `/acerca-de`, sin fecha |
 | L-07 | **URLs muertas en el sitemap:** algunas responden 403; quedan registradas como error en el manifest |
 | L-08 | **Bloques que rotan** en cada petición ("contenido relacionado"): resuelto en la limpieza, ninguno queda en el texto limpio |
@@ -377,13 +393,13 @@ Los IDs son estables: las bitácoras y las decisiones los citan.
 | L-15 | **Sin streaming:** la respuesta aparece completa al terminar, con un indicador de espera; las horas de la lista de conversaciones van en UTC |
 | L-16 | **Datos personales:** las preguntas se guardan en texto plano. La analítica enmascara números largos al mostrarlos, pero no nombres, correos ni direcciones, y no enmascara al guardar |
 | L-17 | **Calidad medida dentro de la muestra:** el 29/30 de calibración es optimista ([§9](#9-calidad-y-pruebas)). `gemini-2.5-flash` a veces se abstiene de más. La agrupación de preguntas frecuentes funciona por temas cuando las preguntas fueron reformuladas |
-| L-18 | **Despliegue con Docker incompleto:** hoy solo Qdrant corre en Docker (M12 pendiente) |
+| L-18 | **Primer arranque con Docker lento y con red:** construir la imagen y descargar los modelos (~1 GB) toma ~10 min la primera vez; los modelos no van dentro de la imagen (se descargan una vez al volumen). Sin conexión a Hugging Face el primer arranque falla |
 
 ---
 
 ## 14. Futuras mejoras
 
-- **Despliegue completo con Docker** en un solo comando, con un snapshot de datos limpios para no scrapear en el arranque (M12).
+- Imagen con los modelos incluidos, para arrancar sin conexión a Hugging Face (L-18).
 - **Evaluación independiente:** golden set separado, Hit@k y MRR con y sin reranker, y comparación de modelos para la sobre-abstención (M13).
 - LLM open source local (p. ej. vía Ollama) como otra estrategia de `LLMProvider`, o Gemini en el nivel pago.
 - Embeddings y reranker de mayor calidad (`bge-m3`, `bge-reranker-v2-m3`).
@@ -408,7 +424,7 @@ El proyecto se construyó por módulos, cada uno con su rama, sus pruebas, su bi
 | M8–M9 | Memoria conversacional, servicio RAG y API | ✅ `m08`, `m09` |
 | M10 | Interfaz conversacional | ✅ `m10` |
 | M11 | Analítica del historial | ✅ `m11` |
-| M12 | Dockerización completa (`docker compose up` en un comando) | ⏳ pendiente |
+| M12 | Dockerización completa (`docker compose up` en un comando) | ✅ `m12` |
 | M13 | Evaluación de calidad con golden set | ⏳ pendiente |
 | M14 | Verificación desde cero en una carpeta limpia y versión `v1.0.0` | ⏳ pendiente |
 
@@ -429,7 +445,8 @@ rag-bbva/
 │   ├── api/          # FastAPI
 │   ├── ui/           # Streamlit: chat y página Métricas
 │   └── analytics/    # métricas, export, privacidad
-├── scripts/          # exploración, calibración, evidencia, seed de demostración, verificación de claves
+├── snapshot/         # datos limpios y embeddings versionados que indexa el arranque con Docker
+├── scripts/          # snapshot, smoke test, exploración, calibración, evidencia, seed de demostración, claves
 ├── tests/            # unitarias (sin red) e integración; fixtures reales del sitio
 ├── eval/             # set de calibración del umbral (etiquetas congeladas)
 └── docs/             # visión, plan, decisiones (ADR), bitácoras por módulo, capturas
@@ -439,7 +456,7 @@ rag-bbva/
 |---|---|
 | [Visión general](docs/00_VISION_GENERAL.md) | Requisitos del caso, arquitectura, configuración y supuestos |
 | [Plan de módulos](docs/01_PLAN_DE_MODULOS.md) | Tareas, pruebas de aceptación y Definition of Done |
-| [Decisiones (ADR)](docs/02_DECISIONES.md) | Las 18 decisiones de arquitectura, con contexto y consecuencias |
+| [Decisiones (ADR)](docs/02_DECISIONES.md) | Las 19 decisiones de arquitectura, con contexto y consecuencias |
 | [Bitácoras](docs/modulos/) | Una por módulo, con la evidencia real (corridas, salidas, mediciones) |
 | [Exploración del sitio](docs/exploracion_sitio.md) | `robots.txt`, sitemaps, plantillas y riesgos del sitio |
 | [CHANGELOG](CHANGELOG.md) | Cambios por versión |

@@ -19,7 +19,7 @@ from pydantic import BaseModel
 
 from rag_bbva.exceptions import ProcessingError
 from rag_bbva.processing.models import CleanDocument, Discarded, RawPage, WorkingDocument
-from rag_bbva.processing.quality import LeakReport, leak_report
+from rag_bbva.processing.quality import LeakReport, TableReport, leak_report, table_report
 from rag_bbva.processing.steps import (
     CleaningStep,
     DeduplicateStep,
@@ -132,6 +132,8 @@ class CleanReport(BaseModel):
     # y por idioma resultante.
     lang_fallback_by_template: dict[str, dict[str, int]]
     leaks: LeakReport
+    # Tablas markdown y filas con un número de celdas distinto al del encabezado (M10).
+    tables: TableReport
 
 
 def _percentil(valores: Sequence[int], q: float) -> int:
@@ -271,6 +273,7 @@ class CleaningPipeline:
             lang_mismatch_pairs=_ordenado(distintos),
             lang_fallback_by_template=_respaldo_por_plantilla(documentos),
             leaks=leak_report(documentos),
+            tables=table_report(documentos),
         )
         return CleaningResult(documentos, reporte)
 

@@ -24,6 +24,8 @@ class CalibrationQuestion(BaseModel):
     answerable: bool
     category: str
     expected_url: str | None = None
+    # Motivo de un cambio de etiqueta (p. ej. n10 y n13, reetiquetadas en M10).
+    note: str | None = None
 
 
 class ThresholdChoice(BaseModel):

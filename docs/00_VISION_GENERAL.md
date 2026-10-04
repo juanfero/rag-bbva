@@ -238,7 +238,8 @@ El caso pide mínimo 3. Se implementan 6 para tener margen, pero el README desta
 | `LLM_REASONING_EFFORT` | `none` | Solo Gemini: `none` apaga el razonamiento interno (menos latencia y tokens) |
 | `LLM_TEMPERATURE` | `0.1` | Temperatura |
 | `LLM_MAX_TOKENS` | `800` | Tope de tokens de salida (controla costo) |
-| `LLM_TIMEOUT_SECONDS` | `60` | Timeout por llamada |
+| `LLM_TIMEOUT_SECONDS` | `20` | Tope de reloj por llamada al LLM; si se vence, reintento y luego respaldo (M10, ADR-017) |
+| `LLM_TURN_BUDGET_SECONDS` | `45` | Presupuesto total del turno; si se agota, 503 "el servicio está lento" sin guardar (M10, ADR-017) |
 | `LLM_MAX_RETRIES` | `2` | Reintentos propios ante 429/5xx/timeouts; el SDK no reintenta (M7) |
 | `LLM_BACKOFF_SECONDS` | `1.0` | Espera base del backoff exponencial (M7) |
 | `LLM_PRICE_INPUT_PER_MTOK` / `LLM_PRICE_OUTPUT_PER_MTOK` | `0.30` / `2.50` | USD por millón de tokens para estimar el costo equivalente: precios pagos de `gemini-2.5-flash` (ai.google.dev/gemini-api/docs/pricing). Con la clave gratuita el costo real es $0 (M7, ADR-012) |
@@ -249,6 +250,9 @@ El caso pide mínimo 3. Se implementan 6 para tener margen, pero el README desta
 | `MANUAL_SEARCH_MINUTES` | `5` | Supuesto para estimar tiempo ahorrado (analítica) |
 | `API_HOST` / `API_PORT` | `127.0.0.1` / `8000` | Dirección y puerto de `serve` (M9); en Docker, `0.0.0.0` (M12) |
 | `CHAT_QUESTION_MAX_CHARS` | `1000` | Largo máximo de una pregunta; más largo responde 422 (M9) |
+| `API_BASE_URL` | `http://127.0.0.1:8000` | URL de la API que consume la UI (M10); en Docker, `http://api:8000` (M12) |
+| `UI_HOST` / `UI_PORT` | `127.0.0.1` / `8501` | Dirección y puerto de la UI Streamlit (`ui`, M10) |
+| `UI_REQUEST_TIMEOUT_SECONDS` | `60` | Espera máxima de la UI por una respuesta de la API (M10) |
 | `LOG_LEVEL` | `INFO` | Nivel de logs |
 
 ---

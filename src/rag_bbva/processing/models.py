@@ -8,7 +8,9 @@ from pydantic import BaseModel, Field
 
 # Plantillas del sitio identificadas en M1 (`docs/exploracion_sitio.md` §5).
 Template = Literal["A_main", "B_main_content", "C_role_main", "otra"]
-Extraction = Literal["trafilatura", "selector"]
+# "selector_tablas": la página tiene tablas de datos y se extrae por selector para
+# conservar su cuadrícula (M10).
+Extraction = Literal["trafilatura", "selector", "selector_tablas"]
 # Origen de `lang`: detectado en el texto o tomado de `<html lang>` por falta de señal.
 LangSource = Literal["detectado", "html_lang"]
 

@@ -292,6 +292,8 @@ class ExtractMainContentStep(CleaningStep):
     *fallback* es el contenedor convertido a markdown por selector. En el HTML real
     trafilatura nunca agregó palabras ausentes del contenedor, pero omitió títulos y
     secciones enteras (`docs/modulos/M03.md` §4) y llegó a reordenar bloques (M04.md §7).
+    Si el contenedor tiene tablas, se usa siempre el selector: escribe las de datos como
+    filas markdown completas y recorre las de maquetación como contenido (M10).
     """
 
     name = "contenido_principal"
@@ -312,6 +314,13 @@ class ExtractMainContentStep(CleaningStep):
         doc.container = contenedor
 
         selector_md = html_to_markdown(contenedor)
+        if contenedor.find("table") is not None:
+            # trafilatura no conserva la cuadrícula de las tablas (rowspan, celdas vecinas
+            # iguales) y escribe las de maquetación como filas de cientos de caracteres
+            # sin cerrar; el selector escribe las de datos como cuadrícula y recorre las
+            # de maquetación como contenido (M10).
+            doc.text, doc.extraction = selector_md, "selector_tablas"
+            return doc
         extraido = trafilatura.extract(
             f"<html><body>{contenedor}</body></html>",
             output_format="markdown",

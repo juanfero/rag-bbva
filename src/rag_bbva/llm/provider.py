@@ -15,13 +15,21 @@ import re
 import time
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterator, Sequence
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FuturesTimeoutError
 from typing import Any, TypeVar
 
 import openai
 from pydantic import BaseModel
 from tenacity import Retrying, retry_if_exception, stop_after_attempt, wait_exponential
 
-from rag_bbva.exceptions import ConfigurationError, LLMError, LLMQuotaError
+from rag_bbva.exceptions import (
+    ConfigurationError,
+    LLMError,
+    LLMQuotaError,
+    LLMUnavailableError,
+)
+from rag_bbva.llm import budget
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +45,16 @@ _TRANSITORIOS = (
 )
 _BACKOFF_MAXIMO = 30.0
 
+# Hilos donde corren las llamadas al SDK, para cortarlas por reloj (M10). El timeout de
+# httpx es por operación de lectura, no total: en M10 una petición a Gemini tardó 39 s
+# en devolver un 503 con timeout=20. Una llamada vencida se abandona (su hilo termina
+# cuando httpx la corta) y se trata como timeout.
+_EJECUTOR = ThreadPoolExecutor(max_workers=16, thread_name_prefix="llm")
+
+
+class _TopeDeTiempoError(Exception):
+    """La llamada no terminó dentro de su tope de reloj."""
+
 
 def is_daily_quota_exhausted(exc: BaseException) -> bool:
     """429 por cupo **diario** agotado (p. ej. el nivel gratuito de Gemini, con quotaId
@@ -47,6 +65,8 @@ def is_daily_quota_exhausted(exc: BaseException) -> bool:
 
 
 def _es_transitorio(exc: BaseException) -> bool:
+    if isinstance(exc, _TopeDeTiempoError):
+        return True
     return isinstance(exc, _TRANSITORIOS) and not is_daily_quota_exhausted(exc)
 
 
@@ -130,6 +150,7 @@ class OpenAICompatibleProvider(LLMProvider):
         para apagar el razonamiento interno). `http_client` permite inyectar un cliente
         HTTP simulado en los tests."""
         self.model = model
+        self.timeout = timeout
         self.temperature = temperature
         self.max_tokens = max_tokens
         self.max_retries = max_retries
@@ -182,10 +203,31 @@ class OpenAICompatibleProvider(LLMProvider):
             return "El modelo configurado (LLM_MODEL) no existe. Ejecute `llm-check`."
         return "El servicio de respuestas no está disponible en este momento. Intenta más tarde."
 
-    def _llamar(self, operacion: str, funcion: Callable[[], T]) -> T:
+    def _con_tope(self, funcion: Callable[[float], T]) -> T:
+        """Ejecuta `funcion(timeout)` con un tope de reloj de `min(LLM_TIMEOUT_SECONDS,
+        plazo restante del turno)` segundos."""
+        tope = budget.call_timeout(self.timeout)
+        futuro = _EJECUTOR.submit(funcion, tope)
+        try:
+            return futuro.result(timeout=tope)
+        except FuturesTimeoutError as exc:
+            futuro.cancel()
+            raise _TopeDeTiempoError(f"sin respuesta en {tope:.1f} s") from exc
+
+    def _llamar(self, operacion: str, funcion: Callable[[float], T]) -> T:
+        """Llama a la API con tope de reloj por intento, reintentos propios y errores
+        traducidos. `funcion` recibe el timeout (s) que debe pasar al SDK."""
+        espera_exponencial = wait_exponential(multiplier=self.backoff_seconds, max=_BACKOFF_MAXIMO)
+
+        def esperar(estado: Any) -> float:
+            # La espera entre reintentos tampoco puede pasarse del plazo del turno.
+            restante = budget.remaining()
+            espera = espera_exponencial(estado)
+            return espera if restante is None else max(0.0, min(espera, restante))
+
         reintentador = Retrying(
-            stop=stop_after_attempt(self.max_retries + 1),
-            wait=wait_exponential(multiplier=self.backoff_seconds, max=_BACKOFF_MAXIMO),
+            stop=stop_after_attempt(self.max_retries + 1) | (lambda _estado: budget.exhausted()),
+            wait=esperar,
             retry=retry_if_exception(_es_transitorio),
             sleep=self._sleep,
             reraise=True,
@@ -195,13 +237,23 @@ class OpenAICompatibleProvider(LLMProvider):
             ),
         )
         try:
-            return reintentador(funcion)
+            return reintentador(self._con_tope, funcion)
+        except _TopeDeTiempoError as exc:
+            raise LLMUnavailableError(
+                "El servicio de respuestas tardó demasiado en contestar. Intenta de nuevo.",
+                detail=f"{operacion}: {exc}",
+            ) from exc
         except openai.OpenAIError as exc:
             raise self._error(exc, operacion) from exc
 
     def _error(self, exc: openai.OpenAIError, operacion: str) -> LLMError:
-        """`LLMQuotaError` ante un 429 (cupo o límite); `LLMError` ante todo lo demás."""
-        clase = LLMQuotaError if isinstance(exc, openai.RateLimitError) else LLMError
+        """`LLMQuotaError` ante un 429; `LLMUnavailableError` ante timeout, 5xx o falta de
+        conexión (los dos activan el respaldo); `LLMError` ante lo demás (clave, modelo)."""
+        clase: type[LLMError] = LLMError
+        if isinstance(exc, openai.RateLimitError):
+            clase = LLMQuotaError
+        elif isinstance(exc, openai.InternalServerError | openai.APIConnectionError):
+            clase = LLMUnavailableError  # APITimeoutError hereda de APIConnectionError
         return clase(self._mensaje_amigable(exc), detail=f"{operacion}: {exc!r}")
 
     def _parametros(self, messages: Sequence[Message], max_tokens: int | None) -> dict[str, Any]:
@@ -221,7 +273,9 @@ class OpenAICompatibleProvider(LLMProvider):
         inicio = time.perf_counter()
         respuesta = self._llamar(
             "completar",
-            lambda: self.client.chat.completions.create(**self._parametros(messages, max_tokens)),
+            lambda tope: self.client.chat.completions.create(
+                **self._parametros(messages, max_tokens), timeout=tope
+            ),
         )
         uso = respuesta.usage
         eleccion = respuesta.choices[0]
@@ -239,8 +293,9 @@ class OpenAICompatibleProvider(LLMProvider):
         # Solo se reintenta abrir el stream; una vez que llegan tokens no se repite.
         flujo = self._llamar(
             "streaming",
-            lambda: self.client.chat.completions.create(
+            lambda tope: self.client.chat.completions.create(
                 **self._parametros(messages, max_tokens),
+                timeout=tope,
                 stream=True,
                 stream_options={"include_usage": True},
             ),
@@ -275,7 +330,9 @@ class OpenAICompatibleProvider(LLMProvider):
         return LLMStream(fragmentos(), cierre)
 
     def list_models(self) -> list[str]:
-        modelos = self._llamar("listar modelos", lambda: list(self.client.models.list()))
+        modelos = self._llamar(
+            "listar modelos", lambda tope: list(self.client.models.list(timeout=tope))
+        )
         # Gemini antepone "models/" a los ids; se quita para compararlos con LLM_MODEL.
         return sorted(m.id.removeprefix("models/") for m in modelos)
 
@@ -368,13 +425,14 @@ class UnconfiguredLLMProvider(LLMProvider):
 
 
 class FallbackLLMProvider(LLMProvider):
-    """Decorator sobre `LLMProvider`: si el modelo principal responde 429 (cupo diario
-    agotado o límite por minuto tras los reintentos), repite la misma llamada con el
-    modelo de respaldo (`LLM_FALLBACK_MODEL`).
+    """Decorator sobre `LLMProvider`: si el modelo principal falla por cupo o límite
+    (429, `LLMQuotaError`) o por lentitud o caída (timeout, 5xx, sin conexión,
+    `LLMUnavailableError`) tras su reintento, repite la llamada con el modelo de
+    respaldo (`LLM_FALLBACK_MODEL`), siempre que quede plazo en el turno.
 
-    Solo actúa ante `LLMQuotaError`. Una clave inválida, un modelo inexistente o un
-    timeout se propagan sin respaldo: cambiar de modelo no los arregla y ocultaría un
-    error de configuración. Qué modelo respondió queda en `LLMResponse.model` y en el log.
+    Una clave inválida o un modelo inexistente se propagan sin respaldo: cambiar de
+    modelo no los arregla y ocultaría un error de configuración. Qué modelo respondió
+    queda en `LLMResponse.model` y en el log.
     """
 
     def __init__(self, primary: LLMProvider, fallback: LLMProvider) -> None:
@@ -383,9 +441,11 @@ class FallbackLLMProvider(LLMProvider):
         self.name = primary.name
         self.model = primary.model
 
-    def _avisar(self, exc: LLMQuotaError) -> None:
+    def _avisar(self, exc: LLMError) -> None:
+        if budget.exhausted():
+            raise budget.budget_exceeded_error("sin plazo para el modelo de respaldo") from exc
         logger.warning(
-            "Cupo agotado en el modelo principal; responde el de respaldo",
+            "Falla el modelo principal; responde el de respaldo",
             extra={
                 "modelo": self.primary.model,
                 "respaldo": self.fallback.model,
@@ -398,7 +458,7 @@ class FallbackLLMProvider(LLMProvider):
     ) -> LLMResponse:
         try:
             return self.primary.complete(messages, max_tokens=max_tokens)
-        except LLMQuotaError as exc:
+        except (LLMQuotaError, LLMUnavailableError) as exc:
             self._avisar(exc)
             return self.fallback.complete(messages, max_tokens=max_tokens)
 
@@ -406,7 +466,7 @@ class FallbackLLMProvider(LLMProvider):
         """El respaldo aplica al abrir el flujo; un error a mitad del flujo se propaga."""
         try:
             return self.primary.stream(messages, max_tokens=max_tokens)
-        except LLMQuotaError as exc:
+        except (LLMQuotaError, LLMUnavailableError) as exc:
             self._avisar(exc)
             return self.fallback.stream(messages, max_tokens=max_tokens)
 

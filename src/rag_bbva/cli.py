@@ -2,8 +2,8 @@
 
 Uso: `python -m rag_bbva.cli <comando>` o `rag-bbva <comando>`.
 Comandos disponibles: `version`, `scrape` (M2), `clean` (M3), `chunk` (M4), `ingest`
-(M5), `search` (M6), `llm-check` (M7), `history` (M8) y `serve` (M9, la API). Los de
-las etapas siguientes (chat, metrics) se agregan en sus módulos respectivos.
+(M5), `search` (M6), `llm-check` (M7), `history` (M8), `serve` (M9, la API), `ui` y
+`chat` (M10). `metrics` se agrega en M11.
 """
 
 import json
@@ -160,6 +160,9 @@ def _resumen_limpieza(reporte: CleanReport) -> str:
         f"{reporte.lang_mismatch_pairs} · sin señal (lang de <html lang>): "
         f"{reporte.lang_fallback_by_template}",
         f"Fugas de boilerplate: {reporte.leaks.total} {reporte.leaks.by_pattern}",
+        f"Tablas: {reporte.tables.tables} en {reporte.tables.documents_with_tables} documentos "
+        f"· filas: {reporte.tables.rows} · filas desalineadas: {reporte.tables.misaligned_rows} "
+        f"· filas mal formadas: {reporte.tables.malformed_rows}",
     ]
     return "\n".join(lineas)
 
@@ -438,6 +441,92 @@ def serve(
     )
     # log_config=None: uvicorn usa el logging JSON del proyecto (configure_logging).
     uvicorn.run(create_app(settings), host=direccion, port=puerto, log_config=None)
+
+
+@app.command()
+def ui(
+    host: Annotated[
+        str | None, typer.Option("--host", help="Dirección (default: UI_HOST).")
+    ] = None,
+    port: Annotated[
+        int | None, typer.Option("--port", min=1, max=65535, help="Puerto (default: UI_PORT).")
+    ] = None,
+    api_url: Annotated[
+        str | None, typer.Option("--api-url", help="URL de la API (default: API_BASE_URL).")
+    ] = None,
+) -> None:
+    """Levanta la interfaz web (Streamlit). Necesita la API corriendo (`serve`)."""
+    import os
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    import rag_bbva.ui
+
+    settings = get_settings()
+    direccion, puerto = host or settings.ui_host, port or settings.ui_port
+    api = api_url or settings.api_base_url
+    app_ui = Path(rag_bbva.ui.__file__).parent / "app.py"
+    typer.echo(f"Interfaz en http://{direccion}:{puerto} · API: {api}")
+    comando = [
+        sys.executable, "-m", "streamlit", "run", str(app_ui),
+        "--server.address", direccion, "--server.port", str(puerto),
+        "--server.headless", "true", "--browser.gatherUsageStats", "false",
+    ]  # fmt: skip
+    resultado = subprocess.run(comando, env={**os.environ, "API_BASE_URL": api}, check=False)
+    raise typer.Exit(code=resultado.returncode)
+
+
+_SALIR = {"salir", "exit", "quit", ":q"}
+
+
+@app.command()
+def chat(
+    conversation_id: Annotated[
+        str | None,
+        typer.Option("--conversation-id", help="Continúa una conversación existente."),
+    ] = None,
+) -> None:
+    """Chat de respaldo en la terminal, directo sobre RAGService (sin API ni UI).
+    Escriba `salir` o deje la línea vacía para terminar."""
+    from rag_bbva.exceptions import RagBbvaError
+    from rag_bbva.ui.render import AVISO
+
+    fabrica = ComponentFactory(get_settings())
+    try:
+        servicio = fabrica.create_rag_service()
+        if conversation_id:
+            conversacion, mensajes = servicio.get_conversation(conversation_id)
+            typer.echo(
+                f"Continuando «{conversacion.title or '(sin título)'}» "
+                f"({len(mensajes)} mensajes previos)."
+            )
+        typer.echo("Cargando modelos…")
+        servicio.warm_up()
+    except (ConfigurationError, HistoryError) as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"Asistente de información pública. {AVISO} Escriba `salir` para terminar.")
+    while True:
+        try:
+            pregunta = typer.prompt("Tú", default="", show_default=False).strip()
+        except (EOFError, typer.Abort):
+            break
+        if not pregunta or pregunta.lower() in _SALIR:
+            break
+        try:
+            r = servicio.ask(conversation_id, pregunta)
+        except RagBbvaError as exc:
+            typer.echo(f"No se pudo responder: {exc.message}", err=True)
+            continue
+        conversation_id = r.conversation_id
+        if r.no_answer:
+            typer.echo("[Sin información suficiente]")
+        typer.echo(f"Asistente: {r.answer}")
+        for s in r.sources:
+            typer.echo(f"  [{s.n}] {s.title or s.url} — {s.url}")
+    if conversation_id:
+        typer.echo(f"Conversación: {conversation_id}")
 
 
 if __name__ == "__main__":

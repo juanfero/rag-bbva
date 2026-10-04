@@ -55,6 +55,25 @@ class MessageNotFoundError(HistoryError):
     """El `message_id` pedido no existe en el historial."""
 
 
+class ApiClientError(RagBbvaError):
+    """La interfaz (M10) no pudo completar una petición a la API: error HTTP, timeout o
+    conexión. `message` es apto para mostrar al usuario; `status` es el código HTTP
+    (`None` si no hubo respuesta)."""
+
+    def __init__(self, message: str, *, status: int | None = None, detail: str | None = None):
+        super().__init__(message, detail=detail)
+        self.status = status
+
+
 class LLMQuotaError(LLMError):
     """El proveedor del LLM respondió 429: cupo diario agotado o límite por minuto tras
     agotar los reintentos. Es el único error que activa el modelo de respaldo (M9)."""
+
+
+class LLMUnavailableError(LLMError):
+    """El modelo no respondió a tiempo, devolvió 5xx o no hubo conexión, tras los
+    reintentos. Activa el modelo de respaldo, igual que `LLMQuotaError` (M10)."""
+
+
+class LLMBudgetExceededError(LLMError):
+    """Se agotó el presupuesto de tiempo del turno (`LLM_TURN_BUDGET_SECONDS`)."""

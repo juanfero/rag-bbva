@@ -243,7 +243,9 @@ def test_archivo_de_calibracion_del_repo() -> None:
     preguntas = load_questions(Path("eval/calibration.jsonl"))
 
     respondibles = [p for p in preguntas if p.answerable]
-    assert len(respondibles) == 15 and len(preguntas) == 30
+    # 15 + 2 reetiquetadas en M10 (n10 y n13, con su motivo en `note`).
+    assert len(respondibles) == 17 and len(preguntas) == 30
+    assert {p.id for p in preguntas if p.note} == {"n10", "n13"}
     assert all(p.expected_url and p.expected_url.startswith(B) for p in respondibles)
     categorias = {p.category for p in preguntas if not p.answerable}
     assert {"fuera_de_dominio", "otro_banco", "prensa_L06", "simulador_L09"} <= categorias
@@ -286,3 +288,20 @@ def test_cross_encoder_real_prefiere_el_pasaje_relevante(
     assert resultado[-1].rerank_score is not None and resultado[-1].rerank_score < 1.6
     assert [c.rerank_rank for c in resultado] == [1, 2, 3]
     assert np.isfinite([c.rerank_score for c in resultado]).all()
+
+
+# Huella de las etiquetas de eval/calibration.jsonl, congeladas al cerrar M10 (M10.md §10.8).
+# No se reetiqueta más: la validación independiente es el golden set de M13.
+HUELLA_ETIQUETAS_CALIBRACION = "69152ac2820687d0d7ab666d7044513871b5e4110cce62dce4134c320074145a"
+
+
+def test_etiquetas_de_calibracion_congeladas() -> None:
+    """Falla si cambia alguna pregunta, etiqueta, categoría o URL esperada."""
+    import hashlib
+
+    preguntas = load_questions(Path("eval/calibration.jsonl"))
+    contenido = json.dumps(
+        [[p.id, p.question, p.answerable, p.category, p.expected_url] for p in preguntas],
+        ensure_ascii=False,
+    )
+    assert hashlib.sha256(contenido.encode()).hexdigest() == HUELLA_ETIQUETAS_CALIBRACION

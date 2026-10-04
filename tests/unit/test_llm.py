@@ -379,7 +379,7 @@ def test_prompt_de_respuesta_snapshot() -> None:
     )
 
     assert render == SNAPSHOT.read_text("utf-8")
-    assert PROMPT_VERSION == "2026-10-03.2"
+    assert PROMPT_VERSION == "2026-10-03.3"
 
 
 def test_prompt_neutraliza_delimitadores_inyectados() -> None:
@@ -623,10 +623,11 @@ def test_sin_error_de_cupo_no_se_usa_el_respaldo() -> None:
     [
         LLMError("La clave GEMINI_API_KEY no es válida"),
         LLMError("El modelo configurado (LLM_MODEL) no existe"),
-        LLMError("El servicio de respuestas tardó demasiado"),
     ],
 )
-def test_errores_que_no_son_de_cupo_no_activan_el_respaldo(error: LLMError) -> None:
+def test_errores_de_clave_o_modelo_no_activan_el_respaldo(error: LLMError) -> None:
+    """M10: el timeout y los 5xx sí activan el respaldo (LLMUnavailableError, ver
+    test_latencia.py); la clave y el modelo inexistente no."""
     respaldo = _Proveedor("gemini-3.1-flash-lite")
     llm = FallbackLLMProvider(_Proveedor("gemini-2.5-flash", error), respaldo)
     with pytest.raises(LLMError) as capturado:
@@ -696,3 +697,13 @@ def test_fabrica_sin_respaldo_si_esta_vacio_o_es_el_mismo_modelo(
     for valor in ("", "gemini-2.5-flash"):
         clean_env.setenv("LLM_FALLBACK_MODEL", valor)
         assert isinstance(ComponentFactory(Settings(_env_file=None)).create_llm(), GeminiProvider)
+
+
+def test_prompt_pide_segmento_y_no_inventar_vigencia() -> None:
+    """M10: aclarar personas/negocios/empresas según la sección; no decir "reciente" sin fecha."""
+    assert "personas, negocios (pymes y empresas) o empresas" in SYSTEM_PROMPT
+    assert "No digas que algo es reciente, actual, nuevo o el último" in SYSTEM_PROMPT
+    contexto = build_answer_messages(
+        "x", [_cand(1, f"{B}/negocios/cdt").model_copy(update={"section": "negocios"})]
+    )
+    assert "| sección: negocios |" in contexto[1]["content"]  # la sección llega al LLM

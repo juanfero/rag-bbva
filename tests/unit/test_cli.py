@@ -400,3 +400,96 @@ def test_cli_serve_usa_api_host_y_api_port_o_las_opciones(
     assert con_opciones.exit_code == 0, con_opciones.output
     assert [(c["host"], c["port"]) for c in llamadas] == [("127.0.0.1", 8123), ("0.0.0.0", 9000)]
     assert all(isinstance(c["app"], FastAPI) and c["log_config"] is None for c in llamadas)
+
+
+def _servicio_falso(monkeypatch: pytest.MonkeyPatch):  # type: ignore[no-untyped-def]
+    """RAGService con dobles (sin modelos, Qdrant ni LLM) para el comando `chat`."""
+    from rag_bbva.indexing.factory import ComponentFactory
+    from rag_bbva.memory.repository import InMemoryConversationRepository
+
+    from .fakes_rag import LLMGuionado, RetrieverFalso, servicio
+
+    repo, llm = InMemoryConversationRepository(), LLMGuionado()
+    rag = servicio(repo=repo, llm=llm, retriever=RetrieverFalso())
+    monkeypatch.setattr(ComponentFactory, "create_rag_service", lambda self, **kw: rag)
+    return rag, repo, llm
+
+
+def test_cli_chat_conversa_con_memoria_y_muestra_fuentes(
+    clean_env: pytest.MonkeyPatch, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from .fakes_rag import REESCRITA
+
+    _rag, repo, llm = _servicio_falso(monkeypatch)
+
+    result = runner.invoke(
+        app,
+        ["chat"],
+        input="¿Qué es el crédito de vivienda?\n¿y cuáles son los requisitos?\nsalir\n",
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "No es un canal oficial" in result.stdout
+    assert result.stdout.count("Asistente: Necesita ser mayor de edad [1]") == 2
+    assert (
+        "  [1] Requisitos — https://www.bancolombia.com/personas/creditos/vivienda/requisitos"
+        in result.stdout
+    )
+    (conversacion,) = repo.list_conversations()
+    assert f"Conversación: {conversacion.id}" in result.stdout
+    assert len(repo.get_messages(conversacion.id)) == 4
+    assert llm.llamadas_de_reformulacion()  # la segunda pregunta usó el historial
+    assert REESCRITA in llm.llamadas_de_respuesta()[-1][1]["content"]
+
+
+def test_cli_chat_continua_por_id_y_sigue_tras_un_error(
+    clean_env: pytest.MonkeyPatch, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    rag, repo, llm = _servicio_falso(monkeypatch)
+    cid = rag.ask(None, "¿Qué es el crédito de vivienda?").conversation_id
+    llm.falla_respuesta = True
+
+    result = runner.invoke(app, ["chat", "--conversation-id", cid], input="¿y los requisitos?\n\n")
+
+    assert result.exit_code == 0, result.output
+    assert "Continuando «¿Qué es el crédito de vivienda?» (2 mensajes previos)." in result.stdout
+    assert "No se pudo responder: Se agotó el cupo diario del LLM" in result.output
+    assert len(repo.get_messages(cid)) == 2  # turno atómico
+
+
+def test_cli_chat_id_inexistente_sale_con_1(
+    clean_env: pytest.MonkeyPatch, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _servicio_falso(monkeypatch)
+    result = runner.invoke(app, ["chat", "--conversation-id", "no-existe"], input="salir\n")
+    assert result.exit_code == 1
+    assert "La conversación no existe" in result.output
+
+
+def test_cli_ui_lanza_streamlit_con_host_puerto_y_api(
+    clean_env: pytest.MonkeyPatch, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import subprocess
+
+    llamadas: list[dict[str, object]] = []
+
+    def falso(comando: list[str], env: dict[str, str], check: bool) -> object:
+        llamadas.append({"comando": comando, "api": env["API_BASE_URL"]})
+        return subprocess.CompletedProcess(comando, 0)
+
+    monkeypatch.setattr(subprocess, "run", falso)
+    clean_env.setenv("UI_PORT", "8600")
+
+    por_defecto = runner.invoke(app, ["ui"])
+    con_opciones = runner.invoke(
+        app, ["ui", "--port", "8700", "--api-url", "http://127.0.0.1:8010"]
+    )
+
+    assert por_defecto.exit_code == 0 and con_opciones.exit_code == 0
+    comando = llamadas[0]["comando"]
+    assert comando[1:4] == ["-m", "streamlit", "run"] and comando[4].endswith("ui/app.py")
+    assert comando[comando.index("--server.port") + 1] == "8600"
+    assert comando[comando.index("--server.address") + 1] == "127.0.0.1"
+    assert llamadas[0]["api"] == "http://127.0.0.1:8000"
+    assert llamadas[1]["api"] == "http://127.0.0.1:8010"
+    assert "http://127.0.0.1:8600" in por_defecto.stdout

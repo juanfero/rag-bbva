@@ -17,6 +17,8 @@ from collections.abc import Callable
 
 from pydantic import BaseModel
 
+from rag_bbva.exceptions import LLMBudgetExceededError, LLMError
+from rag_bbva.llm import budget
 from rag_bbva.llm.generator import AnswerGenerator
 from rag_bbva.llm.rewriter import QueryRewriter
 from rag_bbva.memory.models import Conversation, Feedback, Message, MessageMetrics
@@ -84,6 +86,7 @@ class RAGService:
         rewriter: QueryRewriter,
         generator: AnswerGenerator,
         history_window_n: int,
+        turn_budget_seconds: float | None = None,
         clock: Callable[[], float] = time.perf_counter,
     ) -> None:
         self.repository = repository
@@ -91,6 +94,7 @@ class RAGService:
         self.rewriter = rewriter
         self.generator = generator
         self.history_window_n = history_window_n
+        self.turn_budget_seconds = turn_budget_seconds
         self._clock = clock
 
     def warm_up(self) -> None:
@@ -98,6 +102,20 @@ class RAGService:
         self.retriever.warm_up()
 
     def ask(self, conversation_id: str | None, question: str) -> ChatResult:
+        """Responde una pregunta dentro del presupuesto de tiempo del turno.
+
+        Si el LLM falla porque se agotó `LLM_TURN_BUDGET_SECONDS`, se lanza
+        `LLMBudgetExceededError` ("el servicio está lento") y no se guarda nada.
+        """
+        with budget.turn_budget(self.turn_budget_seconds):
+            try:
+                return self._ask(conversation_id, question)
+            except LLMError as exc:
+                if budget.exhausted() and not isinstance(exc, LLMBudgetExceededError):
+                    raise budget.budget_exceeded_error(str(exc)) from exc
+                raise
+
+    def _ask(self, conversation_id: str | None, question: str) -> ChatResult:
         """Responde una pregunta dentro de una conversación.
 
         - `conversation_id=None` crea una conversación nueva al guardar el turno.

@@ -148,7 +148,8 @@ def test_abstencion_tambien_por_encima_del_umbral() -> None:
         ("Respuesta normal [1].", "Respuesta normal [1].", False),
         (f"{ABSTENTION_MARKER}", NO_ANSWER_MESSAGE, True),
         (f"  {ABSTENTION_MARKER}\n\nNo encontré.", "No encontré.", True),
-        (f"No encontré. {ABSTENTION_MARKER}", "No encontré.", True),
+        # M10: la marca a mitad o al final de una respuesta parcial no es abstención.
+        (f"No encontré. {ABSTENTION_MARKER}", "No encontré.", False),
     ],
 )
 def test_strip_abstention(texto: str, esperado: str, abstenida: bool) -> None:
@@ -204,3 +205,19 @@ def test_servicio_guarda_la_abstencion_como_no_answer() -> None:
     assert r.no_answer and r.model == "fake-model"
     assert ABSTENTION_MARKER not in r.answer
     assert repo.get_messages(r.conversation_id)[1].metrics.no_answer is True
+
+
+def test_respuesta_parcial_con_marca_al_final_no_es_no_answer() -> None:
+    """Caso real de M10: costos con 3 citas y, al final, la marca antes de "No encontré
+    información… sobre otros costos". Respondió: no debe contar como no_answer."""
+    llm = FakeLLMProvider(
+        "Seguro de vida deudor: la prima se cobra con el canon [1].\n\n"
+        f"{ABSTENTION_MARKER} No encontré información sobre otros costos adicionales."
+    )
+    r = AnswerGenerator(llm).generate(
+        "¿y qué costos adicionales tiene?", _recuperacion(True, False)
+    )
+    assert not r.no_answer and not r.abstained
+    assert ABSTENTION_MARKER not in r.text
+    assert r.text.endswith("No encontré información sobre otros costos adicionales.")
+    assert [s.url for s in r.sources] == [CANDIDATOS[0].url]

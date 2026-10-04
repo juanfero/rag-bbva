@@ -22,7 +22,7 @@ Prueba técnica de ML/AI Engineer: un sistema RAG (*Retrieval-Augmented Generati
 | M7 | Generación con LLM: Gemini 2.5 Flash (Grok como alternativa), prompts versionados, citas, reformulación | ✅ | `m07` |
 | M8 | Memoria conversacional: historial en SQLite (Repository), últimos N mensajes, métricas por mensaje | ✅ | `m08` |
 | M9 | Servicio RAG + API: fachada `RAGService`, FastAPI, turno atómico, umbral doble, LLM de respaldo, `/health` | ✅ | `m09` |
-| M10 | Interfaz conversacional | ⏳ | — |
+| M10 | Interfaz conversacional: Streamlit sobre la API, fuentes, 👍/👎, modo detalle, CLI `chat`; tablas corregidas y latencia acotada | ✅ | `m10` |
 | M11 | Analítica del historial | ⏳ | — |
 | M12 | Dockerización completa | ⏳ | — |
 | M13 | Evaluación de calidad | ⏳ | — |
@@ -127,12 +127,13 @@ Corridas reales de referencia: 50 páginas en [M02](docs/modulos/M02.md#6-eviden
 ```bash
 python -m rag_bbva.cli clean
 ```
-- `documents.jsonl`: un documento por página, con `doc_id`, `url`, `title`, `section`, `breadcrumbs`, `text` (markdown: títulos `#`, listas y tablas simples), `html_lang` (lo que declara la página), `lang` (idioma detectado en el texto), `lang_source`, `lastmod`, `published_at` (solo si la página lo trae en metadatos), `scraped_at`, `content_hash`, `n_chars`, `template` y `extraction`.
-- `clean_report.json`: procesados, conservados, descartados por motivo (con la lista de URLs), distribución de longitudes, documentos por sección, plantilla, método de extracción e idioma, y el chequeo de **fugas de boilerplate**.
+- `documents.jsonl`: un documento por página, con `doc_id`, `url`, `title`, `section`, `breadcrumbs`, `text` (markdown: títulos `#`, listas y tablas como filas `| a | b |`), `html_lang` (lo que declara la página), `lang` (idioma detectado en el texto), `lang_source`, `lastmod`, `published_at` (solo si la página lo trae en metadatos), `scraped_at`, `content_hash`, `n_chars`, `template` y `extraction`.
+- `clean_report.json`: procesados, conservados, descartados por motivo (con la lista de URLs), distribución de longitudes, documentos por sección, plantilla, método de extracción e idioma, el chequeo de **fugas de boilerplate** y el de **tablas** (filas con un número de celdas distinto al del encabezado y filas mal formadas; meta 0, M10).
 
 Cómo limpia (pasos en [`processing/steps.py`](src/rag_bbva/processing/steps.py)):
 1. Quita del HTML la navegación, la cabecera y el pie, los menús de portlet con `${…}`, las cajas de error `.lrpError`, los iconos, el banner de cookies, el bloque rotativo de contenido relacionado (L-08), los bloques repetidos de venta cruzada ("Descubre otros canales…", "Si te gustó este producto…") y rótulos de interfaz como "Link copiado en porta papeles".
 2. Toma el contenedor de cada plantilla del sitio (`main` → `#main-content` → `[role=main]`). Usa trafilatura si conserva al menos el 90 % del vocabulario del contenedor y el orden de sus bloques; si no, convierte el contenedor a markdown por selector.
+   - **Tablas (M10):** si el contenedor tiene tablas, se usa siempre el selector (`selector_tablas`). Cada tabla de datos sale como filas markdown que conservan **todas** las celdas, incluidas las vecinas con el mismo valor ("8,75% | 8,75%"). Las celdas con `rowspan`/`colspan` se repiten en cada fila y columna que ocupan, así ningún precio queda bajo el plan vecino. Antes, la tabla de tasas del CDT perdía un valor y el tarifario de cuentas corría columnas.
 3. Normaliza Unicode y espacios, y detecta el idioma.
 4. Descarta los textos de menos de 200 caracteres y los duplicados (soft-404), registrando el motivo.
 
@@ -145,7 +146,7 @@ python -m rag_bbva.cli chunk --strategy fixed_size    # línea base
 ```
 - **`heading_aware`** (por defecto):
   - Divide por los títulos markdown de la limpieza y agrupa secciones pequeñas consecutivas hasta `CHUNK_SIZE`=800 caracteres.
-  - Parte por tamaño, con `CHUNK_OVERLAP`=120 y sin cortar palabras, solo las secciones que no caben.
+  - Parte por tamaño, con `CHUNK_OVERLAP`=120 y sin cortar palabras, solo las secciones que no caben. Las tablas se parten **solo entre filas** y cada parte repite la fila de encabezado (M10).
   - Cada chunk lleva su `heading_path` ("Título > Sección > Subsección").
 - **`fixed_size`:** parte el texto completo por tamaño.
 - **Qué guarda cada chunk:** `chunk_id` determinista, `doc_id`, `url`, `title`, `section`, `heading_path`, `lang`, `position`, `n_chars`, `text` (para citar) y `embedding_text` (encabezado con título, sección y ruta + texto: lo que se embebe).
@@ -190,8 +191,9 @@ Cómo funciona la búsqueda:
 **Umbral de "sin información suficiente"** (`RERANK_MIN_SCORE=1.6`). Si el #1 no lo alcanza, el asistente debe decir que no tiene información en vez de inventar. Desde M9 es un **umbral doble** ([ADR-016](docs/02_DECISIONES.md)):
 - Por debajo de `RERANK_HARD_MIN_SCORE=-3.0` responde "sin información" **sin llamar al LLM** (fuera de dominio claro).
 - Entre −3,0 y 1,6 (**zona gris**) el LLM recibe el contexto y responde o se abstiene. Si se abstiene, empieza con la marca `[SIN_INFO]`, que el sistema quita y registra como `no_answer`. Lo mismo vale por encima del umbral, p. ej. si preguntan por otro banco.
-- Sobre las 30 preguntas de calibración: 8 caen en la zona gris (8 llamadas extra al LLM) y las decisiones correctas siguen siendo 27/30 ([bitácora M09](docs/modulos/M09.md#10-revisión-ajustes-y-cierre)).
-- Se calibró con `eval/calibration.jsonl`: 15 preguntas que el sitio responde y 15 que no (fuera de dominio, otros bancos, prensa, simuladores). Acierta 27 de 30, **medido en la misma muestra con la que se eligió el umbral**: es un resultado dentro de la muestra y probablemente optimista. M13 lo valida con un golden set separado.
+- Sobre las 30 preguntas de calibración, con los datos y el prompt finales de M10: 8 caen en la zona gris (8 llamadas extra al LLM) y las decisiones correctas son **29/30** (27/30 en M9 con las etiquetas originales; [bitácora M09](docs/modulos/M09.md#10-revisión-ajustes-y-cierre), [M10](docs/modulos/M10.md#10-ajustes-derivados-de-m9)).
+- ⚠️ **Ese 29/30 es optimista:** las etiquetas de n10 y n13 se corrigieron **después de ver los resultados**. El motivo está documentado (sus datos aparecen literalmente en el sitio), pero igual es un ajuste a posteriori sobre la misma muestra. La validación independiente es el golden set de M13. Las etiquetas quedaron **congeladas** al cerrar M10 (una prueba fija su huella).
+- Se calibró con `eval/calibration.jsonl`: 15 preguntas que el sitio responde y 15 que no (fuera de dominio, otros bancos, prensa, simuladores). Acertaba 27 de 30, **medido en la misma muestra con la que se eligió el umbral**: es un resultado dentro de la muestra y probablemente optimista. En M10, después de ver los resultados, se corrigieron 2 etiquetas (n10 y n13: sus datos sí están en el sitio, verificados literalmente); con ellas el umbral único acierta 25/30 y no se cambió el umbral. M13 lo valida con un golden set separado.
 - Va sobre el score del reranker y **no sobre el coseno**: los cosenos de e5 están comprimidos (≈ 0,79–0,92 para todo). El mejor umbral posible sobre el coseno acierta 24 de 30 y queda pegado a los datos (margen 0,001).
 - Sin reranker (`--no-rerank` o `RERANKER_ENABLED=false`) no se aplica umbral.
 - **Latencia en CPU:** retrieval ~19 ms; rerank ~0,9 s (p50).
@@ -282,7 +284,48 @@ Respuesta de `/chat` (abreviada):
 
 ## Uso de la interfaz conversacional
 
-🚧 **La interfaz web se completa en M10** (Streamlit + CLI de respaldo). Hoy se conversa por la API REST de M9 (`curl` o http://127.0.0.1:8000/docs, ver arriba).
+Interfaz web en **Streamlit** (M10) que habla con el sistema **solo por HTTP**, a través de la API de M9 (`ApiClient`); no importa el núcleo, y una prueba lo verifica.
+
+**Levantarla** (Qdrant arriba y `GEMINI_API_KEY` en `.env`), en dos terminales:
+```bash
+python -m rag_bbva.cli serve                 # 1) API en http://127.0.0.1:8000
+python -m rag_bbva.cli ui                    # 2) interfaz en http://127.0.0.1:8501
+# Si el 8000 está ocupado:
+python -m rag_bbva.cli serve --port 8010
+python -m rag_bbva.cli ui --api-url http://127.0.0.1:8010
+```
+`UI_HOST`, `UI_PORT`, `API_BASE_URL` y `UI_REQUEST_TIMEOUT_SECONDS` (60 s) se configuran en `.env`.
+
+**Qué ofrece**
+- **Chat** con `st.chat_message` y un indicador "Buscando en el sitio de Bancolombia…" mientras responde.
+- **Citas como enlaces:** cada `[n]` lleva a su página. Las fuentes (título + URL) van en un desplegable.
+- **"Sin información suficiente"** con un aviso amarillo propio, tanto cuando el umbral corta como cuando el LLM se abstiene (ADR-016).
+- **👍 / 👎** por respuesta (`POST /messages/{id}/feedback`); se deshabilitan después de votar, también al retomar una conversación ya valorada.
+- **Barra lateral:**
+  - nueva conversación y el `conversation_id` actual, visible y copiable;
+  - lista para **retomar** conversaciones (título + fecha y hora UTC) y retomar **por ID**;
+  - **estado del servicio** según `/health`: búsqueda (Qdrant), historial (SQLite) y LLM con su modelo de respaldo.
+- **Modo detalle** (interruptor), para la demo: pregunta reformulada, zona gris, tiempos por etapa, tokens y modelo que respondió.
+- **Errores amigables:** 503 (LLM sin cupo o lento, Qdrant caído), 422 (pregunta vacía o de más de 1000 caracteres), 404 (ID inexistente: la siguiente pregunta abre una conversación nueva), timeout y API caída, que indica cómo levantarla. Una pregunta que falla no se guarda (turno atómico) y se cita en el error para reintentarla.
+- **Aviso visible:** *"Prototipo de prueba técnica. No es un canal oficial de Bancolombia."* Sin logos ni marca: Bancolombia aparece solo como fuente.
+
+**Capturas** (tomadas por Juan Felipe el 2026-10-03 sobre los datos finales de M10; guion en la [bitácora M10](docs/modulos/M10.md#6-evidencia-manual)):
+
+| | |
+|---|---|
+| ![Conversación con citas](docs/img/m10_01_conversacion_citas.png) Conversación de vivienda: citas [n] enlazadas, fuentes, 👍/👎, estado del servicio y lista para retomar | ![Segmento y tarifario](docs/img/m10_02_segmento_y_tarifario.png) El CDT se aclara "dirigido a pymes, empresas o corporaciones"; el retiro en sucursal con Plan Cero ($11.490) sale de la tabla corregida del tarifario |
+| ![Sin información](docs/img/m10_03_sin_informacion.png) "4 por mil" respondido y "receta de arepas" con el aviso de "sin información suficiente" | ![Otra entidad](docs/img/m10_04_otra_entidad.png) Pregunta sobre el Banco de Bogotá: el asistente se abstiene y ofrece el equivalente de Bancolombia |
+| ![API caída](docs/img/m10_05_api_caida.png) API detenida: estado en rojo y lista sin cargar, con la instrucción para levantarla | ![ID pegado](docs/img/m10_06_retomar_id_pegado.png) ID de la conversación pegado en "Retomar por ID" |
+| ![Conversación retomada](docs/img/m10_07_conversacion_retomada.png) Conversación retomada por ID, con su historial completo | ![Valoración](docs/img/m10_08_feedback_y_nueva_pregunta.png) Botón 👍 ("Respuesta útil") y una pregunta nueva en la conversación retomada |
+
+No hay captura del **modo detalle activo**: está verificado por las pruebas de la interfaz (`test_modo_detalle`) y por el guion de la bitácora (paso A3).
+
+**CLI de respaldo**, sin API ni navegador, directo sobre `RAGService`:
+```bash
+python -m rag_bbva.cli chat                          # conversación nueva
+python -m rag_bbva.cli chat --conversation-id <ID>   # continuar una existente
+```
+Muestra la respuesta, las fuentes y, al salir (`salir` o línea vacía), el ID de la conversación.
 
 ---
 
@@ -328,7 +371,7 @@ El caso exige al menos 3. Previstos en la [visión general §6](docs/00_VISION_G
 | Orquestación RAG | Código propio, sin LangChain | Patrones visibles y testeables ([ADR-001](docs/02_DECISIONES.md)) | ✅ en uso (M9) |
 | Historial | SQLite + SQLAlchemy 2 | Cero infraestructura extra, persistente ([ADR-004](docs/02_DECISIONES.md)) | ✅ en uso (M8) |
 | API | FastAPI + uvicorn | Validación con Pydantic, OpenAPI automático (`/docs`), `TestClient` | ✅ en uso (M9) |
-| UI | Streamlit | Chat y panel en pocas líneas | ⏳ M10 |
+| UI | Streamlit | Chat en pocas líneas y testeable sin navegador (`AppTest`); consume la API por HTTP | ✅ en uso (M10) |
 | Contenedores | Docker + Compose | Requisito del caso | ✅ imagen base (M0) · ⏳ completo en M12 |
 
 ---
@@ -371,15 +414,16 @@ Registro completo: [`docs/02_DECISIONES.md`](docs/02_DECISIONES.md) (ADR) y supu
 | L-03 | **Contenido dinámico no capturado:** sin renderizar JS no se obtienen el banner de cookies, carruseles ni listas de enlaces dinámicas; su contenido llega por las páginas enlazadas | ADR-009 |
 | L-04 | **Sin PDFs:** quedan fuera del alcance y además `robots.txt` los prohíbe (`/*pdf*`) | S-03 |
 | L-05 | **Foto del sitio:** el índice refleja el sitio en la fecha del scraping; la demo usará un snapshot versionado de datos limpios | S-07, M12 |
-| L-06 | **Sin sala de prensa (noticias y comunicados):** los sitemaps listan 74 URLs únicas bajo `/acerca-de/sala-prensa/`: 73 en `sitemap-sala-de-prensa.xml` y 1 solo en `sitemap-personas.xml`. Responden 301 hacia otro host, `prensa.bancolombia.com`. En el manifest de M2, la única procesada (1 de 1) redirige a la **portada** `https://prensa.bancolombia.com/`, no a la noticia, así que seguir la redirección no daría su contenido. Incluirlas exigiría explorar y crawlear un segundo sitio. Se excluyen sin pedirlas (`CRAWL_EXCLUDE_PATH_PREFIXES`, desde M3; quedan como `excluida`), y el asistente no responde sobre noticias. El resto de `acerca-de` sí se incluye | [ADR-010](docs/02_DECISIONES.md#adr-010--sala-de-prensa-fuera-del-alcance-del-scraping), M2 |
+| L-06 | **Sin sala de prensa (noticias y comunicados):** los sitemaps listan 74 URLs únicas bajo `/acerca-de/sala-prensa/`: 73 en `sitemap-sala-de-prensa.xml` y 1 solo en `sitemap-personas.xml`. Responden 301 hacia otro host, `prensa.bancolombia.com`. En el manifest de M2, la única procesada (1 de 1) redirige a la **portada** `https://prensa.bancolombia.com/`, no a la noticia, así que seguir la redirección no daría su contenido. Incluirlas exigiría explorar y crawlear un segundo sitio. Se excluyen sin pedirlas (`CRAWL_EXCLUDE_PATH_PREFIXES`, desde M3; quedan como `excluida`), y el asistente no tiene sus comunicados. El resto de `acerca-de` sí se incluye: la portada `/acerca-de` muestra resúmenes de algunas noticias **sin fecha**, que el asistente sí puede citar (verificado en M10), pero no sabe cuáles son las más recientes | [ADR-010](docs/02_DECISIONES.md#adr-010--sala-de-prensa-fuera-del-alcance-del-scraping), M2 |
 | L-07 | **URLs muertas en el sitemap:** algunas páginas listadas responden 403 `AccessDenied` (origen S3; p. ej. `/negocios/especiales/wobi…`). Se registran como `error_http` con un fragmento del cuerpo | M2 |
 | L-08 | **Bloques que rotan (resuelta en la limpieza, M3):** varias páginas de educación financiera y del centro de ayuda muestran "contenido relacionado" aleatorio en cada petición. Por eso se reescribe su HTML crudo aunque el contenido principal no cambie. La limpieza quita ese bloque: en el crawl completo, 34 páginas lo traían y en ninguna quedó en el texto limpio | M2, M3 |
 | L-09 | **Simuladores y páginas cargadas por JS, sin contenido:** su contenido llega por JavaScript, así que el HTML estático no tiene texto propio. La limpieza las descarta como `texto_corto` (menos de `CLEAN_MIN_CHARS`=200 caracteres) y **el asistente no podrá responder sobre ellas**. En el crawl completo fueron 57 de 685 páginas: 10 simuladores y calculadoras, 17 páginas de resultados de búsqueda de preguntas frecuentes y 30 páginas con contenido por JS o solo con errores de WCM, entre ellas el buscador de puntos de atención. Otros 4 simuladores muestran solo la pantalla de ingreso (`/personas/login`) y se descartan como duplicados. El listado está en `data/clean/clean_report.json` (`discarded_documents`) | ADR-009, M3 |
 | L-10 | **Cobertura del enlace a enlace (BFS) acotada (aceptada, sin volver a crawlear):** con `CRAWL_MAX_PAGES=1200` se procesan todas las semillas del sitemap, pero solo 173 de los 639 enlaces internos de profundidad 1 encontrados. Además, 250 URLs retiradas redirigen a la portada de su sección (p. ej. `…/sostenibilidad/novacampo` → `/personas`) y consumen cupo, aunque no generan documentos (un solo documento por portada) | M3 |
-| L-11 | **Cupo del nivel gratuito de Gemini:** la clave gratuita permite **20 solicitudes por día** a `gemini-2.5-flash` en este proyecto (lo informa el propio error 429). Al agotarse, el asistente responde con un aviso claro, sin reintentar, hasta el reinicio diario (medianoche del Pacífico) o hasta que se use una clave de **otro proyecto** (el cupo es por proyecto, no por clave). Las preguntas que el umbral corta no consumen cupo. **Modelo de respaldo automático** ([ADR-017](docs/02_DECISIONES.md)): como el cupo es por modelo, ante un 429 del principal la misma llamada se repite con `LLM_FALLBACK_MODEL` (por defecto `gemini-3.1-flash-lite`), y la respuesta de la API indica qué modelo respondió (`model`). Verificado en M9: con el cupo de `gemini-2.5-flash` agotado, el respaldo respondió 20 de 22 preguntas y los 5 turnos de una conversación. Solo se activa ante cupo o límite (429), no ante errores de clave o de modelo. Si el respaldo también agota su cupo, se informa el mismo 503. La calidad del respaldo no se ha medido por separado (M13). Para uso real o evaluaciones grandes hace falta el nivel pago | M7, ADR-012 |
+| L-11 | **Cupo del nivel gratuito de Gemini:** la clave gratuita permite **20 solicitudes por día** a `gemini-2.5-flash` en este proyecto (lo informa el propio error 429). Al agotarse, el asistente responde con un aviso claro, sin reintentar, hasta el reinicio diario (medianoche del Pacífico) o hasta que se use una clave de **otro proyecto** (el cupo es por proyecto, no por clave). Las preguntas que el umbral corta no consumen cupo. **Modelo de respaldo automático** ([ADR-017](docs/02_DECISIONES.md)): como el cupo es por modelo, ante un 429 del principal la misma llamada se repite con `LLM_FALLBACK_MODEL` (por defecto `gemini-3.1-flash-lite`), y la respuesta de la API indica qué modelo respondió (`model`). Verificado en M9: con el cupo de `gemini-2.5-flash` agotado, el respaldo respondió 20 de 22 preguntas y los 5 turnos de una conversación. Desde M10 también se activa ante **timeout o 5xx** del principal, tras **un** reintento; no se activa ante errores de clave o de modelo. **Latencia acotada:** cada llamada tiene un tope de reloj de `LLM_TIMEOUT_SECONDS`=20 s y el turno completo un presupuesto de `LLM_TURN_BUDGET_SECONDS`=45 s. Si se agota, 503 *"El servicio de respuestas está lento en este momento…"* sin guardar el turno. Si el respaldo también agota su cupo, se informa el mismo 503. La calidad del respaldo no se ha medido por separado (M13). Para uso real o evaluaciones grandes hace falta el nivel pago | M7, ADR-012 |
 | L-12 | **Datos en el nivel gratuito de Gemini:** según los términos de la Gemini API, en los servicios sin pago Google puede usar prompts y respuestas para mejorar sus productos y pueden revisarlos personas (*"Do not submit sensitive, confidential, or personal information"*). El contexto es contenido público de Bancolombia, pero **las preguntas no deben incluir información sensible o personal**. El nivel pago no usa los datos para mejorar productos | M7, ADR-012 |
 | L-13 | **Historial en un solo archivo SQLite:** pensado para una instancia de la API y pocos usuarios a la vez; SQLite serializa las escrituras. Tampoco hay migraciones de esquema: las tablas se crean si faltan, pero un cambio de columnas en el futuro exigiría migrar (p. ej. con Alembic) o recrear `history.db`. Las preguntas quedan guardadas en texto plano en el volumen de datos | M8, ADR-004 |
 | L-14 | **API sin autenticación ni límite de uso:** pensada para usuarios internos en una red de confianza (S-05). Cualquiera que alcance el puerto puede preguntar, gastar cupo del LLM y leer todas las conversaciones con `GET /conversations`. Por eso `API_HOST` es `127.0.0.1` por defecto. No hay streaming en la API: la respuesta llega completa (el generador de M7 ya lo soporta; la UI de M10 decidirá si lo expone) | M9, S-05 |
+| L-15 | **Interfaz sin streaming ni sesiones de usuario:** la respuesta aparece completa cuando termina (indicador de espera de hasta `UI_REQUEST_TIMEOUT_SECONDS`=60 s; el turno está acotado a ~45 s (ADR-017) y con el LLM gratuito saturado tarda 9–36 s (M10)). La lista de conversaciones muestra las de todos (no hay usuarios, L-14) y las horas van en UTC | M10 |
 
 ---
 
@@ -416,7 +460,8 @@ rag-bbva/
 │   ├── memory/            # models, repository (Repository: interfaz + memoria), sql_repository (SQLite)
 │   ├── services/          # rag_service (Facade), health (estado sin gastar tokens)
 │   ├── api/               # app (create_app, rutas, lifespan), schemas, errors (JSON {error, detail})
-│   └── ui/ analytics/     # vacíos (próximos módulos)
+│   ├── ui/                # app (Streamlit), api_client (HTTP de la API), render (presentación)
+│   └── analytics/         # vacío (M11)
 ├── scripts/explore_site.py · scripts/trim_html_fixture.py · scripts/calibrate_reranker.py · scripts/llm_evidence.py
 ├── tests/unit/ · tests/fixtures/ (robots, sitemaps, html: páginas reales recortadas de las 3 plantillas; clean: glosario limpio) · tests/integration/
 ├── eval/                  # calibration.jsonl (M6: umbral del reranker); golden set (M13)

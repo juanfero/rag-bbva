@@ -2,7 +2,8 @@
 
 - `HeadingAwareChunker`: respeta la estructura markdown de la limpieza (M3). Agrupa
   secciones consecutivas mientras quepan en `chunk_size` y parte por tamaño solo las
-  secciones que no caben, con solapamiento y sin cortar palabras.
+  secciones que no caben, con solapamiento y sin cortar palabras. Las tablas se parten
+  solo entre filas y cada parte repite la fila de encabezado (M10).
 - `FixedSizeChunker`: línea base; parte el texto completo por tamaño, ignorando títulos.
 
 Ambas producen `Chunk` con un encabezado de contexto (título, sección y ruta de
@@ -79,6 +80,62 @@ def split_text(texto: str, size: int, overlap: int) -> list[str]:
                 siguiente += 1
         inicio = siguiente
     return piezas
+
+
+_FILA_TABLA = re.compile(r"^\|.*\|$")
+_SEPARADOR_TABLA = re.compile(r"^\|(\s*-{3,}\s*\|)+$")
+
+
+def _es_tabla(bloque: str) -> bool:
+    lineas = bloque.strip().split("\n")
+    return len(lineas) >= 2 and all(_FILA_TABLA.match(linea.strip()) for linea in lineas)
+
+
+def split_table(tabla: str, size: int) -> list[str]:
+    """Parte una tabla markdown entre filas (nunca dentro de una fila) en piezas de
+    hasta `size` caracteres; cada pieza repite el encabezado y su separador. Una fila
+    más larga que `size` queda sola en su pieza (no se corta)."""
+    lineas = [linea.strip() for linea in tabla.strip().split("\n")]
+    encabezado = lineas[:2] if len(lineas) >= 2 and _SEPARADOR_TABLA.match(lineas[1]) else []
+    piezas: list[str] = []
+    actual = list(encabezado)
+    for fila in lineas[len(encabezado) :]:
+        if len(actual) > len(encabezado) and len("\n".join([*actual, fila])) > size:
+            piezas.append("\n".join(actual))
+            actual = list(encabezado)
+        actual.append(fila)
+    if len(actual) > len(encabezado):
+        piezas.append("\n".join(actual))
+    return piezas
+
+
+def split_text_with_tables(texto: str, size: int, overlap: int) -> list[str]:
+    """Como `split_text`, pero sin partir tablas a mitad de fila ni dejar filas sin su
+    encabezado. Sin tablas, delega en `split_text` (mismo resultado que antes de M10)."""
+    bloques = texto.split("\n\n")
+    if not any(_es_tabla(b) for b in bloques):
+        return split_text(texto, size, overlap)
+    piezas: list[str] = []
+    actual = ""
+    for bloque in bloques:
+        candidato = f"{actual}\n\n{bloque}" if actual else bloque
+        if len(candidato) <= size:
+            actual = candidato
+            continue
+        if actual:
+            piezas.append(actual)
+            actual = ""
+        if _es_tabla(bloque):
+            partes = split_table(bloque, size)
+        elif len(bloque) > size:
+            partes = split_text(bloque, size, overlap)
+        else:
+            partes = [bloque]
+        piezas += partes[:-1]
+        actual = partes[-1] if partes else ""
+    if actual:
+        piezas.append(actual)
+    return [p.strip() for p in piezas if p.strip()]
 
 
 @dataclass(frozen=True)
@@ -231,7 +288,9 @@ class HeadingAwareChunker(ChunkingStrategy):
                 ruta = self._ruta(doc, seccion.ruta, doc.text)
                 resultado += [
                     (ruta, pieza)
-                    for pieza in split_text(seccion.texto, self.chunk_size, self.chunk_overlap)
+                    for pieza in split_text_with_tables(
+                        seccion.texto, self.chunk_size, self.chunk_overlap
+                    )
                 ]
                 continue
             largo_grupo = sum(len(s.texto) + 2 for s in grupo)

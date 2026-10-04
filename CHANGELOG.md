@@ -4,6 +4,36 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Sin publicar]
 
+## [m10] - 2026-10-03 — Interfaz conversacional
+### Añadido
+- Interfaz Streamlit (`src/rag_bbva/ui/app.py`) que consume la API por HTTP con `ApiClient` (sin importar el núcleo; lo verifica una prueba):
+  - chat con indicador de espera;
+  - citas [n] como enlaces y fuentes en un desplegable;
+  - aviso propio para "sin información suficiente";
+  - 👍/👎 que se deshabilitan tras votar;
+  - barra lateral: nueva conversación, `conversation_id`, retomar por lista o por ID y estado de `/health`;
+  - modo detalle, errores 404/422/503 amigables y aviso de prototipo.
+- `ApiClient` y `ApiClientError` (código HTTP + mensaje para el usuario); `/health` con 503 se trata como reporte degradado.
+- Comandos `ui` (Streamlit con `--host`, `--port`, `--api-url`) y `chat` (CLI de respaldo sobre `RAGService`, con `--conversation-id`).
+- Configuración: `API_BASE_URL`, `UI_HOST`, `UI_PORT`, `UI_REQUEST_TIMEOUT_SECONDS`. Dependencia: `streamlit`.
+- `scripts/ui_guion.py`: guion de la interfaz contra la API real con `AppTest`.
+- 8 capturas de la interfaz en `docs/img/`, enlazadas en el README.
+- Etiquetas de `eval/calibration.jsonl` congeladas: una prueba fija su huella.
+- README: sección "Uso de la interfaz conversacional" con capturas, Streamlit ✅, L-15.
+- Ajustes derivados de M9:
+  - respaldo del LLM también ante timeout y 5xx tras un reintento (`LLMUnavailableError`);
+  - tope de reloj por llamada (`LLM_TIMEOUT_SECONDS=20`);
+  - presupuesto por turno (`LLM_TURN_BUDGET_SECONDS=45`), con 503 "el servicio está lento" sin guardar el turno.
+  - ADR-017 ampliada.
+### Corregido
+- **Tablas:** se extraen como filas markdown con todas sus celdas (antes la tabla de tasas del CDT perdía un valor repetido) y con `rowspan`/`colspan` expandidos (antes el tarifario de cuentas corría precios de columna). Si el contenedor tiene tablas, se extrae siempre por selector (`selector_tablas`). `clean_report.json` cuenta filas desalineadas y mal formadas (0 y 0). El chunker parte las tablas entre filas y repite el encabezado. Datos regenerados: 597 documentos, 3506 → 3546 chunks.
+- La marca `[SIN_INFO]` solo cuenta como abstención al inicio de la respuesta: una respuesta parcial con citas ya no queda como `no_answer`.
+- `eval/calibration.jsonl`: n10 y n13 reetiquetadas como respondibles tras verificar literalmente sus datos en el sitio (campo `note`). M6 25/30, M9 29/30 con los mismos umbrales.
+### Cambiado
+- `UI_REQUEST_TIMEOUT_SECONDS` por defecto 60 s (antes 180).
+- Prompt: aclarar el segmento (personas, negocios o empresas) al dar condiciones de un producto y no decir "reciente" sin fecha. `PROMPT_VERSION` 2026-10-03.3.
+- L-06 (las noticias de `/acerca-de` se pueden citar, sin fecha), L-11 y L-15.
+
 ## [m09] - 2026-10-03 — Servicio RAG + API
 ### Añadido
 - `RAGService` (Facade): historial (`HISTORY_WINDOW_N`) → reformulación → recuperación → reranking → umbral → generación → guardado; respuesta con `conversation_id`, `message_id`, `answer`, `sources[{n, url, title}]`, `no_answer`, `rewritten_query`, `timings` por etapa y `tokens`.

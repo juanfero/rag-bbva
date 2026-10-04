@@ -111,7 +111,10 @@ class TableReport(BaseModel):
     documents_with_tables: int
     tables: int
     rows: int
+    # Filas con un número de celdas distinto al de la primera fila de su tabla.
     misaligned_rows: int
+    # Líneas que empiezan con `|` pero no cierran con `|` (fila cortada o mal formada).
+    malformed_rows: int = 0
     cases: list[MisalignedRow]
 
 
@@ -141,8 +144,13 @@ def table_report(documents: Iterable[CleanDocument], max_cases: int = MAX_CASOS)
     (el encabezado, o la primera fila de datos en tablas sin encabezado)."""
     con_tablas = tablas = filas = 0
     casos: list[MisalignedRow] = []
-    desalineadas = 0
+    desalineadas = mal_formadas = 0
     for doc in documents:
+        for linea in doc.text.split("\n"):
+            limpia = linea.strip()
+            if limpia.startswith("|") and not (limpia.endswith("|") and len(limpia) > 1):
+                mal_formadas += 1
+                casos.append(MisalignedRow(url=doc.url, expected=-1, found=-1, row=limpia[:200]))
         encontradas = markdown_tables(doc.text)
         con_tablas += bool(encontradas)
         for tabla in encontradas:
@@ -163,5 +171,6 @@ def table_report(documents: Iterable[CleanDocument], max_cases: int = MAX_CASOS)
         tables=tablas,
         rows=filas,
         misaligned_rows=desalineadas,
+        malformed_rows=mal_formadas,
         cases=casos[:max_cases],
     )

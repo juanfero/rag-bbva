@@ -161,7 +161,8 @@ def _resumen_limpieza(reporte: CleanReport) -> str:
         f"{reporte.lang_fallback_by_template}",
         f"Fugas de boilerplate: {reporte.leaks.total} {reporte.leaks.by_pattern}",
         f"Tablas: {reporte.tables.tables} en {reporte.tables.documents_with_tables} documentos "
-        f"· filas: {reporte.tables.rows} · filas desalineadas: {reporte.tables.misaligned_rows}",
+        f"· filas: {reporte.tables.rows} · filas desalineadas: {reporte.tables.misaligned_rows} "
+        f"· filas mal formadas: {reporte.tables.malformed_rows}",
     ]
     return "\n".join(lineas)
 

@@ -207,3 +207,50 @@ def test_fixtures_sin_filas_desalineadas_tras_chunking(nombre: str) -> None:
         for tabla in markdown_tables(chunk.text):
             datos = [f for f in tabla if "---" not in f]
             assert len({row_cells(f) for f in datos}) == 1, chunk.text
+
+
+def test_reporte_cuenta_filas_mal_formadas() -> None:
+    texto = "| InvesBot … | Inversión Virtual … |\n| Adquiérelo aquí | Adquiérela aquí"
+    doc = CleanDocument(
+        doc_id="d",
+        url=f"{B}/x",
+        title="t",
+        section="personas",
+        breadcrumbs=[],
+        text=texto,
+        html_lang="es",
+        lang="es",
+        lang_source="detectado",
+        lastmod=None,
+        published_at=None,
+        scraped_at="2026-10-02T00:00:00+00:00",
+        content_hash="h",
+        n_chars=len(texto),
+        template="A_main",
+        extraction="trafilatura",
+    )
+    assert table_report([doc]).malformed_rows == 1
+
+
+def test_pagina_con_tabla_de_maquetacion_no_usa_trafilatura() -> None:
+    """Caso real de M10 (inversiones digitales): trafilatura escribía la tabla de
+    maquetación como filas de 700 caracteres sin cerrar."""
+    html = (
+        "<html><body><main><h2>Inversiones</h2>"
+        + "<p>Texto introductorio largo sobre las alternativas de inversión digital. </p>" * 5
+        + "<table><tr><td><h3>InvesBot</h3><ul><li>Invierte desde $500.000.</li></ul></td>"
+        "<td><h3>Inversión Virtual</h3><ul><li>Plazo fijo.</li></ul></td></tr></table>"
+        "</main></body></html>"
+    )
+    pagina = RawPage(
+        url=f"{B}/inv",
+        source_url=f"{B}/inv",
+        path="p",
+        fetched_at="2026-10-02T00:00:00+00:00",
+        html=html,
+    )
+    doc = CleaningPipeline.default(min_chars=0, min_extraction_coverage=0.9).clean(pagina)
+    assert isinstance(doc, CleanDocument)
+    assert doc.extraction == "selector_tablas"
+    assert "### InvesBot\n\n- Invierte desde $500.000." in doc.text
+    assert table_report([doc]).malformed_rows == 0

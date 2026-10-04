@@ -27,13 +27,17 @@
   - `c38abdc` y `9a6e3ce`, entre `m01` y `m02`.
 - Cada merge incluye las correcciones de su revisión (§10 de cada bitácora).
 
-### Siguiente módulo: M11 — Analítica del historial (**no empezar hasta la revisión de Juan Felipe**)
-- M10 se cerró el 2026-10-03, con merge, tag `m10` y push. Juan Felipe pidió **no empezar M11 hasta su revisión**.
-- Estado de los datos: 597 documentos, **3546 chunks**, Qdrant con 3546 puntos (tablas corregidas, `M10.md §10.4`). Prompt `2026-10-03.3`.
-- `eval/calibration.jsonl` **congelado** (`test_etiquetas_de_calibracion_congeladas`): no se reetiqueta más; la validación independiente es el golden set de M13.
-- Para probar en esta máquina: `serve --port 8010` y `ui --api-url http://127.0.0.1:8010` (el 8000 lo ocupa un contenedor ajeno).
-- En `docs/img/` queda sin versionar una captura de la página de www.bancolombia.com, que tomó Juan Felipe (no se usa, por la marca).
-- `.env` local: `LLM_TIMEOUT_SECONDS=20` (se cambió en M10; no es secreta).
+### Módulo en curso: M11 — Analítica del historial
+- Juan Felipe cerró M10 y pidió M11 en la rama `feat/m11-analytics`:
+  - métricas operativas, de calidad, de contenido, de memoria, de costo e impacto;
+  - salidas: CLI `metrics`, `GET /analytics/summary`, página "Métricas" y export CSV;
+  - `scripts/seed_conversations.py` sobre `data/history/demo.db`;
+  - enmascarado de números largos.
+- **Sin merge** sin aprobación.
+- Estado de los datos (desde M10): 597 documentos, 3546 chunks, Qdrant con 3546 puntos; prompt `2026-10-03.3`; `eval/calibration.jsonl` congelado.
+
+### Pendientes anotados para M14
+- **Retomar las capturas sobre la versión Docker final:** en las 1 y 2 de M10 aparece texto de instrucciones en el chat; faltan modo detalle y API caída (también en `01_PLAN_DE_MODULOS.md`, M14).
 
 ### Estado del árbol (al cerrar M10)
 - `main` con el merge de M10 y el tag `m10`, publicados en `origin`. Las ramas `feat/m00…m10` siguen a sus pares en `origin`.

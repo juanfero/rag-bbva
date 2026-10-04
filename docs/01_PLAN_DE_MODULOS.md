@@ -282,4 +282,5 @@ El README se construye de forma incremental desde M0–M1 (Definition of Done, p
 - Revisar que las 7 secciones exigidas estén completas y que el estado, los patrones (con rutas reales), el stack, las limitaciones y las mejoras futuras reflejen el código final.
 - Mantener la nota inicial sobre la fuente Bancolombia con el enlace a ADR-008 (ancla de GitHub: `#adr-008--fuente-de-datos-bancolombia-en-lugar-de-bbva-colombia`).
 - **Verificación desde cero en una carpeta limpia:** clonar el repo en una carpeta nueva y seguir el README literalmente (instalación, Docker, uso); corregir cualquier paso que falle.
+- **Capturas (pendiente de M10):** retomar las capturas de `docs/img/` sobre la versión Docker final. En las 1 y 2 de M10 aparece texto de instrucciones escrito en el chat ("Activa Modo detalle en la prueba 1"), y faltan las del **modo detalle activo** y la de la **API caída con el error rojo** al preguntar (M10.md §6.4).
 - Revisión del historial de commits; tag `v1.0.0`.

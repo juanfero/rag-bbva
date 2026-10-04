@@ -499,7 +499,7 @@ def test_cli_ui_lanza_streamlit_con_host_puerto_y_api(
 
     assert por_defecto.exit_code == 0 and con_opciones.exit_code == 0
     comando = llamadas[0]["comando"]
-    assert comando[1:4] == ["-m", "streamlit", "run"] and comando[4].endswith("ui/app.py")
+    assert comando[1:4] == ["-m", "streamlit", "run"] and comando[4].endswith("ui/streamlit_app.py")
     assert comando[comando.index("--server.port") + 1] == "8600"
     assert comando[comando.index("--server.address") + 1] == "127.0.0.1"
     assert llamadas[0]["api"] == "http://127.0.0.1:8000"

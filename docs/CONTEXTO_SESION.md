@@ -30,7 +30,8 @@
 
 ### Siguiente módulo: M12 — Dockerización completa
 - Juan Felipe aprobó M11 (y el README reorganizado para la presentación) el 2026-10-04 y pidió seguir con M12 en la rama `feat/m12-docker`.
-- M12 es el requisito **obligatorio** pendiente (R2, L-18): `docker compose up -d --build` debe levantar Qdrant, la ingesta inicial desde un snapshot de datos limpios, la API y la UI, en un solo comando.
+- **Implementado, en revisión** (`M12.md`): `docker compose up -d --build` levanta Qdrant, `init` (bootstrap desde el snapshot versionado), la API y la UI. Verificado en un clon limpio: ~10 min la primera vez, 4 min con la imagen ya construida, 35 s al reiniciar, y el historial persiste. Smoke test OK.
+- En esta máquina el 8010 y el 8501 los usa Juan Felipe para su API y su UI locales; las pruebas de Docker usaron 8020 y 8521 (`API_PUBLISHED_PORT`, `UI_PUBLISHED_PORT` en `.env`).
 - Estado de los datos: 597 documentos, 3546 chunks, Qdrant con 3546 puntos; prompt `2026-10-03.3`; `eval/calibration.jsonl` congelado.
 - `scripts/check_keys.py`: correr antes de cada commit.
 - **Sin merge** sin aprobación.
@@ -120,7 +121,7 @@ No están escritas en `CLAUDE.md`; la forma de trabajo de §4 las recoge:
 - Ante hallazgos en datos reales (fugas, idioma, redirecciones), primero se revisan los casos y se clasifican como reales o falsos positivos, y luego se corrige con test.
 
 Todo lo demás está registrado:
-- ADR-001 a 018.
+- ADR-001 a 019.
 - Supuestos S-01 a S-08 (S-02, S-03 y S-04 confirmados; S-03 acotado por ADR-010 y ampliado por ADR-011).
 - Limitaciones L-01 a L-16 en el README.
 - Reglas en `CLAUDE.md`.
@@ -223,7 +224,7 @@ Fuentes: `docs/01_PLAN_DE_MODULOS.md`, las bitácoras §8 y el README.
 3. `README.md`: estado, uso, patrones y limitaciones L-01 a L-16.
 4. `docs/00_VISION_GENERAL.md`: requisitos, arquitectura, configuración §7 y supuestos §9.
 5. `docs/01_PLAN_DE_MODULOS.md`: Definition of Done y el módulo en curso o siguiente.
-6. `docs/02_DECISIONES.md`: ADR-001 a ADR-018.
+6. `docs/02_DECISIONES.md`: ADR-001 a ADR-019.
 7. `docs/modulos/M11.md` (último cerrado), `M10.md` (§10: latencia, tablas y calibración), `M09.md` (umbral doble y respaldo) y `M07.md` (reglas de claves); `M12.md` si existe; luego las bitácoras anteriores si hace falta.
 8. `docs/exploracion_sitio.md`: hallazgos del sitio, selectores y riesgos.
 9. `CHANGELOG.md`.

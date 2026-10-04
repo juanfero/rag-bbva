@@ -4,6 +4,17 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Sin publicar]
 
+## [m12] - en revisión — Dockerización completa
+### Añadido
+- `docker compose up -d --build` levanta todo en un comando: `qdrant` → `init` (`bootstrap`) → `api` → `ui`, con healthchecks, `depends_on` por condición, volúmenes con nombre y puertos solo en 127.0.0.1, configurables con `API_PUBLISHED_PORT` y `UI_PUBLISHED_PORT`.
+- Dockerfile multi-stage: torch CPU, usuario no root (uid 1000), snapshot incluido y `HF_HOME` en el volumen de modelos.
+- Snapshot versionado (`snapshot/`): 597 documentos limpios y la caché de embeddings podada, con manifiesto SHA-256 (`scripts/make_snapshot.py`). El arranque no scrapea.
+- Comando `bootstrap`: copia el snapshot si faltan datos, indexa solo si la colección está vacía y descarga los modelos.
+- `scripts/smoke_test.sh`: `/health`, una pregunta con fuentes, el historial y la UI.
+- ADR-019. README con Docker como camino principal. Dependencia de desarrollo: `pyyaml`.
+### Corregido
+- La página Métricas (`ui/pages/`) se incluye en la instalación (*package data*).
+
 ## [m11] - 2026-10-04 — Analítica del historial
 ### Añadido
 - `src/rag_bbva/analytics/`: métricas con pandas sobre el historial leído por el Repository (`all_messages`):

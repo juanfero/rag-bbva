@@ -46,6 +46,7 @@ LEAK_PATTERNS: dict[str, re.Pattern[str]] = {
 }
 _CONTEXTO = 40
 MAX_CASOS = 50
+_SEPARADOR_TABLA = re.compile(r"^\|(\s*-{3,}\s*\|)+$")
 
 
 class LeakCase(BaseModel):
@@ -91,5 +92,76 @@ def leak_report(documents: Iterable[CleanDocument], max_cases: int = MAX_CASOS) 
         total=sum(por_patron.values()),
         documents_with_leaks=con_fugas,
         by_pattern=dict(sorted(por_patron.items())),
+        cases=casos[:max_cases],
+    )
+
+
+class MisalignedRow(BaseModel):
+    """Fila de tabla con un número de celdas distinto al del encabezado."""
+
+    url: str
+    expected: int
+    found: int
+    row: str
+
+
+class TableReport(BaseModel):
+    """Tablas markdown del texto limpio y filas desalineadas (meta: 0, M10)."""
+
+    documents_with_tables: int
+    tables: int
+    rows: int
+    misaligned_rows: int
+    cases: list[MisalignedRow]
+
+
+def markdown_tables(text: str) -> list[list[str]]:
+    """Tablas markdown del texto: cada una es su lista de filas `| … |` (incluida la
+    línea separadora del encabezado, si la hay)."""
+    tablas: list[list[str]] = []
+    actual: list[str] = []
+    for linea in [*text.split("\n"), ""]:
+        limpia = linea.strip()
+        if limpia.startswith("|") and limpia.endswith("|") and len(limpia) > 1:
+            actual.append(limpia)
+            continue
+        if actual:
+            tablas.append(actual)
+            actual = []
+    return tablas
+
+
+def row_cells(fila: str) -> int:
+    """Número de celdas de una fila markdown `| a | b |`."""
+    return len(fila.strip()[1:-1].split("|"))
+
+
+def table_report(documents: Iterable[CleanDocument], max_cases: int = MAX_CASOS) -> TableReport:
+    """Cuenta tablas y filas cuyo número de celdas difiere del de la primera fila
+    (el encabezado, o la primera fila de datos en tablas sin encabezado)."""
+    con_tablas = tablas = filas = 0
+    casos: list[MisalignedRow] = []
+    desalineadas = 0
+    for doc in documents:
+        encontradas = markdown_tables(doc.text)
+        con_tablas += bool(encontradas)
+        for tabla in encontradas:
+            tablas += 1
+            datos = [f for f in tabla if not _SEPARADOR_TABLA.match(f)]
+            esperado = row_cells(datos[0])
+            for fila in datos:
+                filas += 1
+                if (encontrado := row_cells(fila)) != esperado:
+                    desalineadas += 1
+                    casos.append(
+                        MisalignedRow(
+                            url=doc.url, expected=esperado, found=encontrado, row=fila[:200]
+                        )
+                    )
+    return TableReport(
+        documents_with_tables=con_tablas,
+        tables=tablas,
+        rows=filas,
+        misaligned_rows=desalineadas,
         cases=casos[:max_cases],
     )

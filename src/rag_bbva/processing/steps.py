@@ -18,7 +18,7 @@ import trafilatura
 from bs4 import BeautifulSoup, Tag
 
 from rag_bbva.exceptions import ProcessingError
-from rag_bbva.processing.markdown import html_to_markdown
+from rag_bbva.processing.markdown import has_data_table, html_to_markdown
 from rag_bbva.processing.models import Discarded, Template, WorkingDocument
 
 logger = logging.getLogger(__name__)
@@ -292,6 +292,8 @@ class ExtractMainContentStep(CleaningStep):
     *fallback* es el contenedor convertido a markdown por selector. En el HTML real
     trafilatura nunca agregó palabras ausentes del contenedor, pero omitió títulos y
     secciones enteras (`docs/modulos/M03.md` §4) y llegó a reordenar bloques (M04.md §7).
+    Si el contenedor tiene tablas de datos, se usa siempre el selector, que las escribe
+    como filas markdown completas (M10).
     """
 
     name = "contenido_principal"
@@ -312,6 +314,11 @@ class ExtractMainContentStep(CleaningStep):
         doc.container = contenedor
 
         selector_md = html_to_markdown(contenedor)
+        if has_data_table(contenedor):
+            # trafilatura no conserva la cuadrícula de las tablas (rowspan, celdas vecinas
+            # iguales); el selector sí (M10).
+            doc.text, doc.extraction = selector_md, "selector_tablas"
+            return doc
         extraido = trafilatura.extract(
             f"<html><body>{contenedor}</body></html>",
             output_format="markdown",

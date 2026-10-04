@@ -1,7 +1,7 @@
 """Interfaz conversacional con Streamlit (M10).
 
 Consume la API REST (M9) por HTTP con `ApiClient`; no importa el núcleo del sistema.
-Uso: `python -m rag_bbva.cli ui` (o `streamlit run src/rag_bbva/ui/app.py`) con la API
+Uso: `python -m rag_bbva.cli ui` (entrada `streamlit_app.py`, que la muestra como "Chat") con la API
 levantada en `API_BASE_URL`.
 
 Estado de la sesión (`st.session_state`):

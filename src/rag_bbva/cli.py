@@ -468,7 +468,7 @@ def ui(
     settings = get_settings()
     direccion, puerto = host or settings.ui_host, port or settings.ui_port
     api = api_url or settings.api_base_url
-    app_ui = Path(rag_bbva.ui.__file__).parent / "app.py"
+    app_ui = Path(rag_bbva.ui.__file__).parent / "streamlit_app.py"  # navegación (M14)
     typer.echo(f"Interfaz en http://{direccion}:{puerto} · API: {api}")
     comando = [
         sys.executable, "-m", "streamlit", "run", str(app_ui),

@@ -322,3 +322,15 @@ def test_error_de_pregunta_larga_cita_la_pregunta_recortada(api: ApiFalsa) -> No
         f"No se pudo responder «{'x' * 79}…». "
         "La pregunta no es válida: La pregunta supera el máximo de 1000 caracteres"
     )
+
+
+def test_entrada_con_navegacion_abre_el_chat(api: ApiFalsa) -> None:
+    """M14: la entrada declara "Chat" y "Métricas" y abre el chat por defecto."""
+    entrada = Path(APP).with_name("streamlit_app.py")
+    texto = entrada.read_text("utf-8")
+    assert 'title="Chat"' in texto and 'title="Métricas"' in texto and "default=True" in texto
+    at = AppTest.from_file(str(entrada), default_timeout=30)
+    at.session_state["api_client"] = api
+    at = at.run()
+    assert not at.exception
+    assert at.title[0].value == "Asistente de información pública"

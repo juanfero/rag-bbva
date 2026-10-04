@@ -271,12 +271,16 @@
 
 ## M13 — Evaluación de calidad
 
+> **Estado (2026-10-04): no realizado.** Se declara como mejora futura en el README (§14 y §15).
+
 - `eval/golden_set.jsonl`: ~25 preguntas con URL esperada.
 - Métricas: Hit@k y MRR **con y sin reranker** → tabla en el README (evidencia del bonus).
 
 ---
 
 ## M14 — Pulido final del README y cierre
+
+> **Estado (2026-10-04): cerrado como "M14 corto"** (tags `m14` y `v1.0.0`): navegación Chat/Métricas, README final y verificación desde cero con Docker. Las capturas no se retomaron (M14.md §8).
 
 El README se construye de forma incremental desde M0–M1 (Definition of Done, punto 7). M14 no lo redacta desde cero: lo pule y lo verifica.
 - Revisar que las 7 secciones exigidas estén completas y que el estado, los patrones (con rutas reales), el stack, las limitaciones y las mejoras futuras reflejen el código final.

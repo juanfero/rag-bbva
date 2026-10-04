@@ -243,7 +243,9 @@ def test_archivo_de_calibracion_del_repo() -> None:
     preguntas = load_questions(Path("eval/calibration.jsonl"))
 
     respondibles = [p for p in preguntas if p.answerable]
-    assert len(respondibles) == 15 and len(preguntas) == 30
+    # 15 + 2 reetiquetadas en M10 (n10 y n13, con su motivo en `note`).
+    assert len(respondibles) == 17 and len(preguntas) == 30
+    assert {p.id for p in preguntas if p.note} == {"n10", "n13"}
     assert all(p.expected_url and p.expected_url.startswith(B) for p in respondibles)
     categorias = {p.category for p in preguntas if not p.answerable}
     assert {"fuera_de_dominio", "otro_banco", "prensa_L06", "simulador_L09"} <= categorias

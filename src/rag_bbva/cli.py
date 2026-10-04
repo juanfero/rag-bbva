@@ -3,7 +3,7 @@
 Uso: `python -m rag_bbva.cli <comando>` o `rag-bbva <comando>`.
 Comandos disponibles: `version`, `scrape` (M2), `clean` (M3), `chunk` (M4), `ingest`
 (M5), `search` (M6), `llm-check` (M7), `history` (M8), `serve` (M9, la API), `ui` y
-`chat` (M10) y `metrics` (M11).
+`chat` (M10), `metrics` (M11) y `bootstrap` (M12, arranque con Docker).
 """
 
 import json
@@ -477,6 +477,39 @@ def ui(
     ]  # fmt: skip
     resultado = subprocess.run(comando, env={**os.environ, "API_BASE_URL": api}, check=False)
     raise typer.Exit(code=resultado.returncode)
+
+
+@app.command()
+def bootstrap(
+    force: Annotated[
+        bool, typer.Option("--force", help="Indexa aunque la colección ya tenga puntos.")
+    ] = False,
+    sin_modelos: Annotated[
+        bool,
+        typer.Option("--sin-modelos", help="No carga (ni descarga) el embedder y el reranker."),
+    ] = False,
+) -> None:
+    """Arranque para Docker: copia el snapshot si faltan datos, indexa si la colección está
+    vacía y deja los modelos descargados. No scrapea el sitio."""
+    from rag_bbva.indexing.bootstrap import Bootstrapper
+
+    settings = get_settings()
+    try:
+        r = Bootstrapper(settings, ComponentFactory(settings)).run(
+            force=force, warm_up=not sin_modelos
+        )
+    except (IndexingError, ConfigurationError, RetrievalError) as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    docs = "copiados del snapshot" if r.documents_from_snapshot else "ya existían"
+    cache = "copiada del snapshot" if r.embeddings_cache_from_snapshot else "ya existía o no hay"
+    typer.echo(f"Documentos limpios: {docs} · caché de embeddings: {cache}")
+    if r.indexed and r.ingest:
+        typer.echo(f"Colección vacía ({r.points_before} puntos): indexada.")
+        typer.echo(_resumen_ingesta(r.ingest))
+    else:
+        typer.echo(f"Colección con {r.points_before} puntos: no se reindexa (use --force).")
+    typer.echo("Modelos cargados." if r.models_warmed else "Modelos sin cargar (--sin-modelos).")
 
 
 AVISO_DEMO = (

@@ -51,6 +51,11 @@ rag-bbva = "rag_bbva.cli:app"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+# La página "Métricas" de Streamlit (ui/pages/) no es un paquete: se incluye como dato
+# para que viaje en la instalación (imagen Docker, M12).
+[tool.setuptools.package-data]
+"rag_bbva.ui" = ["pages/*.py"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra --strict-markers"

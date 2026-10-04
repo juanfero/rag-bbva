@@ -150,3 +150,16 @@ Formato: una entrada por decisión. Estado: Propuesta · Aceptada · Reemplazada
   - El modelo que respondió queda en `LLMResponse.model`, en la respuesta de la API (`model`) y en el log (`Falla el modelo principal; responde el de respaldo`). No se guarda en la base: el esquema de M8 no tiene esa columna y no hay migraciones (L-13).
   - `LLM_FALLBACK_MODEL` vacío, o igual a `LLM_MODEL`, lo desactiva. Con `LLM_PROVIDER=xai` debe ser un modelo de Grok o quedar vacío.
 - **Consecuencias:** + el asistente sigue respondiendo cuando se agota el cupo del modelo principal; el 429 del principal llega al instante y no se reintenta, así que agrega pocos milisegundos; + ningún turno pasa de ~45 s: o responde o da un 503 claro (verificado en M10, M10.md §10); − las respuestas del respaldo pueden tener otra calidad (no medida aún, M13); − si el respaldo también agota su cupo o el plazo, el usuario recibe un 503 amigable; − con el LLM gratuito saturado, un turno real sigue tardando 9–36 s (M10.md §10).
+
+## ADR-018 — Columnas de analítica en `messages` y migración mínima sin Alembic
+- **Estado:** Aceptada (2026-10-04, M11)
+- **Contexto:** la analítica pide el porcentaje de turnos con pregunta reformulada, la latencia de la reformulación y separar el corte duro de la abstención del LLM. El esquema de M8 no guardaba la pregunta reformulada, su tiempo, el modelo que respondió ni la zona gris: esos datos solo viajaban en la respuesta de la API. L-13 ya advertía que no había migraciones.
+- **Decisión:**
+  - Se agregan a `messages` cuatro columnas **opcionales**: `rewrite_ms`, `rewritten_query`, `model` y `gray_zone`. `RAGService` las llena en cada turno.
+  - **Migración mínima:** al abrir el repositorio, si una base existente no tiene esas columnas, se agregan con `ALTER TABLE messages ADD COLUMN …`. SQLite lo hace sin reescribir la tabla y sin tocar los datos. Es idempotente: reabrir no vuelve a migrar.
+  - No se adopta Alembic: es un solo cambio aditivo. Si el esquema llegara a necesitar cambios no aditivos (renombrar o borrar columnas), habría que introducirlo (L-13).
+  - En los mensajes anteriores a M11 las columnas quedan en `NULL`. La analítica los trata así:
+    - la zona gris se deduce del score con los umbrales actuales;
+    - el corte duro, por `top_score < RERANK_HARD_MIN_SCORE`;
+    - el "% de turnos reformulados" se calcula solo sobre los turnos con el dato e informa cuántos son.
+- **Consecuencias:** + métricas de memoria y de calidad exactas para los turnos nuevos; + bases de M8–M10 siguen abriendo (probado con una base creada con el esquema de M8); − un cambio de esquema no aditivo seguiría requiriendo una migración real.

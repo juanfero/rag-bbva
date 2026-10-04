@@ -33,6 +33,8 @@
   - salidas: CLI `metrics`, `GET /analytics/summary`, página "Métricas" y export CSV;
   - `scripts/seed_conversations.py` sobre `data/history/demo.db`;
   - enmascarado de números largos.
+- **Implementado, en revisión** (`M11.md`). Evidencia sobre `data/history/demo.db` (12 conversaciones, 18 turnos, 26 peticiones al LLM). Falta la captura de la página Métricas (`M11.md §6.5`) y la aprobación.
+- Columnas nuevas en `messages`, con migración aditiva al abrir la base (ADR-018). `scripts/check_keys.py` reemplaza al verificador del scratchpad: correr antes de cada commit.
 - **Sin merge** sin aprobación.
 - Estado de los datos (desde M10): 597 documentos, 3546 chunks, Qdrant con 3546 puntos; prompt `2026-10-03.3`; `eval/calibration.jsonl` congelado.
 
@@ -128,9 +130,9 @@ No están escritas en `CLAUDE.md`; la forma de trabajo de §4 las recoge:
 - Ante hallazgos en datos reales (fugas, idioma, redirecciones), primero se revisan los casos y se clasifican como reales o falsos positivos, y luego se corrige con test.
 
 Todo lo demás está registrado:
-- ADR-001 a 017.
+- ADR-001 a 018.
 - Supuestos S-01 a S-08 (S-02, S-03 y S-04 confirmados; S-03 acotado por ADR-010 y ampliado por ADR-011).
-- Limitaciones L-01 a L-15 en el README.
+- Limitaciones L-01 a L-16 en el README.
 - Reglas en `CLAUDE.md`.
 
 ---
@@ -228,10 +230,10 @@ Fuentes: `docs/01_PLAN_DE_MODULOS.md`, las bitácoras §8 y el README.
 
 1. `docs/CONTEXTO_SESION.md` (este archivo).
 2. `CLAUDE.md`: reglas obligatorias.
-3. `README.md`: estado, uso, patrones y limitaciones L-01 a L-15.
+3. `README.md`: estado, uso, patrones y limitaciones L-01 a L-16.
 4. `docs/00_VISION_GENERAL.md`: requisitos, arquitectura, configuración §7 y supuestos §9.
 5. `docs/01_PLAN_DE_MODULOS.md`: Definition of Done y el módulo en curso o siguiente.
-6. `docs/02_DECISIONES.md`: ADR-001 a ADR-017.
+6. `docs/02_DECISIONES.md`: ADR-001 a ADR-018.
 7. `docs/modulos/M10.md` (último cerrado; §10 con latencia, tablas y calibración), `M09.md` (umbral doble y respaldo) y `M07.md` (reglas de claves); `M11.md` si existe; luego las bitácoras anteriores si hace falta.
 8. `docs/exploracion_sitio.md`: hallazgos del sitio, selectores y riesgos.
 9. `CHANGELOG.md`.

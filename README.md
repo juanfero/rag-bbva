@@ -23,7 +23,7 @@ Prueba técnica de ML/AI Engineer: un sistema RAG (*Retrieval-Augmented Generati
 | M8 | Memoria conversacional: historial en SQLite (Repository), últimos N mensajes, métricas por mensaje | ✅ | `m08` |
 | M9 | Servicio RAG + API: fachada `RAGService`, FastAPI, turno atómico, umbral doble, LLM de respaldo, `/health` | ✅ | `m09` |
 | M10 | Interfaz conversacional: Streamlit sobre la API, fuentes, 👍/👎, modo detalle, CLI `chat`; tablas corregidas y latencia acotada | ✅ | `m10` |
-| M11 | Analítica del historial | ⏳ | — |
+| M11 | Analítica del historial: métricas con pandas, CLI `metrics`, `/analytics/summary`, página Métricas, export CSV, seed de demostración | 🟡 en revisión | — |
 | M12 | Dockerización completa | ⏳ | — |
 | M13 | Evaluación de calidad | ⏳ | — |
 | M14 | Pulido final del README y verificación desde cero | ⏳ | — |
@@ -273,7 +273,7 @@ Respuesta de `/chat` (abreviada):
 - **Errores:** siempre JSON `{error, detail}`, sin trazas. 422 (pregunta vacía o de más de `CHAT_QUESTION_MAX_CHARS`=1000 caracteres), 404 (conversación o respuesta inexistente), 503 (LLM sin cupo o caído, Qdrant caído, historial no disponible, falta la clave) y 500 (inesperado).
 - **Concurrencia:** endpoints síncronos que FastAPI ejecuta en su threadpool; SQLite con conexiones utilizables desde cualquier hilo, espera de 15 s ante bloqueos y modo WAL.
 - **Latencia medida** (CPU, 5 turnos reales, M09.md §6): recuperación 18–54 ms, reranking 0,71–0,87 s, reformulación 0,75–1,1 s, LLM 1,1–2,0 s; total 1,9–3,5 s por turno.
-- `/analytics` llega en M11.
+- `GET /analytics/summary` (M11): métricas del historial; ver [Análisis de datos del histórico](#análisis-de-datos-del-histórico).
 
 - **Para M12:** dentro del contenedor la API escuchará en `API_HOST=0.0.0.0` (el aislamiento lo da Docker); en local sigue `127.0.0.1`. `API_PORT` es configurable porque el 8000 puede estar ocupado en la máquina.
 
@@ -320,12 +320,60 @@ python -m rag_bbva.cli ui --api-url http://127.0.0.1:8010
 
 No hay captura del **modo detalle activo**: está verificado por las pruebas de la interfaz (`test_modo_detalle`) y por el guion de la bitácora (paso A3).
 
+**Página "Métricas"** (M11, navegación lateral): KPIs, gráficos y tablas de la analítica del historial, desde `GET /analytics/summary`. Ver [Análisis de datos del histórico](#análisis-de-datos-del-histórico).
+
 **CLI de respaldo**, sin API ni navegador, directo sobre `RAGService`:
 ```bash
 python -m rag_bbva.cli chat                          # conversación nueva
 python -m rag_bbva.cli chat --conversation-id <ID>   # continuar una existente
 ```
 Muestra la respuesta, las fuentes y, al salir (`salir` o línea vacía), el ID de la conversación.
+
+---
+
+## Análisis de datos del histórico
+
+Analítica del historial de conversaciones (M11), en [`src/rag_bbva/analytics/`](src/rag_bbva/analytics/). Lee el historial **solo a través del Repository** (`all_messages`) y calcula con pandas. Hay tres salidas:
+
+```bash
+python -m rag_bbva.cli metrics                                  # todas las métricas (HISTORY_DB_PATH)
+python -m rag_bbva.cli metrics --since 2026-10-01 --export csv  # desde una fecha y export a data/analytics/
+python -m rag_bbva.cli metrics --db data/history/demo.db        # base de demostración
+curl -s "http://127.0.0.1:8000/analytics/summary?since=2026-10-01"
+```
+La interfaz web tiene una página **"Métricas"** (navegación lateral) que consume ese endpoint. El export CSV deja `turnos.csv`, `urls_citadas.csv`, `secciones_citadas.csv`, `preguntas_frecuentes.csv` y `brechas_de_contenido.csv`; `--export json` deja `resumen.json`.
+
+**Definiciones.** Un **turno** es una respuesta del asistente con su pregunta. Los percentiles van por rango más cercano (`sorted[ceil(p/100·n) - 1]`). Los porcentajes con total 0 valen 0.
+
+| Grupo | Métrica | Definición |
+|---|---|---|
+| Operativas | Conversaciones · mensajes · turnos | Conversaciones con algún mensaje en el periodo; todos los mensajes; respuestas del asistente |
+| | Turnos por conversación | Media y mediana (las conversaciones sin respuesta cuentan 0) |
+| | Por día y por hora | Turnos según la hora de la respuesta en `ANALYTICS_TIMEZONE` (America/Bogota) |
+| | Latencia p50/p95 | Total y por etapa: `rewrite` (solo turnos reformulados), `retrieval`, `rerank`, `llm` (solo turnos donde se llamó al LLM) |
+| Calidad | % sin información | Turnos con `no_answer` sobre todos los turnos. Se separa en **corte duro** (`top_score < RERANK_HARD_MIN_SCORE` o sin resultados: no se llamó al LLM) y **abstención del LLM** (el resto: el LLM empezó con `[SIN_INFO]`), con cuántas abstenciones cayeron en la zona gris |
+| | % con fuentes | Turnos con al menos una cita |
+| | Score medio del reranker | Media del score del #1 en los turnos con score |
+| | 👍/👎 | Tasa 👍 = 👍 / (👍 + 👎); cobertura = turnos votados / turnos |
+| Contenido | URLs y secciones más citadas | Conteo de citas en las fuentes de las respuestas; sección = primer segmento de la ruta de la URL |
+| | Preguntas frecuentes | Se agrupan las preguntas autónomas (la reformulada si existe) con el embedder e5: cada pregunta se une al grupo cuyo centroide tenga coseno ≥ `ANALYTICS_FAQ_SIMILARITY` = **0,93**. Umbral medido en M11: separa 7 de 8 pares de preguntas casi iguales y 8 de 9 distintas ([bitácora](docs/modulos/M11.md#3-diseño)) |
+| | Brechas de contenido | Las preguntas `no_answer`, agrupadas igual: **oportunidades de contenido** |
+| Memoria | Conversaciones de más de un turno | Sobre las conversaciones del periodo |
+| | Turnos reformulados | Turnos con pregunta reformulada sobre los turnos con ese dato (desde M11, [ADR-018](docs/02_DECISIONES.md)) |
+| Costo | Tokens y costo estimado | Tokens de reformulación + respuesta; costo = entrada · `LLM_PRICE_INPUT_PER_MTOK` + salida · `LLM_PRICE_OUTPUT_PER_MTOK` (por millón). **Estimación** con precios pagos: con la clave gratuita el costo real es 0 |
+| Impacto | Consultas resueltas · tasa de resolución | Turnos respondidos (`no_answer` falso) **y sin 👎**, sobre los turnos |
+| | **Horas ahorradas** | **consultas resueltas × `MANUAL_SEARCH_MINUTES` / 60** |
+| | Costo por consulta resuelta | Costo estimado / consultas resueltas |
+
+**Supuesto del impacto:** cada consulta resuelta ahorra `MANUAL_SEARCH_MINUTES` = 5 minutos de búsqueda manual en el sitio. Es un **supuesto configurable, no una medición**, y se muestra junto a la cifra en la CLI, la API y la página.
+
+**Datos de demostración.** `scripts/seed_conversations.py` corre 12 conversaciones guionizadas **por el pipeline real** contra una base separada, `data/history/demo.db`: varias multiturno, fuera de dominio, otra entidad, una casi duplicada y una con una cédula. Las latencias, los scores, los tokens y las abstenciones salen de esa ejecución. Lo único que pone el script son algunos votos 👍/👎, declarados en el propio script. Con una base cuyo nombre contiene `demo`, la CLI, la API (`meta.demo`) y la página muestran **"Datos de demostración"**.
+```bash
+python scripts/seed_conversations.py --pausa 4      # gasta cupo del LLM: ~1 llamada por turno
+python -m rag_bbva.cli metrics --db data/history/demo.db
+```
+
+**Privacidad.** Las preguntas pueden traer datos personales. En toda salida de la analítica (preguntas frecuentes, brechas, exports), los números de 6 o más dígitos se reemplazan por `[número]`: cédulas, cuentas, teléfonos, tarjetas, también con separadores ([`privacy.py`](src/rag_bbva/analytics/privacy.py)). Los montos precedidos por `$` se conservan. Ver L-16.
 
 ---
 
@@ -424,6 +472,7 @@ Registro completo: [`docs/02_DECISIONES.md`](docs/02_DECISIONES.md) (ADR) y supu
 | L-13 | **Historial en un solo archivo SQLite:** pensado para una instancia de la API y pocos usuarios a la vez; SQLite serializa las escrituras. Tampoco hay migraciones de esquema: las tablas se crean si faltan, pero un cambio de columnas en el futuro exigiría migrar (p. ej. con Alembic) o recrear `history.db`. Las preguntas quedan guardadas en texto plano en el volumen de datos | M8, ADR-004 |
 | L-14 | **API sin autenticación ni límite de uso:** pensada para usuarios internos en una red de confianza (S-05). Cualquiera que alcance el puerto puede preguntar, gastar cupo del LLM y leer todas las conversaciones con `GET /conversations`. Por eso `API_HOST` es `127.0.0.1` por defecto. No hay streaming en la API: la respuesta llega completa (el generador de M7 ya lo soporta; la UI de M10 decidirá si lo expone) | M9, S-05 |
 | L-15 | **Interfaz sin streaming ni sesiones de usuario:** la respuesta aparece completa cuando termina (indicador de espera de hasta `UI_REQUEST_TIMEOUT_SECONDS`=60 s; el turno está acotado a ~45 s (ADR-017) y con el LLM gratuito saturado tarda 9–36 s (M10)). La lista de conversaciones muestra las de todos (no hay usuarios, L-14) y las horas van en UTC | M10 |
+| L-16 | **Datos personales en el historial:** las preguntas se guardan tal como las escribe el usuario, en texto plano (L-13), y pueden traer cédulas, cuentas o teléfonos. La analítica enmascara los números de 6 o más dígitos en sus salidas, pero **no** detecta nombres, correos ni direcciones, y la base sigue teniendo el texto original. Para uso real haría falta enmascarar al guardar, una política de retención y control de acceso (L-14) | M11 |
 
 ---
 
@@ -461,7 +510,7 @@ rag-bbva/
 │   ├── services/          # rag_service (Facade), health (estado sin gastar tokens)
 │   ├── api/               # app (create_app, rutas, lifespan), schemas, errors (JSON {error, detail})
 │   ├── ui/                # app (Streamlit), api_client (HTTP de la API), render (presentación)
-│   └── analytics/         # vacío (M11)
+│   └── analytics/         # metrics (pandas), service (export CSV/JSON), privacy (enmascarado)
 ├── scripts/explore_site.py · scripts/trim_html_fixture.py · scripts/calibrate_reranker.py · scripts/llm_evidence.py
 ├── tests/unit/ · tests/fixtures/ (robots, sitemaps, html: páginas reales recortadas de las 3 plantillas; clean: glosario limpio) · tests/integration/
 ├── eval/                  # calibration.jsonl (M6: umbral del reranker); golden set (M13)

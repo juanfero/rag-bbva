@@ -7,6 +7,8 @@ Prueba técnica de **ML/AI Engineer**. Es un sistema RAG (*Retrieval-Augmented G
 
 Incluye analítica del historial con métricas operativas, de calidad y de impacto.
 
+**Versión `v1.0.0`** · un solo comando para levantarlo: `docker compose up -d --build` ([§4](#4-instalación-y-puesta-en-marcha)).
+
 > ⚠️ **Fuente de datos: Bancolombia, no BBVA.** `www.bbva.com.co` responde **403** (WAF) a `robots.txt`, a la portada y al sitemap para cualquier cliente que no sea un navegador, así que no se puede scrapear de forma respetuosa. El caso permite usar otro banco y se eligió `www.bancolombia.com` ([ADR-008](docs/02_DECISIONES.md#adr-008--fuente-de-datos-bancolombia-en-lugar-de-bbva-colombia)). BBVA Colombia sigue siendo el cliente ficticio: el código conserva el nombre `rag_bbva`, pero todo texto visible al usuario dice Bancolombia.
 
 ![Conversación con citas](docs/img/m10_01_conversacion_citas.png)
@@ -47,7 +49,7 @@ Incluye analítica del historial con métricas operativas, de calidad y de impac
 | Historial por ID usando los N mensajes anteriores (N configurable) | SQLite detrás de un Repository; `HISTORY_WINDOW_N=6` en `.env` | ✅ |
 | Python | Python 3.11 | ✅ |
 | **Docker + docker-compose, un solo comando** | `docker compose up -d --build` levanta Qdrant, la ingesta inicial desde un snapshot versionado, la API y la UI ([§4](#4-instalación-y-puesta-en-marcha)) | ✅ |
-| Repositorio público con historial lógico | Conventional Commits en español, una rama y un tag por módulo (`m00`…`m10`) | ✅ |
+| Repositorio público con historial lógico | Conventional Commits en español, una rama y un tag por módulo (`m00`…`m14`) y la versión `v1.0.0` | ✅ |
 | Al menos 3 patrones de diseño | 10 patrones documentados con su ruta en el código ([§10](#10-patrones-de-diseño)) | ✅ |
 | Persistencia del historial | Sobrevive a reinicios de la API (verificado) | ✅ |
 | Herramientas sin costo | Todo open source y local, salvo el LLM: **Gemini con clave gratuita** (costo real $0) | ✅ |
@@ -183,7 +185,7 @@ Interfaz web en **Streamlit** que habla con el sistema **solo por HTTP** (la API
 | Estado del servicio | Búsqueda (Qdrant), historial (SQLite) y LLM, según `/health` |
 | Modo detalle | Pregunta reformulada, tiempos por etapa, tokens y modelo que respondió |
 | Errores claros | API caída, LLM lento o sin cupo, pregunta inválida o ID inexistente, con mensajes para el usuario |
-| Métricas | Página "Métricas" en la navegación lateral ([§8](#8-análisis-de-datos-del-histórico)) |
+| Navegación | Dos páginas en la barra lateral: **Chat** y **Métricas** ([§8](#8-análisis-de-datos-del-histórico)) |
 
 Aviso visible en todas las páginas: *"Prototipo de prueba técnica. No es un canal oficial de Bancolombia."* No usa logos ni marca; Bancolombia aparece solo como fuente.
 
@@ -304,9 +306,9 @@ Definiciones exactas de cada métrica: [bitácora M11](docs/modulos/M11.md#3-dis
   - umbral único sobre el reranker: 27/30;
   - umbral doble con abstención del LLM: **29/30**.
   - ⚠️ **Es optimista:** los umbrales se eligieron sobre esa misma muestra, y 2 etiquetas se corrigieron después de ver los resultados (con su motivo documentado: los datos estaban en el sitio).
-  - Las etiquetas quedaron **congeladas** y una prueba fija su huella. La validación independiente (golden set, Hit@k y MRR con y sin reranker) es el módulo M13, pendiente.
+  - Las etiquetas quedaron **congeladas** y una prueba fija su huella. La validación independiente (golden set separado, Hit@k y MRR con y sin reranker) **no se realizó en esta entrega**: queda como mejora futura ([§14](#14-futuras-mejoras)).
 - **Verificación anti-alucinación:** en las respuestas revisadas, cada cifra apareció literalmente en el fragmento citado ([M10 §10.3](docs/modulos/M10.md#103-verificación-anti-alucinación-de-n10-y-n13)).
-- **Hallazgo abierto:** `gemini-2.5-flash` a veces se abstiene en preguntas que el sitio sí responde. Se medirá en M13.
+- **Hallazgo abierto:** `gemini-2.5-flash` a veces se abstiene en preguntas que el sitio sí responde. Medirlo es parte de la evaluación independiente pendiente.
 
 ---
 
@@ -400,7 +402,7 @@ Los IDs son estables: las bitácoras y las decisiones los citan.
 ## 14. Futuras mejoras
 
 - Imagen con los modelos incluidos, para arrancar sin conexión a Hugging Face (L-18).
-- **Evaluación independiente:** golden set separado, Hit@k y MRR con y sin reranker, y comparación de modelos para la sobre-abstención (M13).
+- **Evaluación independiente:** golden set separado, Hit@k y MRR con y sin reranker, y comparación de modelos para medir la sobre-abstención (era el módulo M13; no se realizó en esta entrega).
 - LLM open source local (p. ej. vía Ollama) como otra estrategia de `LLMProvider`, o Gemini en el nivel pago.
 - Embeddings y reranker de mayor calidad (`bge-m3`, `bge-reranker-v2-m3`).
 - Actualización periódica del índice; ingesta de PDFs y de la sala de prensa (`prensa.bancolombia.com`).
@@ -425,8 +427,8 @@ El proyecto se construyó por módulos, cada uno con su rama, sus pruebas, su bi
 | M10 | Interfaz conversacional | ✅ `m10` |
 | M11 | Analítica del historial | ✅ `m11` |
 | M12 | Dockerización completa (`docker compose up` en un comando) | ✅ `m12` |
-| M13 | Evaluación de calidad con golden set | ⏳ pendiente |
-| M14 | Verificación desde cero en una carpeta limpia y versión `v1.0.0` | ⏳ pendiente |
+| M13 | Evaluación de calidad con golden set | ⏭️ no realizado: queda como mejora futura ([§14](#14-futuras-mejoras)) |
+| M14 | Cierre: verificación desde cero con Docker, navegación de la interfaz y versión `v1.0.0` | ✅ `m14` · `v1.0.0` |
 
 ---
 

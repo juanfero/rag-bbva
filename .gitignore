@@ -27,6 +27,10 @@ venv/
 .coverage
 htmlcov/
 
+# Capturas de pantalla sin renombrar (las de la documentación van con nombre propio en docs/img/)
+Captura desde*
+Screenshot*
+
 # Editores / SO
 .vscode/
 .idea/

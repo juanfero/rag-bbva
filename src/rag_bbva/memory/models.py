@@ -36,10 +36,15 @@ class Conversation(BaseModel):
 
 
 class MessageMetrics(BaseModel):
-    """Métricas de una respuesta del asistente (todas opcionales; M9 y M11 las usan)."""
+    """Métricas de una respuesta del asistente (todas opcionales; M9 y M11 las usan).
+
+    `rewrite_ms`, `rewritten_query`, `model` y `gray_zone` se agregan en M11 (ADR-018):
+    en mensajes anteriores quedan en `None`.
+    """
 
     model_config = ConfigDict(frozen=True)
 
+    rewrite_ms: float | None = None
     retrieval_ms: float | None = None
     rerank_ms: float | None = None
     llm_ms: float | None = None
@@ -48,6 +53,12 @@ class MessageMetrics(BaseModel):
     no_answer: bool | None = None
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
+    # Pregunta reformulada con el historial (None si se buscó tal cual).
+    rewritten_query: str | None = None
+    # Modelo que generó la respuesta (None si no se llamó al LLM para responder).
+    model: str | None = None
+    # El #1 del reranker cayó entre el umbral duro y RERANK_MIN_SCORE (ADR-016).
+    gray_zone: bool | None = None
 
 
 class Message(BaseModel):

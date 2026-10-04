@@ -248,6 +248,9 @@ El caso pide mínimo 3. Se implementan 6 para tener margen, pero el README desta
 | `HISTORY_DB_PATH` | `data/history/history.db` | Ruta SQLite |
 | `HISTORY_WINDOW_N` | `6` | **N mensajes previos** usados como contexto |
 | `MANUAL_SEARCH_MINUTES` | `5` | Supuesto para estimar tiempo ahorrado (analítica) |
+| `ANALYTICS_TIMEZONE` | `America/Bogota` | Zona horaria de la distribución por día y hora (M11) |
+| `ANALYTICS_FAQ_SIMILARITY` | `0.93` | Coseno mínimo para agrupar preguntas casi iguales; medido con e5 (M11.md §3) |
+| `ANALYTICS_TOP_N` | `10` | Tamaño de los rankings de la analítica (M11) |
 | `API_HOST` / `API_PORT` | `127.0.0.1` / `8000` | Dirección y puerto de `serve` (M9); en Docker, `0.0.0.0` (M12) |
 | `CHAT_QUESTION_MAX_CHARS` | `1000` | Largo máximo de una pregunta; más largo responde 422 (M9) |
 | `API_BASE_URL` | `http://127.0.0.1:8000` | URL de la API que consume la UI (M10); en Docker, `http://api:8000` (M12) |
@@ -312,4 +315,4 @@ Salida: comando CLI `metrics`, endpoint `GET /analytics/summary`, página "Métr
 
 ## 12. Limitaciones conocidas
 
-La tabla de limitaciones (L-01, L-02, …) **vive en el README**: [Limitaciones conocidas](../README.md#limitaciones-conocidas). Cada módulo agrega allí las suyas (Definition of Done, punto 7).
+La tabla de limitaciones (L-01, L-02, …) **vive en el README**: [Limitaciones conocidas](../README.md#13-limitaciones-conocidas). Cada módulo agrega allí las suyas (Definition of Done, punto 7).

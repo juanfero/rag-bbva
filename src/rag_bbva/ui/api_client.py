@@ -6,7 +6,7 @@ traduce a `ApiClientError` con un mensaje para mostrar al usuario.
 """
 
 import logging
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Literal
 
 import httpx
@@ -171,6 +171,14 @@ class ApiClient:
 
     def send_feedback(self, message_id: int, value: Feedback) -> None:
         self._pedir("POST", f"/messages/{message_id}/feedback", json={"value": value})
+
+    def analytics_summary(self, since: date | None = None) -> dict[str, Any]:
+        """Resumen de `GET /analytics/summary` (JSON tal cual: la UI no importa el núcleo)."""
+        parametros = {"since": since.isoformat()} if since else None
+        datos = self._pedir("GET", "/analytics/summary", params=parametros)
+        if not isinstance(datos, dict) or "operational" not in datos:
+            raise ApiClientError("La API devolvió una respuesta inesperada.")
+        return datos
 
     def health(self) -> HealthStatus:
         """Estado de la API. Un 503 de `/health` trae el reporte degradado en el cuerpo:

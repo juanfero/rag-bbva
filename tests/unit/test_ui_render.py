@@ -134,7 +134,7 @@ NUCLEO = (
 def test_la_ui_no_importa_el_nucleo() -> None:
     """La UI habla con el sistema solo por HTTP (ApiClient); no importa el núcleo."""
     carpeta = Path(__file__).resolve().parents[2] / "src" / "rag_bbva" / "ui"
-    for archivo in carpeta.glob("*.py"):
+    for archivo in carpeta.rglob("*.py"):  # incluye ui/pages (M11)
         for nodo in ast.walk(ast.parse(archivo.read_text("utf-8"))):
             modulos = (
                 [a.name for a in nodo.names]

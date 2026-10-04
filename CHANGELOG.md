@@ -4,6 +4,28 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [Sin publicar]
 
+## [m11] - 2026-10-04 — Analítica del historial
+### Añadido
+- `src/rag_bbva/analytics/`: métricas con pandas sobre el historial leído por el Repository (`all_messages`):
+  - operativas: conversaciones, turnos, día y hora, latencia p50/p95 por etapa;
+  - calidad: corte duro vs. abstención del LLM, fuentes, score, 👍/👎;
+  - contenido: URLs, secciones, preguntas frecuentes y brechas agrupadas por coseno ≥ 0,93;
+  - memoria, costo e impacto estimado, con el supuesto visible.
+- CLI `metrics [--since] [--db] [--export csv|json] [--sin-embeddings]`, `GET /analytics/summary` y la página "Métricas" de Streamlit. Export CSV de 5 tablas.
+- `scripts/seed_conversations.py`: 12 conversaciones por el pipeline real en `data/history/demo.db`, marcadas como "Datos de demostración".
+- Enmascarado de números de 6 o más dígitos en la analítica (`analytics/privacy.py`).
+- Columnas `rewrite_ms`, `rewritten_query`, `model` y `gray_zone` en `messages`, con migración aditiva al abrir la base (ADR-018).
+- `scripts/check_keys.py`: verificación de claves versionada.
+- Configuración `ANALYTICS_TIMEZONE`, `ANALYTICS_FAQ_SIMILARITY`, `ANALYTICS_TOP_N`. Dependencia declarada: `pandas`.
+- README: sección "Análisis de datos del histórico" y L-16. `.gitignore`: `Captura desde*`, `Screenshot*`.
+### Cambiado
+- **README reorganizado para la presentación del caso:**
+  - resumen para evaluadores (requisitos del caso → cómo se cumplen → estado) y resultados medidos;
+  - puesta en marcha paso a paso;
+  - uso, API, pipeline, analítica (con capturas), calidad, patrones, stack, decisiones, limitaciones y mejoras;
+  - estado del proyecto y trabajo pendiente.
+  - El detalle de implementación quedó en las bitácoras enlazadas. Las limitaciones conservan sus IDs (L-01…L-16) y suman L-17 (calidad medida dentro de la muestra) y L-18 (Docker incompleto).
+
 ## [m10] - 2026-10-03 — Interfaz conversacional
 ### Añadido
 - Interfaz Streamlit (`src/rag_bbva/ui/app.py`) que consume la API por HTTP con `ApiClient` (sin importar el núcleo; lo verifica una prueba):

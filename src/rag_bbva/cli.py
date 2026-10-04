@@ -3,15 +3,17 @@
 Uso: `python -m rag_bbva.cli <comando>` o `rag-bbva <comando>`.
 Comandos disponibles: `version`, `scrape` (M2), `clean` (M3), `chunk` (M4), `ingest`
 (M5), `search` (M6), `llm-check` (M7), `history` (M8), `serve` (M9, la API), `ui` y
-`chat` (M10). `metrics` se agrega en M11.
+`chat` (M10) y `metrics` (M11).
 """
 
 import json
 import signal
 from collections.abc import Iterator
 from contextlib import contextmanager
+from datetime import datetime
+from pathlib import Path
 from types import FrameType
-from typing import Annotated
+from typing import Annotated, Any
 from urllib.parse import urlsplit
 
 import httpx
@@ -475,6 +477,141 @@ def ui(
     ]  # fmt: skip
     resultado = subprocess.run(comando, env={**os.environ, "API_BASE_URL": api}, check=False)
     raise typer.Exit(code=resultado.returncode)
+
+
+AVISO_DEMO = (
+    "*** DATOS DE DEMOSTRACIÓN: conversaciones generadas por scripts/seed_conversations.py "
+    "(los votos 👍/👎 los aplicó el script). No son uso real. ***"
+)
+
+
+def _fmt(valor: float | None, sufijo: str = "") -> str:
+    return "—" if valor is None else f"{valor:,.1f}{sufijo}"
+
+
+def _formato_metricas(r: Any) -> str:
+    o, q, c, m, k, i = r.operational, r.quality, r.content, r.memory, r.cost, r.impact
+    lineas = []
+    if r.meta.demo:
+        lineas.append(AVISO_DEMO)
+    desde = r.meta.since.isoformat() if r.meta.since else "todo el historial"
+    lineas += [
+        f"Fuente: {r.meta.source} · desde: {desde} · zona horaria: {r.meta.timezone}",
+        "",
+        "== Operativas",
+        f"Conversaciones: {o.conversations} · mensajes: {o.messages} · turnos: {o.turns}",
+        f"Turnos por conversación: media {o.turns_per_conversation.mean} · "
+        f"mediana {o.turns_per_conversation.median}",
+        f"Turnos por día: {o.turns_by_day}",
+        f"Turnos por hora: {o.turns_by_hour}",
+        "Latencia (ms, rango más cercano):",
+    ]
+    for etapa, p in o.latency_ms.items():
+        lineas.append(f"  {etapa:9s} n={p.n:3d} · p50 {_fmt(p.p50)} · p95 {_fmt(p.p95)}")
+    lineas += [
+        "",
+        "== Calidad",
+        f"Sin información: {q.no_answer.count} ({q.no_answer.pct} %) = "
+        f"corte duro (score < {r.meta.rerank_hard_min_score}, sin LLM) {q.hard_cut.count} "
+        f"({q.hard_cut.pct} %) + abstención del LLM {q.llm_abstention.count} "
+        f"({q.llm_abstention.pct} %: {q.llm_abstention_gray_zone} en zona gris, "
+        f"{q.llm_abstention_outside_gray_zone} fuera)",
+        f"Turnos en zona gris: {q.gray_zone_turns.count} ({q.gray_zone_turns.pct} %)",
+        f"Con al menos una fuente: {q.with_sources.count} ({q.with_sources.pct} %)",
+        f"Score medio del reranker (#1): {_fmt(q.reranker_top_score_mean)}",
+        f"Valoraciones: 👍 {q.feedback.up} · 👎 {q.feedback.down} · tasa 👍 "
+        f"{q.feedback.up_rate_pct} % de las votadas · cobertura {q.feedback.coverage_pct} % "
+        "de los turnos",
+        "",
+        "== Contenido",
+        "URLs más citadas:",
+        *[f"  {x.count:3d}  {x.name}" for x in c.top_urls],
+        "Secciones más citadas: " + ", ".join(f"{x.name} ({x.count})" for x in c.top_sections),
+        f"Preguntas frecuentes (agrupadas por {c.grouping}):",
+        *[f"  {g.count:3d}  {g.question}" for g in c.frequent_questions],
+        "Brechas de contenido (preguntas sin respuesta = oportunidades de contenido):",
+        *[f"  {g.count:3d}  {g.question}" for g in c.content_gaps],
+        "",
+        "== Memoria",
+        f"Conversaciones de más de un turno: {m.multi_turn_conversations.count} "
+        f"({m.multi_turn_conversations.pct} %)",
+        f"Turnos con pregunta reformulada: {m.rewritten_turns.count} ({m.rewritten_turns.pct} % "
+        f"de {m.turns_with_rewrite_data} turnos con el dato)",
+        "",
+        "== Costo (estimación)",
+        f"Tokens: {k.prompt_tokens:,} entrada + {k.completion_tokens:,} salida = "
+        f"{k.total_tokens:,} · {k.tokens_per_turn} por turno",
+        f"Costo estimado: US$ {k.estimated_cost_usd:.6f} · US$ {k.estimated_cost_per_turn_usd:.6f}"
+        f" por turno (precios US$ {k.price_input_per_mtok}/{k.price_output_per_mtok} por millón)",
+        f"  {k.note}",
+        "",
+        "== Impacto (estimación)",
+        f"Consultas resueltas: {i.resolved_turns} · tasa de resolución {i.resolution_rate_pct} %",
+        f"Horas de búsqueda manual ahorradas: {i.hours_saved} "
+        f"(= {i.resolved_turns} consultas · {i.manual_search_minutes} min / 60)",
+        "Costo por consulta resuelta: "
+        + ("—" if i.cost_per_resolved_usd is None else f"US$ {i.cost_per_resolved_usd:.6f}"),
+        f"  Supuesto: {i.assumption}",
+    ]
+    if r.meta.demo:
+        lineas.append(AVISO_DEMO)
+    return "\n".join(lineas)
+
+
+def _fecha(texto: str | None, zona: str) -> "datetime | None":
+    """`AAAA-MM-DD` → medianoche de ese día en la zona horaria de la analítica."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    if texto is None:
+        return None
+    try:
+        return datetime.strptime(texto, "%Y-%m-%d").replace(tzinfo=ZoneInfo(zona))
+    except ValueError as exc:
+        raise typer.BadParameter("Use el formato AAAA-MM-DD", param_hint="--since") from exc
+
+
+@app.command()
+def metrics(
+    since: Annotated[
+        str | None,
+        typer.Option("--since", help="Desde esta fecha (AAAA-MM-DD, zona de la analítica)."),
+    ] = None,
+    db: Annotated[
+        Path | None, typer.Option("--db", help="Base del historial (default: HISTORY_DB_PATH).")
+    ] = None,
+    export: Annotated[
+        str | None, typer.Option("--export", help="Exporta: csv (tablas) o json (resumen).")
+    ] = None,
+    out: Annotated[Path, typer.Option("--out", help="Carpeta del export.")] = Path(
+        "data/analytics"
+    ),
+    sin_embeddings: Annotated[
+        bool,
+        typer.Option("--sin-embeddings", help="Agrupa preguntas por texto (no carga el modelo)."),
+    ] = False,
+) -> None:
+    """Analítica del historial: operativas, calidad, contenido, memoria, costo e impacto."""
+    settings = get_settings()
+    if export not in (None, "csv", "json"):
+        raise typer.BadParameter("Use csv o json", param_hint="--export")
+    desde = _fecha(since, settings.analytics_timezone)
+    ruta = db or settings.history_db_path
+    if not ruta.is_file():
+        typer.echo(f"Error: no existe la base del historial {ruta}", err=True)
+        raise typer.Exit(code=1)
+    try:
+        servicio = ComponentFactory(settings).create_analytics_service(
+            db_path=ruta, with_embedder=not sin_embeddings
+        )
+        resumen = servicio.summary(desde)
+        typer.echo(_formato_metricas(resumen))
+        if export:
+            rutas = servicio.export(out, export, desde)  # type: ignore[arg-type]
+            typer.echo(f"Export ({export}): " + ", ".join(str(r) for r in rutas))
+    except HistoryError as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
 
 
 _SALIR = {"salir", "exit", "quit", ":q"}

@@ -93,6 +93,34 @@ class _MessageRow(_Base):
     prompt_tokens: Mapped[int | None] = mapped_column(Integer)
     completion_tokens: Mapped[int | None] = mapped_column(Integer)
     feedback: Mapped[str | None] = mapped_column(String(8))
+    # Columnas agregadas en M11 (ADR-018); en bases anteriores las agrega
+    # `_agregar_columnas_faltantes` al abrir el repositorio.
+    rewrite_ms: Mapped[float | None] = mapped_column(Float)
+    rewritten_query: Mapped[str | None] = mapped_column(Text)
+    model: Mapped[str | None] = mapped_column(String(80))
+    gray_zone: Mapped[bool | None] = mapped_column(Boolean)
+
+
+# Migración mínima (ADR-018): columnas que una base creada antes de M11 puede no tener.
+# Todas son opcionales (NULL), así que agregarlas no toca los datos existentes.
+_COLUMNAS_M11 = {
+    "rewrite_ms": "FLOAT",
+    "rewritten_query": "TEXT",
+    "model": "VARCHAR(80)",
+    "gray_zone": "BOOLEAN",
+}
+
+
+def _agregar_columnas_faltantes(engine: Engine) -> list[str]:
+    """Agrega a `messages` las columnas de M11 que falten; devuelve las agregadas."""
+    with engine.begin() as conexion:
+        existentes = {fila[1] for fila in conexion.exec_driver_sql("PRAGMA table_info(messages)")}
+        faltantes = [c for c in _COLUMNAS_M11 if c not in existentes]
+        for columna in faltantes:
+            conexion.exec_driver_sql(
+                f"ALTER TABLE messages ADD COLUMN {columna} {_COLUMNAS_M11[columna]}"
+            )
+    return faltantes
 
 
 def _utc(valor: datetime) -> datetime:
@@ -126,6 +154,10 @@ def _a_mensaje(fila: _MessageRow) -> Message:
             no_answer=fila.no_answer,
             prompt_tokens=fila.prompt_tokens,
             completion_tokens=fila.completion_tokens,
+            rewrite_ms=fila.rewrite_ms,
+            rewritten_query=fila.rewritten_query,
+            model=fila.model,
+            gray_zone=fila.gray_zone,
         ),
         feedback=fila.feedback,  # type: ignore[arg-type]  # validado al escribir
     )
@@ -154,6 +186,8 @@ class SqlAlchemyConversationRepository(ConversationRepository):
         self._sessions = sessionmaker(engine, expire_on_commit=False)
         try:
             _Base.metadata.create_all(engine)
+            if agregadas := _agregar_columnas_faltantes(engine):
+                logger.info("Historial migrado a M11", extra={"columnas": agregadas})
         except SQLAlchemyError as exc:
             mensaje = "No se pudo crear el esquema del historial"
             raise HistoryError(mensaje, detail=str(exc)) from exc
@@ -223,11 +257,11 @@ class SqlAlchemyConversationRepository(ConversationRepository):
             fila = sesion.get(_ConversationRow, conversation_id)
             return _a_conversacion(fila) if fila else None
 
-    def list_conversations(self, limit: int = 50) -> list[Conversation]:
-        """Conversaciones más recientes primero (por `updated_at`)."""
-        consulta = (
-            select(_ConversationRow).order_by(_ConversationRow.updated_at.desc()).limit(limit)
-        )
+    def list_conversations(self, limit: int | None = 50) -> list[Conversation]:
+        """Conversaciones más recientes primero (por `updated_at`); `None` = todas."""
+        consulta = select(_ConversationRow).order_by(_ConversationRow.updated_at.desc())
+        if limit is not None:
+            consulta = consulta.limit(limit)
         with self._session() as sesion:
             return [_a_conversacion(f) for f in sesion.scalars(consulta)]
 
@@ -308,6 +342,14 @@ class SqlAlchemyConversationRepository(ConversationRepository):
                 question=_a_mensaje(pregunta),
                 answer=_a_mensaje(respuesta),
             )
+
+    def all_messages(self, since: datetime | None = None) -> list[Message]:
+        """Todos los mensajes (de todas las conversaciones) desde `since`, en orden."""
+        consulta = select(_MessageRow).order_by(_MessageRow.id)
+        if since is not None:
+            consulta = consulta.where(_MessageRow.created_at >= _utc(since))
+        with self._session() as sesion:
+            return [_a_mensaje(f) for f in sesion.scalars(consulta)]
 
     def get_messages(self, conversation_id: str) -> list[Message]:
         """Todos los mensajes de la conversación en orden cronológico."""

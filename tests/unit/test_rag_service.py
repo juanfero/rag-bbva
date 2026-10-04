@@ -156,3 +156,15 @@ def test_warm_up_calienta_el_retriever() -> None:
     rag, _repo, _llm, retriever = _armar()
     rag.warm_up()
     assert retriever.calentado
+
+
+def test_guarda_reformulacion_modelo_y_zona_gris() -> None:
+    """M11: el servicio guarda lo que necesita la analítica (ADR-018)."""
+    rag, repo, _llm, _ = _armar()
+    cid = rag.ask(None, "¿Qué es el crédito de vivienda?").conversation_id
+    r = rag.ask(cid, "¿y cuáles son los requisitos?")
+
+    primero, segundo = (m.metrics for m in repo.get_messages(cid) if m.role == "assistant")
+    assert primero.rewritten_query is None and primero.rewrite_ms is not None
+    assert segundo.rewritten_query == REESCRITA == r.rewritten_query
+    assert segundo.model == "fake-model" and segundo.gray_zone is False

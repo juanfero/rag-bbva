@@ -143,6 +143,10 @@ class RAGService:
         tokens_salida = reformulada.completion_tokens + respuesta.completion_tokens
         total_antes_de_guardar = self._clock() - inicio
         metricas = MessageMetrics(
+            rewrite_ms=_ms(t_rewrite),
+            rewritten_query=autonoma,
+            model=respuesta.model,
+            gray_zone=recuperacion.gray_zone,
             retrieval_ms=recuperacion.retrieval_ms,
             rerank_ms=recuperacion.rerank_ms,
             llm_ms=respuesta.llm_ms,

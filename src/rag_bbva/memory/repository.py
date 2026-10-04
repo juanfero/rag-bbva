@@ -77,8 +77,13 @@ class ConversationRepository(ABC):
         """Devuelve la conversación o `None` si no existe."""
 
     @abstractmethod
-    def list_conversations(self, limit: int = 50) -> list[Conversation]:
-        """Conversaciones más recientes primero (por `updated_at`)."""
+    def list_conversations(self, limit: int | None = 50) -> list[Conversation]:
+        """Conversaciones más recientes primero (por `updated_at`); `None` = todas."""
+
+    @abstractmethod
+    def all_messages(self, since: datetime | None = None) -> list[Message]:
+        """Lectura masiva para la analítica (M11): todos los mensajes de todas las
+        conversaciones creados desde `since` (inclusive), en orden de inserción."""
 
     @abstractmethod
     def add_message(
@@ -148,10 +153,14 @@ class InMemoryConversationRepository(ConversationRepository):
         """Devuelve la conversación o `None` si no existe."""
         return self._conversations.get(conversation_id)
 
-    def list_conversations(self, limit: int = 50) -> list[Conversation]:
-        """Conversaciones más recientes primero (por `updated_at`)."""
+    def list_conversations(self, limit: int | None = 50) -> list[Conversation]:
+        """Conversaciones más recientes primero (por `updated_at`); `None` = todas."""
         ordenadas = sorted(self._conversations.values(), key=lambda c: c.updated_at, reverse=True)
-        return ordenadas[:limit]
+        return ordenadas if limit is None else ordenadas[:limit]
+
+    def all_messages(self, since: datetime | None = None) -> list[Message]:
+        """Todos los mensajes desde `since`, en orden de inserción."""
+        return [m for m in self._messages.values() if since is None or m.created_at >= since]
 
     def add_message(
         self,

@@ -126,6 +126,12 @@ class Settings(BaseSettings):
     history_db_path: Path = Path("data/history/history.db")
     history_window_n: int = Field(default=6, ge=0)
     manual_search_minutes: float = Field(default=5, ge=0)
+    # Analítica (M11): zona horaria de la distribución por día y hora, umbral de coseno
+    # para agrupar preguntas casi iguales (medido con e5 en M11.md §3) y tamaño de los
+    # rankings.
+    analytics_timezone: str = "America/Bogota"
+    analytics_faq_similarity: float = Field(default=0.93, gt=0, le=1)
+    analytics_top_n: int = Field(default=10, gt=0)
 
     # API (M9). En Docker (M12) se usa API_HOST=0.0.0.0.
     api_host: str = "127.0.0.1"

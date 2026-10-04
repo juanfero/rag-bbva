@@ -4,6 +4,9 @@ El resto del código pide un chunker o un embedder a `ComponentFactory` y recibe
 implementación que indique la configuración, sin importar clases concretas.
 """
 
+from pathlib import Path
+
+from rag_bbva.analytics.service import AnalyticsService
 from rag_bbva.config import Settings
 from rag_bbva.exceptions import ConfigurationError
 from rag_bbva.indexing.chunking import ChunkingStrategy, FixedSizeChunker, HeadingAwareChunker
@@ -197,4 +200,26 @@ class ComponentFactory:
         """Chequeo de salud sobre el almacén vectorial y el historial del servicio."""
         return HealthChecker(
             store=service.retriever.store, repository=service.repository, settings=self.settings
+        )
+
+    def create_analytics_service(
+        self,
+        *,
+        repository: ConversationRepository | None = None,
+        embedder: Embedder | None = None,
+        db_path: Path | None = None,
+        with_embedder: bool = True,
+    ) -> AnalyticsService:
+        """Analítica sobre `HISTORY_DB_PATH` (o `db_path`). Con `with_embedder`, agrupa
+        las preguntas con el embedder configurado (o el que se pase)."""
+        ruta = db_path or self.settings.history_db_path
+        if repository is None:
+            repository = SqlAlchemyConversationRepository.from_path(ruta)
+        if with_embedder and embedder is None:
+            embedder = self.create_embedder()
+        return AnalyticsService(
+            repository=repository,
+            settings=self.settings,
+            embedder=embedder if with_embedder else None,
+            source=ruta.name,
         )

@@ -68,3 +68,12 @@ class ApiClientError(RagBbvaError):
 class LLMQuotaError(LLMError):
     """El proveedor del LLM respondió 429: cupo diario agotado o límite por minuto tras
     agotar los reintentos. Es el único error que activa el modelo de respaldo (M9)."""
+
+
+class LLMUnavailableError(LLMError):
+    """El modelo no respondió a tiempo, devolvió 5xx o no hubo conexión, tras los
+    reintentos. Activa el modelo de respaldo, igual que `LLMQuotaError` (M10)."""
+
+
+class LLMBudgetExceededError(LLMError):
+    """Se agotó el presupuesto de tiempo del turno (`LLM_TURN_BUDGET_SECONDS`)."""

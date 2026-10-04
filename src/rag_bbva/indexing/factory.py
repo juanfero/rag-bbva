@@ -130,7 +130,7 @@ class ComponentFactory:
                 "para pruebas."
             )
 
-        def proveedor(modelo: str) -> LLMProvider:
+        def proveedor(modelo: str, max_retries: int) -> LLMProvider:
             return clase(
                 api_key=clave.get_secret_value(),
                 base_url=base_url,
@@ -138,16 +138,17 @@ class ComponentFactory:
                 temperature=ajustes.llm_temperature,
                 max_tokens=ajustes.llm_max_tokens,
                 timeout=ajustes.llm_timeout_seconds,
-                max_retries=ajustes.llm_max_retries,
+                max_retries=max_retries,
                 backoff_seconds=ajustes.llm_backoff_seconds,
                 reasoning_effort=esfuerzo,
             )
 
-        principal = proveedor(ajustes.llm_model)
         respaldo = ajustes.llm_fallback_model.strip()
         if not respaldo or respaldo == ajustes.llm_model:
-            return principal
-        return FallbackLLMProvider(principal, proveedor(respaldo))
+            return proveedor(ajustes.llm_model, ajustes.llm_max_retries)
+        # Con respaldo, el principal tiene UN reintento antes de pasar al respaldo (M10).
+        principal = proveedor(ajustes.llm_model, min(ajustes.llm_max_retries, 1))
+        return FallbackLLMProvider(principal, proveedor(respaldo, ajustes.llm_max_retries))
 
     def create_query_rewriter(self, llm: LLMProvider, mode: str | None = None) -> QueryRewriter:
         """Reformulador con `QUERY_REWRITE_MODE` (o `mode`)."""
@@ -189,6 +190,7 @@ class ComponentFactory:
             rewriter=self.create_query_rewriter(llm),
             generator=self.create_answer_generator(llm),
             history_window_n=self.settings.history_window_n,
+            turn_budget_seconds=self.settings.llm_turn_budget_seconds,
         )
 
     def create_health_checker(self, service: RAGService) -> HealthChecker:

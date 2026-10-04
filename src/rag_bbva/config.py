@@ -103,7 +103,12 @@ class Settings(BaseSettings):
     llm_reasoning_effort: str = "none"
     llm_temperature: float = Field(default=0.1, ge=0, le=2)
     llm_max_tokens: int = Field(default=800, gt=0)
-    llm_timeout_seconds: float = Field(default=60, gt=0)
+    # Timeout de cada llamada al LLM. Bajo a propósito (M10): un modelo saturado tardó
+    # hasta 150 s por turno en M9; mejor pasar al de respaldo.
+    llm_timeout_seconds: float = Field(default=20, gt=0)
+    # Presupuesto total de un turno (reformulación + respuesta, con reintentos y
+    # respaldo). Si se agota: 503 "el servicio está lento" y el turno no se guarda.
+    llm_turn_budget_seconds: float = Field(default=45, gt=0)
     # Reintentos propios (tenacity) solo ante 429, 5xx, timeouts y fallos de conexión;
     # los reintentos internos del SDK openai se desactivan (max_retries=0).
     llm_max_retries: int = Field(default=2, ge=0)
@@ -132,9 +137,9 @@ class Settings(BaseSettings):
     api_base_url: str = "http://127.0.0.1:8000"
     ui_host: str = "127.0.0.1"
     ui_port: int = Field(default=8501, gt=0, le=65535)
-    # Espera máxima de la UI por una respuesta de la API. Alta a propósito: con el LLM
-    # gratuito saturado, un turno real llegó a tardar ~150 s (M09.md §10.1).
-    ui_request_timeout_seconds: float = Field(default=180, gt=0)
+    # Espera máxima de la UI por una respuesta de la API: algo más que el presupuesto
+    # del turno (LLM_TURN_BUDGET_SECONDS) más la recuperación.
+    ui_request_timeout_seconds: float = Field(default=60, gt=0)
 
     # Observabilidad
     log_level: LogLevel = "INFO"
